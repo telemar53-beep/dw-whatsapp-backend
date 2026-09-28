@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from './ConversationView';
+import { VARIANTE_DA_MESA } from './ConversaDaMesa';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
@@ -51,7 +52,7 @@ beforeEach(() => {
 });
 
 describe('ConversationView', () => {
-  test('mostra apenas os dados disponíveis do cliente no painel contextual', () => {
+  test('mostra apenas os dados disponíveis do cliente no painel contextual', async () => {
     render(
       <ConversationView
         conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana', contactCityName: 'São Paulo', sectorName: 'Financeiro', protocolNumber: '123' }}
@@ -59,19 +60,25 @@ describe('ConversationView', () => {
         workspace
       />
     );
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
     const panel = screen.getByRole('complementary', { name: 'Dados do cliente' });
     expect(within(panel).getByText('São Paulo')).toBeInTheDocument();
+    // Setor e protocolo já estão na faixa da conversa: ficam recolhidos.
+    await userEvent.click(within(panel).getByRole('button', { name: 'Dados do atendimento' }));
     expect(within(panel).getByText('Financeiro')).toBeInTheDocument();
     expect(within(panel).getByText('123')).toBeInTheDocument();
     expect(within(panel).queryByText('CPF')).not.toBeInTheDocument();
   });
 
+  // O botão "Dados do cliente" é da mesa: vem na faixa da variante (ConversaDaMesa).
   test('permite fechar e reabrir os dados do cliente sem alterar a conversa', async () => {
-    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', contactDisplayName: 'Ana' }} onTransferClick={vi.fn()} workspace />);
-    await userEvent.click(screen.getByRole('button', { name: 'Fechar dados do cliente' }));
-    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).toHaveClass('is-dismissed');
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', contactDisplayName: 'Ana' }} onTransferClick={vi.fn()} workspace variante={VARIANTE_DA_MESA} />);
     await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
-    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).not.toHaveClass('is-dismissed');
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar dados do cliente' }));
+    expect(screen.queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Editar cliente: Ana/ })).toBeInTheDocument();
   });
 
   // O nome do provedor e configuracao: o sistema roda em mais de uma empresa.
@@ -257,7 +264,8 @@ describe('ConversationView', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(screen.getByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
+    // O Encerrar chega sob demanda (guardas/dialogosSobDemanda.test.jsx).
+    expect(await screen.findByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('Troca de senha'));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
@@ -468,7 +476,7 @@ describe('ConversationView', () => {
     await userEvent.click(screen.getByRole('button', { name: /ver atendimentos anteriores/i }));
 
     await waitFor(() => expect(api.getConversationHistory).toHaveBeenCalledWith('contact-1', 'tok-123'));
-    expect(await screen.findByText('Atendimentos anteriores')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Histórico de atendimentos' })).toBeInTheDocument();
   });
 
   test('shows a back button that calls onBack when clicked', async () => {
@@ -539,7 +547,8 @@ describe('ConversationView', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /editar cliente/i }));
 
-    expect(screen.getByText('Editar cliente')).toBeInTheDocument();
+    // O modal chega sob demanda (guardas/dadosClienteSobDemanda.test.jsx).
+    expect(await screen.findByText('Editar cliente')).toBeInTheDocument();
   });
 
   test('saving in the edit-contact modal updates the header immediately', async () => {
@@ -719,115 +728,102 @@ describe('ConversationView', () => {
 });
 
 describe('SGP lookup panel', () => {
-  test('the panel is hidden until the "Consultar SGP" button is clicked', () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-    // The header button's accessible name is "Consultar SGP" via aria-label, but the button
-    // has no visible text content, so this only matches the panel's own <h2> once it renders.
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+  // Dados fictícios. O painel é carregado sob demanda: depois do clique, a
+  // espera é pelo findBy.
+  const VINCULADO = '00011122233';
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactSgpDocument: VINCULADO };
+  const COM_FATURA = {
+    client: { id: 1, name: 'Cliente Exemplo', document: '000.111.222-33' },
+    contracts: [{ id: 555, status: 'Ativo', plan: 'Plano Teste' }],
+    loading: false,
+    error: null,
+    search: vi.fn(),
+    fetchDuplicate: vi.fn(),
+    duplicateState: {
+      555: {
+        loading: false,
+        error: null,
+        hasOpenInvoice: true,
+        duplicates: [{ id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '0000', pixCode: 'PIX-999', boletoLink: 'https://exemplo.test/999' }],
+      },
+    },
+  };
+  const mostrar = (conversation, props = {}) => (
+    <ConversationView conversation={conversation} onTransferClick={vi.fn()} onBack={vi.fn()} {...props} />
+  );
+
+  test('o painel não abre sozinho, nem com documento vinculado, e nenhuma consulta sai', () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar(MINHA));
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
+    expect(document.querySelector('#conv-painel-sgp')).toBeNull();
+    expect(search).not.toHaveBeenCalled();
   });
 
-  test('clicking "Consultar SGP" shows the panel, clicking again hides it', async () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
+  test('clicar em "Consultar SGP" abre o painel e consulta o documento vinculado; de novo, fecha', async () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar(MINHA));
 
     await userEvent.click(screen.getByLabelText('Consultar SGP'));
-    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Consulta SGP' })).toBeInTheDocument();
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledWith(VINCULADO);
 
     await userEvent.click(screen.getByLabelText('Consultar SGP'));
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
+  });
+
+  test('sem documento vinculado, abre sem consulta e pede o documento', async () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar({ ...MINHA, contactSgpDocument: null }));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    expect(await screen.findByLabelText('CPF ou CNPJ do cliente')).toBeInTheDocument();
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  test('fechar e reabrir consulta de novo: nada do SGP fica guardado', async () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar(MINHA));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await screen.findByRole('region', { name: 'Consulta SGP' });
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await screen.findByRole('region', { name: 'Consulta SGP' });
+    expect(search).toHaveBeenCalledTimes(2);
   });
 
   test('the panel closes when the conversation changes', async () => {
     const CONVERSATION_A = { id: 'c1', status: 'waiting', assignedAgentId: null };
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };
-    const { rerender } = render(<ConversationView conversation={CONVERSATION_A} onTransferClick={vi.fn()} onBack={vi.fn()} />);
+    const { rerender } = render(mostrar(CONVERSATION_A));
     await userEvent.click(screen.getByLabelText('Consultar SGP'));
-    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Consulta SGP' })).toBeInTheDocument();
 
-    rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+    rerender(mostrar(CONVERSATION_B));
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
   });
 
-  test('abre o painel do SGP sozinho quando o contato tem CPF vinculado', () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: '11122233344' }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
-    expect(screen.getByLabelText(/cpf do cliente/i)).toHaveValue('11122233344');
-  });
-
-  test('não abre o painel do SGP quando o contato não tem CPF vinculado', () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: null }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
-  });
-
-  test('clicking "Cód Pix" no painel do SGP chama sendSgpPix e adiciona as duas mensagens na conversa', async () => {
+  test('na conversa do responsável, "Código Pix" chama sendSgpPix e põe as duas mensagens na conversa', async () => {
     const appendMessage = vi.fn();
-    useConversationMessages.mockReturnValue({
-      messages: [],
-      sendMessage: vi.fn(),
-      appendMessage,
-    });
-    useSgpLookup.mockReturnValue({
-      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
-      contracts: [{ id: 555, status: 'Ativo', plan: '1GB' }],
-      loading: false,
-      error: null,
-      search: vi.fn(),
-      fetchDuplicate: vi.fn(),
-      duplicateState: {
-        555: {
-          loading: false,
-          error: null,
-          hasOpenInvoice: true,
-          duplicates: [
-            { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' },
-          ],
-        },
-      },
-    });
+    useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn(), appendMessage });
+    useSgpLookup.mockReturnValue(COM_FATURA);
     const messagesReturned = [{ id: 'msg1' }, { id: 'msg2' }];
     api.sendSgpPix.mockResolvedValue(messagesReturned);
 
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: '11122233344' }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
+    render(mostrar(MINHA));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
 
     // faturaId acompanha o envio para virar o "Nº da cobrança" no cartão nativo de Pix.
     await waitFor(() =>
       expect(api.sendSgpPix).toHaveBeenCalledWith(
         555,
         'c1',
-        { pixCode: '000201...', value: 89.9, dueDate: '2026-09-20', faturaId: '999' },
+        { pixCode: 'PIX-999', value: 89.9, dueDate: '2026-09-20', faturaId: '999' },
         'tok-123'
       )
     );
@@ -835,12 +831,38 @@ describe('SGP lookup panel', () => {
     expect(appendMessage).toHaveBeenCalledWith(messagesReturned[1]);
   });
 
+  // A regra é a das rotas do SGP (só o responsável envia): a tela não oferece
+  // o que o servidor recusaria, e diz por quê.
+  test.each([
+    ['sem responsável', { status: 'waiting', assignedAgentId: null }, 'Assuma o atendimento para enviar ao cliente.'],
+    ['com outro atendente', { status: 'assigned', assignedAgentId: 'agent-9' }, 'Só o responsável pelo atendimento pode enviar ao cliente.'],
+  ])('%s, o envio fica desabilitado e o motivo à vista', async (_nome, dono, motivo) => {
+    useSgpLookup.mockReturnValue(COM_FATURA);
+    render(mostrar({ ...MINHA, ...dono }));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    expect(await screen.findByRole('button', { name: 'Código Pix' })).toBeDisabled();
+    expect(screen.getByText(motivo)).toBeInTheDocument();
+  });
+
+  test('no lugar da conversa (celular), um só controle de voltar, e ele devolve a conversa', async () => {
+    useSgpLookup.mockReturnValue(COM_FATURA);
+    render(mostrar(MINHA, { painelModo: 'alternado' }));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await screen.findByRole('region', { name: 'Consulta SGP' });
+
+    expect(screen.getAllByRole('button', { name: /voltar à conversa/i })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Fechar consulta SGP' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar à conversa/i }));
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
+  });
+
   test('the close-reason popup closes when the conversation changes', async () => {
     const CONVERSATION_A = { id: 'c1', status: 'waiting', assignedAgentId: null };
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };
     const { rerender } = render(<ConversationView conversation={CONVERSATION_A} onTransferClick={vi.fn()} onBack={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
-    expect(screen.getByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
+    expect(await screen.findByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
 
     rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
     expect(screen.queryByRole('radiogroup', { name: 'Motivo do contato' })).not.toBeInTheDocument();
@@ -989,7 +1011,7 @@ describe('AI suggestion card', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(screen.getByLabelText('Sem conexão')).toBeChecked();
+    expect(await screen.findByLabelText('Sem conexão')).toBeChecked();
   });
 
   test('opens the close-reason popup with nothing pre-selected when there is no AI-suggested reason', async () => {
@@ -1002,7 +1024,7 @@ describe('AI suggestion card', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
+    expect(await screen.findByLabelText('Troca de senha')).not.toBeChecked();
     expect(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i })).toBeDisabled();
   });
 
@@ -1604,5 +1626,143 @@ describe('ConversationView — Fase 1B, mensagens automáticas', () => {
     renderizar([{ id: 'r1', direction: 'inbound', content: 'não estou atrasado', repliedToPreview: { content: MONTADO, direction: 'outbound' } }]);
     expect(screen.getByText(MONTADO)).toBeInTheDocument();
     expect(screen.queryByText('Mídia')).not.toBeInTheDocument();
+  });
+});
+
+// "Editar cliente" salva nome, município, localidade e nota. A lista não fica
+// sabendo (a rota não emite evento), então o que voltou do servidor é o valor
+// efetivo desta conversa: no cabeçalho, no painel e ao reabrir a edição. Antes
+// a nota ficava de fora — o painel mostrava a antiga, reabrir carregava a
+// antiga, e salvar de novo a devolvia ao servidor.
+describe('edição do contato: o que foi salvo vale para esta conversa', () => {
+  const LUGARES = [
+    { id: 'mun-1', name: 'Município Um', kind: 'city', parentId: null },
+    { id: 'mun-2', name: 'Município Dois', kind: 'city', parentId: null },
+    { id: 'loc-2', name: 'Localidade Dois', kind: 'locality', parentId: 'mun-2' },
+  ];
+  const CONVERSA = {
+    id: 'conv-1',
+    contactId: 'contato-1',
+    status: 'assigned',
+    assignedAgentId: 'agent-1',
+    contactDisplayName: 'Contato Um',
+    contactCityId: 'mun-1',
+    contactCityName: 'Município Um',
+    contactInternalNote: 'Nota antiga',
+  };
+
+  beforeEach(() => {
+    // clearAllMocks não esvazia a fila de mockResolvedValueOnce: a resposta
+    // que um teste não consumiu iria para o seguinte.
+    api.updateContact.mockReset();
+    usePlaces.mockReturnValue({ places: LUGARES, status: 'ready', refresh: vi.fn() });
+  });
+
+  // O painel "Dados do cliente" só existe aberto: cada teste o abre logo.
+  const mostrar = () => {
+    render(<ConversationView conversation={CONVERSA} onTransferClick={vi.fn()} workspace variante={VARIANTE_DA_MESA} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+  };
+  const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
+  const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
+  // O modal de edição chega sob demanda.
+  const abrirEdicao = async () => {
+    await userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
+    await screen.findByRole('dialog', { name: 'Editar cliente' });
+  };
+  const edicaoFechou = () => waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+
+  async function escrever(rotulo, texto) {
+    const campo = within(edicao()).getByLabelText(rotulo);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, texto);
+  }
+  const salvar = () => userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar alterações' }));
+
+  test('salvar uma nota nova troca a nota do painel na hora', async () => {
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Contato Um', cityId: 'mun-1', localityId: null, internalNote: 'Nota nova' });
+    mostrar();
+
+    await abrirEdicao();
+    await escrever('Nota interna', 'Nota nova');
+    await salvar();
+    await edicaoFechou();
+
+    expect(within(painel()).getByText('Nota nova')).toBeInTheDocument();
+    expect(within(painel()).queryByText('Nota antiga')).not.toBeInTheDocument();
+  });
+
+  test('reabrir a edição traz a nota salva, e salvar de novo não devolve a antiga', async () => {
+    api.updateContact
+      .mockResolvedValueOnce({ id: 'contato-1', displayName: 'Contato Um', cityId: 'mun-1', localityId: null, internalNote: 'Nota nova' })
+      .mockResolvedValueOnce({ id: 'contato-1', displayName: 'Contato Renomeado', cityId: 'mun-1', localityId: null, internalNote: 'Nota nova' });
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nota interna', 'Nota nova');
+    await salvar();
+    await edicaoFechou();
+
+    await abrirEdicao();
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+    await escrever('Nome', 'Contato Renomeado');
+    await salvar();
+
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledTimes(2));
+    // Só o nome mudou nesta segunda vez: a nota nem vai (PATCH parcial).
+    expect(api.updateContact).toHaveBeenLastCalledWith('contato-1', { displayName: 'Contato Renomeado' }, 'tok-123');
+  });
+
+  test('salvar nome, município e localidade troca os valores efetivos da conversa', async () => {
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Contato Editado', cityId: 'mun-2', localityId: 'loc-2', internalNote: 'Nota antiga' });
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nome', 'Contato Editado');
+    await userEvent.selectOptions(within(edicao()).getByLabelText('Município'), 'mun-2');
+    await userEvent.selectOptions(within(edicao()).getByLabelText('Localidade'), 'loc-2');
+    await salvar();
+    await edicaoFechou();
+
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato Editado - Localidade Dois · Município Dois' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Contato Editado')).toBeInTheDocument();
+    expect(within(painel()).getByText('Localidade Dois · Município Dois')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota antiga')).toBeInTheDocument();
+
+    await abrirEdicao();
+    expect(within(edicao()).getByLabelText('Nome')).toHaveValue('Contato Editado');
+    expect(within(edicao()).getByLabelText('Município')).toHaveValue('mun-2');
+    expect(within(edicao()).getByLabelText('Localidade')).toHaveValue('loc-2');
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota antiga');
+  });
+
+  test('falha ao salvar: a edição continua aberta com o que foi digitado, e nada muda na conversa', async () => {
+    api.updateContact.mockRejectedValue(new Error('rede fora'));
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nome', 'Nome que não salvou');
+    await escrever('Nota interna', 'Nota que não salvou');
+    await salvar();
+
+    expect(await within(edicao()).findByRole('alert')).toBeInTheDocument();
+    expect(within(edicao()).getByLabelText('Nome')).toHaveValue('Nome que não salvou');
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota que não salvou');
+    expect(within(painel()).getByText('Contato Um')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota antiga')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato Um - Município Um' })).toBeInTheDocument();
+  });
+
+  test('cancelar não muda nada, e reabrir volta aos valores de antes', async () => {
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nome', 'Nome descartado');
+    await escrever('Nota interna', 'Nota descartada');
+    await userEvent.click(within(edicao()).getByRole('button', { name: 'Cancelar' }));
+    await edicaoFechou();
+
+    expect(api.updateContact).not.toHaveBeenCalled();
+    expect(within(painel()).getByText('Contato Um')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota antiga')).toBeInTheDocument();
+    await abrirEdicao();
+    expect(within(edicao()).getByLabelText('Nome')).toHaveValue('Contato Um');
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota antiga');
   });
 });

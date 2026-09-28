@@ -155,3 +155,79 @@ describe('useMyConversations', () => {
     });
   });
 });
+
+// O "Editar cliente" salvou: a lista guarda o que voltou do servidor, para a
+// conversa reaberta (e a linha) não voltarem com o contato antigo. O contato é
+// a identidade: toda conversa dele recebe os dados; as outras não mudam de
+// referência, senão a lista inteira redesenharia (A2).
+describe('useMyConversations — contato salvo na edição', () => {
+  const A1 = { id: 'c1', contactId: 'contato-A', contactDisplayName: 'Contato A', contactCityId: null, contactInternalNote: 'Nota antiga' };
+  const A2 = { id: 'c2', contactId: 'contato-A', contactDisplayName: 'Contato A', contactCityId: null, contactInternalNote: 'Nota antiga' };
+  const B = { id: 'c3', contactId: 'contato-B', contactDisplayName: 'Contato B', contactCityId: null, contactInternalNote: 'Nota de B' };
+  const SALVO = {
+    conversationId: 'c1',
+    contactId: 'contato-A',
+    displayName: 'Contato A editado',
+    cityId: 'mun-1',
+    cityName: 'Município Um',
+    localityId: 'loc-1',
+    localityName: 'Localidade Um',
+    internalNote: 'Nota nova',
+  };
+
+  async function carregar() {
+    api.getMyConversations.mockResolvedValue([A1, A2, B]);
+    const hook = renderHook(() => useMyConversations());
+    await waitFor(() => expect(hook.result.current.conversations).toHaveLength(3));
+    return hook;
+  }
+
+  test('as duas conversas do mesmo contato recebem nome, município, localidade e nota', async () => {
+    const { result } = await carregar();
+    act(() => result.current.aplicarContatoSalvo(SALVO));
+
+    for (const id of ['c1', 'c2']) {
+      expect(result.current.conversations.find((c) => c.id === id)).toMatchObject({
+        contactDisplayName: 'Contato A editado',
+        contactCityId: 'mun-1',
+        contactCityName: 'Município Um',
+        contactLocalityId: 'loc-1',
+        contactLocalityName: 'Localidade Um',
+        contactInternalNote: 'Nota nova',
+      });
+    }
+    // Objeto novo, nunca o antigo mudado no lugar.
+    expect(A1.contactInternalNote).toBe('Nota antiga');
+  });
+
+  test('a conversa de outro contato continua sendo o mesmo objeto', async () => {
+    const { result } = await carregar();
+    act(() => result.current.aplicarContatoSalvo(SALVO));
+    expect(result.current.conversations.find((c) => c.id === 'c3')).toBe(B);
+  });
+
+  test('outro contato não muda: salvar um contato que não está na lista não troca nem o array', async () => {
+    const { result } = await carregar();
+    const antes = result.current.conversations;
+    act(() => result.current.aplicarContatoSalvo({ ...SALVO, conversationId: 'c9', contactId: 'contato-Z' }));
+    expect(result.current.conversations).toBe(antes);
+    expect(result.current.conversations.find((c) => c.id === 'c3')).toEqual(B);
+  });
+
+  test('salvar de novo os mesmos valores não troca o array', async () => {
+    const { result } = await carregar();
+    act(() => result.current.aplicarContatoSalvo(SALVO));
+    const depois = result.current.conversations;
+    act(() => result.current.aplicarContatoSalvo(SALVO));
+    expect(result.current.conversations).toBe(depois);
+  });
+
+  // O conversation.id é a origem da operação: um salvo que diz vir de uma
+  // conversa da lista, mas com outro contato, está errado e não entra.
+  test('origem que não bate com o contato não altera nada', async () => {
+    const { result } = await carregar();
+    const antes = result.current.conversations;
+    act(() => result.current.aplicarContatoSalvo({ ...SALVO, conversationId: 'c3' }));
+    expect(result.current.conversations).toBe(antes);
+  });
+});

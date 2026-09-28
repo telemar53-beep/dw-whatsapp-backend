@@ -1,418 +1,597 @@
-import { useState, useEffect, useRef } from 'react';
-import QRCode from 'qrcode';
+import { useState, useEffect, useRef, useId } from 'react';
 import { useSgpLookup } from '../hooks/useSgpLookup';
-import { IconSearch, IconChevronDown } from './icons/WaIcons';
-import {
-  IconPix,
-  IconBarcode,
-  IconQrCode,
-  IconPdfFile,
-  IconInvoiceLink,
-  IconIdCard,
-  IconClose,
-  IconSpinner,
-  IconCheck,
-} from './icons/SgpIcons';
+import { ApiError } from '../services/api';
+import { descreverErro } from '../utils/errorMessages';
+import { IconeConsultarSgp, IconeBuscar, IconeRecolher, IconeInformacoes, IconeAssumir } from './icones';
+import { IconeCodigoPix, IconeQrPix, IconeCodigoBarras, IconeLinkFatura, IconePdfFatura } from './icones/sgp';
+import { IconClose, IconSpinner, IconCheck } from './icons/SgpIcons';
+import './sgp-painel.css';
 
-function formatDueDate(isoDate) {
-  if (!isoDate) return isoDate;
-  const [year, month, day] = isoDate.split('-');
-  return year && month && day ? `${day}/${month}/${year}` : isoDate;
+// Painel "Verificação SGP". Só é carregado quando o atendente abre a consulta
+// (ConversationView faz o import sob demanda), e a biblioteca de QR só chega
+// quando a prévia é pedida. Tudo o que aparece aqui vem do SGP pela consulta
+// já existente; o painel não inventa, não guarda e não recalcula nada além de
+// somar as faturas que o próprio SGP devolveu.
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const PARA_A_ESQUERDA = { transform: 'rotate(90deg)' };
+
+const digitos = (valor) => String(valor || '').replace(/\D/g, '');
+
+// CPF e CNPJ com o miolo escondido; o começo e o fim bastam para conferir.
+function mascararDocumento(documento) {
+  const d = digitos(documento);
+  if (d.length === 11) return `${d.slice(0, 3)}.***.***-${d.slice(9)}`;
+  if (d.length === 14) return `${d.slice(0, 2)}.***.***/****-${d.slice(12)}`;
+  if (d.length > 4) return `${'*'.repeat(d.length - 2)}${d.slice(-2)}`;
+  return d;
 }
 
-function formatCurrency(value) {
-  const number = Number(value);
-  if (Number.isNaN(number)) return `R$ ${value}`;
-  return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const mascararContrato = (id) => {
+  const texto = String(id ?? '');
+  return texto.length > 3 ? `••${texto.slice(-3)}` : texto;
+};
+
+function moeda(valor) {
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) return `R$ ${valor}`;
+  return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-// Um bloco de conteúdo do painel: moldura fina, sem barra de título própria —
-// o painel é estreito e cada cabeçalho custava uma linha inteira.
-function Block({ children }) {
-  return <section className="rounded-[16px] border border-wa-border bg-wa-surface p-3">{children}</section>;
+function dataCurta(iso) {
+  const [ano, mes, dia] = String(iso || '').split('-');
+  if (!ano || !mes || !dia) return iso || '';
+  const outroAno = Number(ano) !== new Date().getFullYear() ? ` ${ano}` : '';
+  return `${Number(dia)} ${MESES[Number(mes) - 1]}${outroAno}`;
 }
 
-function SectionLabel({ children }) {
-  return (
-    <div className="flex items-center gap-2 px-0.5 pt-0.5">
-      <span className="text-[12px] font-medium text-wa-muted">{children}</span>
-      <span className="h-px flex-1 bg-wa-border" />
-    </div>
-  );
+function hojeIso() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
 }
 
-function Chip({ children, tone = 'neutral' }) {
-  const tones = {
-    neutral: 'bg-wa-active text-wa-muted',
-    good: 'bg-wa-chip text-wa-chip-text',
-    warn: 'bg-wa-warn-bg text-wa-warn-text',
-  };
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[12px] font-medium ${tones[tone]}`}>
-      {children}
-    </span>
-  );
+// "Venceu" ou "Vence", pela data que o SGP informou.
+const vencimento = (iso) => `${String(iso) < hojeIso() ? 'Venceu' : 'Vence'} ${dataCurta(iso)}`;
+
+const contar = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+const estaAtivo = (contrato) => contrato.status === 'Ativo';
+
+// Falha de envio: diz o que aconteceu (traduzido quando o backend responde),
+// e não só "tente de novo".
+function mensagemDeEnvio(erro) {
+  if (erro instanceof ApiError) return `Não foi possível enviar. ${descreverErro(erro, 'Tente de novo.')}`;
+  return 'Não foi possível enviar. Confira a conexão e tente de novo.';
 }
 
-function StatusChip({ status }) {
-  const active = status === 'Ativo';
-  return (
-    <Chip tone={active ? 'good' : 'neutral'}>
-      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-wa-chip-text' : 'bg-wa-border-strong'}`} />
-      {status}
-    </Chip>
-  );
+function Marca({ escolhida }) {
+  return <span className={`sgp-marca${escolhida ? ' is-escolhida' : ''}`} aria-hidden="true" />;
 }
 
-// Ação de envio: ícone e rótulo na mesma linha, em vez do ladrilho alto.
-function SendAction({ label, color, icon, onClick, busy, done, pressed }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      aria-pressed={pressed}
-      className={`flex h-9 items-center gap-2 rounded-[10px] border px-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring disabled:opacity-50 ${
-        pressed || done ? 'border-wa-chip-text bg-wa-chip' : 'border-wa-border bg-wa-surface hover:border-accent/50 hover:bg-wa-hover'
-      }`}
-    >
-      <span
-        className="flex h-4 w-4 shrink-0 items-center justify-center"
-        style={{ color: done ? 'var(--color-wa-chip-text)' : color }}
-      >
-        {busy ? <IconSpinner size={16} /> : done ? <IconCheck size={16} /> : icon}
-      </span>
-      <span className="truncate text-[12.5px] font-medium text-wa-text">{label}</span>
-    </button>
-  );
+function Status({ contrato }) {
+  if (!contrato.status) return null;
+  return <span className={`sgp-status${estaAtivo(contrato) ? '' : ' is-atencao'}`}>{contrato.status}</span>;
 }
 
-function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode, state, onGenerate }) {
-  const [qrDataUrl, setQrDataUrl] = useState(null);
-  const [busyKey, setBusyKey] = useState(null);
-  const [feedback, setFeedback] = useState(null);
-  const qrRef = useRef(null);
+// Um seletor compacto: fechado mostra só o escolhido; aberto, a lista inteira.
+// Escolher fecha e devolve o foco à linha. Esc fecha a lista sem fechar o painel.
+function Seletor({ rotulo, itens, escolhidoId, onEscolher, titulo, detalhe, opcao, contagem }) {
+  const [aberto, setAberto] = useState(false);
+  const idLista = useId();
+  const linhaRef = useRef(null);
+  const escolhidaRef = useRef(null);
+  const variosItens = itens.length > 1;
 
   useEffect(() => {
-    if (qrDataUrl && qrRef.current && qrRef.current.scrollIntoView) {
-      qrRef.current.scrollIntoView({ block: 'nearest' });
-    }
-  }, [qrDataUrl]);
+    if (aberto && escolhidaRef.current) escolhidaRef.current.focus();
+  }, [aberto]);
 
-  async function handleToggleQr(pixCode) {
-    if (qrDataUrl) {
-      setQrDataUrl(null);
-      return;
-    }
-    const dataUrl = await QRCode.toDataURL(pixCode);
-    setQrDataUrl(dataUrl);
+  function fechar() {
+    setAberto(false);
+    if (linhaRef.current) linhaRef.current.focus();
   }
 
-  async function runAction(key, label, action) {
-    setBusyKey(key);
-    setFeedback(null);
-    try {
-      await action();
-      setFeedback({ key, kind: 'sent', text: `${label} enviado para o cliente` });
-    } catch (err) {
-      setFeedback({ key, kind: 'error', text: 'Não foi possível enviar. Tente de novo.' });
-    } finally {
-      setBusyKey(null);
-    }
-  }
+  // Primeira linha: o que identifica (nome e status, ou vencimento e valor).
+  // Segunda: o detalhe e, à direita, quantos há.
+  const conteudo = (
+    <>
+      <Marca escolhida />
+      <span className="sgp-linha-conteudo">
+        {titulo}
+        {(detalhe || variosItens) && (
+          <span className="sgp-linha-sub">
+            <span className="sgp-linha-detalhe">{detalhe}</span>
+            {variosItens && <span className="sgp-contagem">{contagem}</span>}
+          </span>
+        )}
+      </span>
+    </>
+  );
 
-  const duplicate = state && !state.loading && !state.error && state.hasOpenInvoice && state.duplicates && state.duplicates[0];
+  if (!variosItens) return <div className="sgp-linha is-escolhida">{conteudo}</div>;
 
   return (
     <>
-      <SectionLabel>Financeiro</SectionLabel>
-
-      {!state && (
-        <button
-          type="button"
-          onClick={onGenerate}
-          className="w-full rounded-[12px] bg-accent px-3 py-2.5 text-[13.5px] font-medium text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      <button
+        ref={linhaRef}
+        type="button"
+        className="sgp-linha is-escolhida"
+        aria-expanded={aberto}
+        aria-controls={aberto ? idLista : undefined}
+        onClick={() => setAberto((valor) => !valor)}
+      >
+        {conteudo}
+        <IconeRecolher tamanho={18} className="sgp-chevron" />
+      </button>
+      {aberto && (
+        <ul
+          id={idLista}
+          className="sgp-opcoes"
+          aria-label={rotulo}
+          onKeyDown={(evento) => {
+            if (evento.key !== 'Escape') return;
+            evento.stopPropagation();
+            fechar();
+          }}
         >
-          Consultar fatura em aberto
-        </button>
-      )}
-
-      {state && state.loading && (
-        <p role="status" className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
-          <IconSpinner size={16} />
-          Consultando o SGP…
-        </p>
-      )}
-
-      {state && !state.loading && state.error && (
-        <p role="alert" className="rounded-[12px] bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">
-          {state.errorMessage || 'Não foi possível consultar o SGP agora.'}
-        </p>
-      )}
-
-      {state && !state.loading && !state.error && state.hasOpenInvoice === false && (
-        <p className="px-0.5 text-[13.5px] text-wa-muted">Nenhuma fatura em aberto para este contrato.</p>
-      )}
-
-      {duplicate && (
-        <>
-          <Block>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-display text-[20px] font-semibold leading-tight text-wa-text">
-                  {formatCurrency(duplicate.value)}
-                </p>
-                <p className="mt-1 text-[12.5px] text-wa-muted">vence {formatDueDate(duplicate.dueDate)}</p>
-              </div>
-              <Chip tone="warn">Em aberto</Chip>
-            </div>
-
-            <div className="mt-3 sgp-acoes grid gap-1.5 border-t border-wa-border pt-3">
-              {duplicate.pixCode && (
-                <SendAction
-                  label="Cód Pix"
-                  color="#2fc8b6"
-                  icon={<IconPix size={16} />}
-                  busy={busyKey === 'pix'}
-                  done={feedback && feedback.key === 'pix' && feedback.kind === 'sent'}
-                  onClick={() => runAction('pix', 'Cód Pix', () => onSendPix(contractId, duplicate))}
-                />
-              )}
-              {duplicate.pixCode && (
-                <SendAction
-                  label="Enviar QR"
-                  color="#2fc8b6"
-                  icon={<IconQrCode size={16} />}
-                  busy={busyKey === 'pixqr'}
-                  done={feedback && feedback.key === 'pixqr' && feedback.kind === 'sent'}
-                  onClick={() => runAction('pixqr', 'QR Pix', () => onSendPixQr(contractId, duplicate))}
-                />
-              )}
-              {duplicate.barCode && (
-                <SendAction
-                  label="Cód Barras"
-                  color="var(--color-wa-text)"
-                  icon={<IconBarcode size={16} />}
-                  busy={busyKey === 'barcode'}
-                  done={feedback && feedback.key === 'barcode' && feedback.kind === 'sent'}
-                  onClick={() => runAction('barcode', 'Cód Barras', () => onSendBarcode(contractId, duplicate))}
-                />
-              )}
-              {duplicate.boletoLink && (
-                <SendAction
-                  label="Link Fatura"
-                  color="var(--color-sgp-blue)"
-                  icon={<IconInvoiceLink size={16} />}
-                  busy={busyKey === 'link'}
-                  done={feedback && feedback.key === 'link' && feedback.kind === 'sent'}
-                  onClick={() => runAction('link', 'Link Fatura', () => onSendMessage(duplicate.boletoLink))}
-                />
-              )}
-              {duplicate.boletoLink && (
-                <SendAction
-                  label="PDF Fatura"
-                  color="var(--color-sgp-red)"
-                  icon={<IconPdfFile size={16} />}
-                  busy={busyKey === 'pdf'}
-                  done={feedback && feedback.key === 'pdf' && feedback.kind === 'sent'}
-                  onClick={() => runAction('pdf', 'PDF Fatura', () => onSendPdf(contractId, duplicate.boletoLink))}
-                />
-              )}
-              {duplicate.pixCode && (
-                <SendAction
-                  label="Ver QR"
-                  color="var(--color-sgp-gray)"
-                  icon={<IconQrCode size={16} />}
-                  pressed={Boolean(qrDataUrl)}
-                  onClick={() => handleToggleQr(duplicate.pixCode)}
-                />
-              )}
-            </div>
-
-            {feedback && (
-              <p
-                role={feedback.kind === 'sent' ? 'status' : 'alert'}
-                className={`mt-2.5 flex items-center gap-1.5 text-[12px] ${
-                  feedback.kind === 'sent' ? 'text-wa-chip-text' : 'text-wa-error-text'
-                }`}
-              >
-                {feedback.kind === 'sent' && <IconCheck size={14} />}
-                {feedback.text}
-              </p>
-            )}
-
-            {qrDataUrl && (
-              <figure ref={qrRef} className="mt-3 flex flex-col items-center border-t border-wa-border pt-3">
-                <img src={qrDataUrl} alt="QR code do Pix" className="h-28 w-28 rounded-[6px] bg-white p-1.5" />
-                <figcaption className="mt-2 text-center text-[11.5px] leading-[15px] text-wa-muted">
-                  Prévia. Use "Enviar QR" para mandar ao cliente.
-                </figcaption>
-              </figure>
-            )}
-          </Block>
-        </>
+          {itens.map((item) => {
+            const escolhido = String(item.id) === String(escolhidoId);
+            return (
+              <li key={item.id}>
+                <button
+                  ref={escolhido ? escolhidaRef : undefined}
+                  type="button"
+                  className="sgp-opcao"
+                  aria-pressed={escolhido}
+                  onClick={() => {
+                    onEscolher(item.id);
+                    fechar();
+                  }}
+                >
+                  <Marca escolhida={escolhido} />
+                  <span className="sgp-linha-conteudo">{opcao(item)}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </>
   );
 }
 
-function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode, onClose, initialCpf }) {
-  const [cpf, setCpf] = useState('');
-  const [selectedContractId, setSelectedContractId] = useState(null);
-  const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
+function Financeiro({ contrato, estado, onConsultar, podeEnviar, idMotivo, envios }) {
+  const faturas = estado && !estado.loading && !estado.error && estado.hasOpenInvoice ? estado.duplicates || [] : [];
+  const [faturaId, setFaturaId] = useState(null);
+  const fatura = faturas.find((item) => String(item.id) === String(faturaId)) || faturas[0] || null;
+  const [enviando, setEnviando] = useState(() => new Set());
+  const enviandoRef = useRef(new Set());
+  const [retorno, setRetorno] = useState(null);
+  const [qr, setQr] = useState({ aberto: false, codigo: null, url: null, erro: null });
+  const qrRef = useRef(null);
+
+  // Trocar de fatura fecha a prévia: o QR aberto seria o da fatura anterior.
+  const faturaAtualId = fatura ? fatura.id : null;
+  useEffect(() => {
+    setQr({ aberto: false, codigo: null, url: null, erro: null });
+    setRetorno(null);
+  }, [faturaAtualId]);
 
   useEffect(() => {
-    setSelectedContractId(contracts.length > 0 ? contracts[0].id : null);
-  }, [contracts]);
+    if (qr.url && qrRef.current && qrRef.current.scrollIntoView) qrRef.current.scrollIntoView({ block: 'nearest' });
+  }, [qr.url]);
 
-  useEffect(() => {
-    const digits = (initialCpf || '').replace(/\D/g, '');
-    if (digits) {
-      setCpf(digits);
-      search(digits);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCpf]);
-
-  function handleSubmit(event) {
-    event.preventDefault();
-    const digits = cpf.replace(/\D/g, '');
-    if (digits) search(digits);
+  // Antes da 2ª via, o resumo vem da própria consulta do contrato; depois,
+  // da soma das faturas que a 2ª via devolveu. Sem dado, sem resumo.
+  let resumo = null;
+  if (faturas.length > 0) {
+    resumo = { quantidade: faturas.length, total: faturas.reduce((soma, item) => soma + (Number(item.value) || 0), 0) };
+  } else if (!estado && Number(contrato.openInvoicesCount) > 0 && contrato.openAmount !== undefined && contrato.openAmount !== null) {
+    resumo = { quantidade: Number(contrato.openInvoicesCount), total: contrato.openAmount };
   }
 
-  const selectedContract = contracts.find((contract) => String(contract.id) === String(selectedContractId)) || null;
-  const contact = selectedContract
-    ? [...(selectedContract.phones || []), ...(selectedContract.emails || [])]
+  async function enviar(chave, nome, acao) {
+    if (enviandoRef.current.has(chave)) return;
+    enviandoRef.current.add(chave);
+    setEnviando(new Set(enviandoRef.current));
+    setRetorno(null);
+    try {
+      await acao();
+      setRetorno({ chave, tipo: 'ok', texto: `${nome} enviado para o cliente` });
+    } catch (erro) {
+      setRetorno({ chave, tipo: 'erro', texto: mensagemDeEnvio(erro) });
+    } finally {
+      enviandoRef.current.delete(chave);
+      setEnviando(new Set(enviandoRef.current));
+    }
+  }
+
+  async function alternarQr() {
+    if (qr.aberto) {
+      setQr({ aberto: false, codigo: null, url: null, erro: null });
+      return;
+    }
+    const codigo = fatura.pixCode;
+    setQr({ aberto: true, codigo, url: null, erro: null });
+    try {
+      const { default: QRCode } = await import('qrcode');
+      const url = await QRCode.toDataURL(codigo);
+      setQr((atual) => (atual.aberto && atual.codigo === codigo ? { ...atual, url } : atual));
+    } catch {
+      setQr((atual) => (atual.aberto && atual.codigo === codigo ? { ...atual, erro: 'Não foi possível gerar a prévia do QR.' } : atual));
+    }
+  }
+
+  const acoes = fatura
+    ? [
+        { chave: 'pix', rotulo: 'Código Pix', nome: 'Código Pix', Icone: IconeCodigoPix, tem: fatura.pixCode, falta: 'Esta fatura não tem código Pix.', acao: () => envios.pix(contrato.id, fatura) },
+        { chave: 'qr', rotulo: 'QR Pix', nome: 'QR Pix', Icone: IconeQrPix, tem: fatura.pixCode, falta: 'Esta fatura não tem código Pix.', previa: true },
+        { chave: 'barras', rotulo: 'Código de barras', nome: 'Código de barras', Icone: IconeCodigoBarras, tem: fatura.barCode, falta: 'Esta fatura não tem código de barras.', acao: () => envios.barras(contrato.id, fatura) },
+        { chave: 'link', rotulo: 'Link', nome: 'Link da fatura', Icone: IconeLinkFatura, tem: fatura.boletoLink, falta: 'Esta fatura não tem link.', acao: () => envios.link(fatura.boletoLink) },
+        { chave: 'pdf', rotulo: 'PDF', nome: 'PDF da fatura', Icone: IconePdfFatura, tem: fatura.boletoLink, falta: 'Esta fatura não tem PDF.', acao: () => envios.pdf(contrato.id, fatura.boletoLink) },
+      ]
     : [];
 
   return (
-    <aside role="region" aria-label="Consulta SGP" className="dialog-sgp-panel conv-painel flex h-full w-full min-h-0 flex-col bg-wa-surface-soft font-wa">
-      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-wa-surface-line px-3">
-        <span className="text-wa-icon">
-          <IconIdCard size={18} />
-        </span>
-        <span className="flex-1 truncate text-[15px] font-medium leading-[20px] text-wa-text">Consultar SGP</span>
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar consulta SGP"
-            title="Fechar"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-wa-hover"
-          >
-            <IconClose size={17} />
+    <section className="sgp-secao" aria-label="Faturas">
+      {resumo && (
+        <p className="sgp-resumo">
+          <IconeInformacoes tamanho={18} />
+          <span>
+            {contar(resumo.quantidade, 'fatura em aberto', 'faturas em aberto')} · Total {moeda(resumo.total)}
+          </span>
+        </p>
+      )}
+
+      {estado && estado.loading && (
+        <p role="status" className="sgp-estado">
+          <IconSpinner size={16} />
+          Consultando o SGP…
+        </p>
+      )}
+      {estado && !estado.loading && estado.error && (
+        <p role="alert" className="sgp-erro">
+          {descreverErro(estado.errorMessage, 'Não foi possível consultar a 2ª via agora.')}
+        </p>
+      )}
+      {estado && !estado.loading && !estado.error && !estado.hasOpenInvoice && (
+        <p className="sgp-estado">Nenhuma fatura em aberto para este contrato.</p>
+      )}
+
+      {fatura && (
+        <>
+          <h3 className="sgp-rotulo">Fatura selecionada</h3>
+          <Seletor
+            rotulo="Faturas em aberto"
+            itens={faturas}
+            escolhidoId={fatura.id}
+            onEscolher={setFaturaId}
+            contagem={contar(faturas.length, 'fatura', 'faturas')}
+            titulo={
+              <span className="sgp-linha-titulo is-entre">
+                <span>{vencimento(fatura.dueDate)}</span>
+                <span className="sgp-valor">{moeda(fatura.value)}</span>
+              </span>
+            }
+            detalhe={
+              <>
+                Nº {fatura.id}
+                <span className="sgp-situacao">Em aberto</span>
+              </>
+            }
+            opcao={(item) => (
+              <>
+                <span className="sgp-linha-titulo is-entre">
+                  <span>{vencimento(item.dueDate)}</span>
+                  <span className="sgp-valor">{moeda(item.value)}</span>
+                </span>
+                <span className="sgp-linha-sub">Nº {item.id}</span>
+              </>
+            )}
+          />
+        </>
+      )}
+
+      {(!estado || (!estado.loading && estado.error)) && (
+        <>
+          <button type="button" className="sgp-segunda-via" onClick={onConsultar}>
+            <IconeConsultarSgp tamanho={18} />
+            Consultar 2ª via
+          </button>
+          <p className="sgp-nota">Pode gerar Pix no SGP.</p>
+        </>
+      )}
+
+      {fatura && (
+        <>
+          <h3 className="sgp-rotulo">Enviar ao cliente (Fatura de {dataCurta(fatura.dueDate)})</h3>
+          <div className="sgp-acoes">
+            {acoes.map(({ chave, rotulo, nome, Icone, tem, falta, acao, previa }) => {
+              const semDado = !tem;
+              const bloqueado = previa ? semDado : semDado || !podeEnviar;
+              return (
+                <button
+                  key={chave}
+                  type="button"
+                  className={`sgp-acao${retorno && retorno.chave === chave && retorno.tipo === 'ok' ? ' is-enviado' : ''}`}
+                  disabled={bloqueado || enviando.has(chave)}
+                  aria-pressed={previa ? qr.aberto : undefined}
+                  title={semDado ? falta : undefined}
+                  aria-describedby={!previa && !podeEnviar ? idMotivo : undefined}
+                  onClick={previa ? alternarQr : () => enviar(chave, nome, acao)}
+                >
+                  {enviando.has(chave) ? <IconSpinner size={20} /> : <Icone tamanho={20} />}
+                  <span>{rotulo}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {qr.aberto && (
+            <figure ref={qrRef} className="sgp-qr">
+              {qr.url && <img src={qr.url} alt="QR code do Pix" width="136" height="136" />}
+              {!qr.url && !qr.erro && (
+                <p role="status" className="sgp-estado">
+                  <IconSpinner size={16} />
+                  Gerando a prévia…
+                </p>
+              )}
+              {qr.erro && (
+                <p role="alert" className="sgp-erro">
+                  {qr.erro}
+                </p>
+              )}
+              <figcaption>Prévia. O cliente ainda não recebeu este QR.</figcaption>
+              <button
+                type="button"
+                className="sgp-botao-principal"
+                disabled={!podeEnviar || enviando.has('qr-envio')}
+                aria-describedby={!podeEnviar ? idMotivo : undefined}
+                onClick={() => enviar('qr-envio', 'QR Pix', () => envios.qr(contrato.id, fatura))}
+              >
+                {enviando.has('qr-envio') ? 'Enviando…' : 'Enviar QR Pix'}
+              </button>
+            </figure>
+          )}
+
+          {retorno && (
+            <p role={retorno.tipo === 'ok' ? 'status' : 'alert'} className={`sgp-retorno ${retorno.tipo === 'ok' ? 'is-ok' : 'is-erro'}`}>
+              {retorno.tipo === 'ok' && <IconCheck size={14} />}
+              {retorno.texto}
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function DadosTecnicos({ contrato }) {
+  const [aberto, setAberto] = useState(false);
+  const id = useId();
+  const linhas = [
+    ...(contrato.phones || []).map((telefone) => ['Telefone', telefone]),
+    ...(contrato.emails || []).map((email) => ['E-mail', email]),
+    ['Endereço', contrato.address],
+    ['Cidade', contrato.city],
+    ['Login', contrato.login],
+    ['MAC', contrato.mac],
+    ['VLAN', contrato.vlan],
+    ['POP', contrato.popName || contrato.popId],
+    ['Conexão', contrato.connectionType],
+  ].filter(([, valor]) => valor !== undefined && valor !== null && String(valor).trim() !== '');
+  if (linhas.length === 0) return null;
+  return (
+    <section className="sgp-tecnicos">
+      <button type="button" className="sgp-tecnicos-botao" aria-expanded={aberto} aria-controls={aberto ? id : undefined} onClick={() => setAberto((valor) => !valor)}>
+        Contatos e dados técnicos
+        <IconeRecolher tamanho={18} className="sgp-chevron" />
+      </button>
+      {aberto && (
+        <dl id={id}>
+          {linhas.map(([rotulo, valor], indice) => (
+            <div key={`${rotulo}-${indice}`}>
+              <dt>{rotulo}</dt>
+              <dd>{valor}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+function SgpLookupPanel({
+  onSendMessage,
+  onSendPdf,
+  onSendPix,
+  onSendPixQr,
+  onSendBarcode,
+  onClose,
+  initialCpf,
+  emTela = false,
+  podeEnviar = true,
+  motivoSemEnvio = null,
+}) {
+  const vinculado = digitos(initialCpf);
+  const [documento, setDocumento] = useState('');
+  const [buscado, setBuscado] = useState(vinculado);
+  const [outroAberto, setOutroAberto] = useState(!vinculado);
+  const [contratoId, setContratoId] = useState(null);
+  const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
+  const voltarRef = useRef(null);
+  const idBusca = useId();
+  const idMotivo = useId();
+
+  // A regra de sempre: começa pelo primeiro contrato que o SGP devolve. O
+  // status fica à vista para o atendente decidir se é esse mesmo.
+  useEffect(() => {
+    setContratoId(contracts.length > 0 ? contracts[0].id : null);
+  }, [contracts]);
+
+  // Abriu (sempre por clique): consulta o documento vinculado ao contato.
+  useEffect(() => {
+    if (vinculado) {
+      setBuscado(vinculado);
+      search(vinculado);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vinculado]);
+
+  // No lugar da conversa, o foco entra pela volta — o único controle de saída.
+  useEffect(() => {
+    if (emTela && voltarRef.current) voltarRef.current.focus();
+  }, [emTela]);
+
+  function buscar(evento) {
+    evento.preventDefault();
+    const d = digitos(documento);
+    if (!d || loading) return;
+    setBuscado(d);
+    search(d);
+  }
+
+  const contrato = contracts.find((item) => String(item.id) === String(contratoId)) || null;
+  const relacao = !client ? null : !vinculado ? 'sem-vinculo' : digitos(buscado) === vinculado ? 'vinculado' : 'diferente';
+  const envios = { pix: onSendPix, qr: onSendPixQr, barras: onSendBarcode, link: onSendMessage, pdf: onSendPdf };
+
+  const formulario = (
+    <form id={idBusca} onSubmit={buscar} className="sgp-busca">
+      <input
+        value={documento}
+        onChange={(evento) => setDocumento(evento.target.value)}
+        placeholder="CPF ou CNPJ"
+        aria-label="CPF ou CNPJ do cliente"
+        inputMode="numeric"
+        autoComplete="off"
+      />
+      <button type="submit" aria-label="Buscar" title="Buscar" className="sgp-buscar" disabled={loading}>
+        <IconeBuscar tamanho={18} />
+      </button>
+    </form>
+  );
+
+  return (
+    <aside role="region" aria-label="Consulta SGP" className="sgp conv-painel">
+      <header className="sgp-topo">
+        {emTela ? (
+          <button ref={voltarRef} type="button" className="sgp-voltar" aria-label="Voltar à conversa" title="Voltar à conversa" onClick={onClose}>
+            <IconeRecolher tamanho={22} style={PARA_A_ESQUERDA} />
+          </button>
+        ) : (
+          <span className="sgp-topo-icone" aria-hidden="true">
+            <IconeConsultarSgp />
+          </span>
+        )}
+        <h2 className="sgp-titulo">Verificação SGP</h2>
+        {!emTela && onClose && (
+          <button type="button" className="sgp-fechar" aria-label="Fechar consulta SGP" title="Fechar" onClick={onClose}>
+            <IconClose size={18} />
           </button>
         )}
-      </div>
+      </header>
 
-      <div className="chat-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            value={cpf}
-            onChange={(e) => setCpf(e.target.value)}
-            placeholder="CPF ou CNPJ"
-            aria-label="CPF do cliente"
-            inputMode="numeric"
-            className="h-10 min-w-0 flex-1 rounded-[12px] border border-wa-border bg-wa-field px-3 text-[14px] text-wa-text outline-none placeholder:text-wa-muted focus:border-accent focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-accent/40"
-          />
-          <button
-            type="submit"
-            aria-label="Buscar"
-            title="Buscar"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-accent text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <IconSearch size={18} />
-          </button>
-        </form>
+      <div className="sgp-corpo chat-scroll">
+        {!vinculado && (
+          <>
+            <p className="sgp-dica">Este contato não tem documento vinculado. Busque pelo documento para ver o contrato e enviar a fatura direto na conversa.</p>
+            {formulario}
+          </>
+        )}
 
         {loading && (
-          <p role="status" className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
+          <p role="status" className="sgp-estado">
             <IconSpinner size={16} />
             Buscando no SGP…
           </p>
         )}
         {error === 'not_found' && (
-          <p role="status" className="rounded-[12px] border border-wa-border bg-wa-field px-3 py-2.5 text-[13.5px] leading-[19px] text-wa-muted">
+          <p role="status" className="sgp-estado">
             Cliente não encontrado. Confira o documento e busque de novo.
           </p>
         )}
         {error === 'error' && (
-          <p role="alert" className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13px] text-wa-error-text">
-            {errorMessage || 'Não foi possível consultar o SGP agora.'}
-          </p>
-        )}
-
-        {!client && !loading && !error && (
-          <p className="px-0.5 pt-1 text-[13px] leading-[18px] text-wa-muted">
-            Busque pelo documento para ver o contrato e enviar a fatura direto na conversa.
+          <p role="alert" className="sgp-erro">
+            {descreverErro(errorMessage, 'Não foi possível consultar o SGP agora.')}
           </p>
         )}
 
         {client && (
-          <>
-            <Block>
-              <p className="text-[14.5px] font-medium leading-[19px] text-wa-text">{client.name}</p>
-              <p className="mt-0.5 text-[12.5px] text-wa-muted">{client.document}</p>
+          <section className="sgp-cliente" aria-label="Cliente no SGP">
+            <span className="sgp-avatar" aria-hidden="true">
+              {String(client.name || '?').trim().charAt(0).toUpperCase()}
+            </span>
+            <div className="sgp-cliente-dados">
+              <p className="sgp-nome">{client.name}</p>
+              <p className="sgp-doc">{mascararDocumento(client.document || buscado)}</p>
+            </div>
+            {relacao === 'vinculado' && <span className="sgp-selo is-ok">Documento vinculado</span>}
+            {relacao === 'diferente' && <span className="sgp-selo is-atencao">Documento diferente do contato</span>}
+            {relacao === 'sem-vinculo' && <span className="sgp-selo">Contato sem documento vinculado</span>}
+          </section>
+        )}
 
-              {contracts.length > 0 && (
-                <div className="relative mt-3">
-                  <label htmlFor="sgp-contract-select" className="sr-only">
-                    Contrato
-                  </label>
-                  <select
-                    id="sgp-contract-select"
-                    value={selectedContractId || ''}
-                    onChange={(e) => setSelectedContractId(e.target.value)}
-                    className="h-9 w-full appearance-none rounded-[10px] border border-wa-border bg-wa-field pl-3 pr-8 text-[13.5px] text-wa-text outline-none focus:border-accent"
-                  >
-                    {contracts.map((contract) => (
-                      <option key={contract.id} value={contract.id}>
-                        Contrato {contract.id}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-wa-icon">
-                    <IconChevronDown size={16} />
-                  </span>
-                </div>
-              )}
+        {vinculado && (
+          <div className="sgp-outro">
+            <button type="button" className="sgp-link" aria-expanded={outroAberto} aria-controls={outroAberto ? idBusca : undefined} onClick={() => setOutroAberto((valor) => !valor)}>
+              Consultar outro documento
+            </button>
+            {outroAberto && formulario}
+          </div>
+        )}
 
-              {selectedContract && (
+        {client && contracts.length === 0 && <p className="sgp-estado">Nenhum contrato encontrado para este cliente no SGP.</p>}
+
+        {contrato && (
+          <section className="sgp-secao" aria-label="Contratos">
+            <h3 className="sgp-rotulo">{contracts.length > 1 ? `Contratos (${contracts.length})` : 'Contrato'}</h3>
+            <Seletor
+              rotulo="Contratos"
+              itens={contracts}
+              escolhidoId={contrato.id}
+              onEscolher={setContratoId}
+              contagem={contar(contracts.length, 'contrato', 'contratos')}
+              titulo={
+                <span className="sgp-linha-titulo">
+                  <span>Contrato {mascararContrato(contrato.id)}</span>
+                  <Status contrato={contrato} />
+                </span>
+              }
+              detalhe={contrato.plan}
+              opcao={(item) => (
                 <>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                    {selectedContract.plan && <Chip>{selectedContract.plan}</Chip>}
-                    <StatusChip status={selectedContract.status} />
-                  </div>
-
-                  {contact.length > 0 && (
-                    <div className="mt-2.5 space-y-0.5 border-t border-wa-border pt-2.5">
-                      {contact.map((item) => (
-                        <p key={item} className="truncate text-[12.5px] leading-[17px] text-wa-muted">
-                          {item}
-                        </p>
-                      ))}
-                    </div>
-                  )}
+                  <span className="sgp-linha-titulo">
+                    <span>Contrato {mascararContrato(item.id)}</span>
+                    <Status contrato={item} />
+                  </span>
+                  {item.plan && <span className="sgp-linha-sub">{item.plan}</span>}
+                  {item.address && <span className="sgp-linha-sub">{item.address}</span>}
+                  {!estaAtivo(item) && item.statusReason && <span className="sgp-aviso">{item.statusReason}</span>}
                 </>
               )}
-            </Block>
-
-            {selectedContract && (
-              <FinanceiroSection
-                key={selectedContract.id}
-                contractId={selectedContract.id}
-                onSendMessage={onSendMessage}
-                onSendPdf={onSendPdf}
-                onSendPix={onSendPix}
-                onSendPixQr={onSendPixQr}
-                onSendBarcode={onSendBarcode}
-                state={duplicateState[selectedContract.id]}
-                onGenerate={() => fetchDuplicate(selectedContract.id)}
-              />
-            )}
-          </>
+            />
+            {!estaAtivo(contrato) && contrato.statusReason && <p className="sgp-aviso">Motivo: {contrato.statusReason}</p>}
+          </section>
         )}
+
+        {contrato && (
+          <Financeiro
+            key={contrato.id}
+            contrato={contrato}
+            estado={duplicateState[contrato.id]}
+            onConsultar={() => fetchDuplicate(contrato.id)}
+            podeEnviar={podeEnviar}
+            idMotivo={idMotivo}
+            envios={envios}
+          />
+        )}
+
+        {contrato && <DadosTecnicos key={`tecnicos-${contrato.id}`} contrato={contrato} />}
       </div>
+
+      <footer className={`sgp-rodape${podeEnviar ? '' : ' is-sem-envio'}`}>
+        <IconeAssumir tamanho={18} />
+        <span id={idMotivo}>{podeEnviar ? 'Atendimento sob sua responsabilidade' : motivoSemEnvio || 'Só o responsável pelo atendimento pode enviar ao cliente.'}</span>
+      </footer>
     </aside>
   );
 }

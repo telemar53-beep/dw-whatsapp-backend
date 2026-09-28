@@ -1,0 +1,274 @@
+/* ---------- Conversa da mesa, clara (fatia 2 do novo atendimento) ----------
+   Vem com ConversaDaMesa.jsx e, desde a 2ª fatia da Supervisão, também com o
+   popup de conversa dela (components/supervisao/PopupDaSupervisao.jsx), que
+   importa esta folha direto — é a mesma conversa clara. Por isso ela é um
+   arquivo à parte na rota da mesa. Tudo aqui mora sob `.mesa-conversa`: o
+   <main> da DashboardPage e o corpo daquele popup. O modal dos Encerrados
+   também é `.chat-workspace`, mas nunca `.mesa-conversa`: nada daqui o alcança.
+
+   Os tokens claros valem na COLUNA da conversa (o primeiro filho de
+   `.conv-raiz`), não no encaixe do painel lateral: o painel do SGP está
+   congelado e continua com os tokens de antes.
+
+   Custo: superfícies lisas, divisores de 1px, nenhum blur, backdrop-filter,
+   filtro ou gradiente. Os que existiam na conversa da mesa saem aqui:
+   o gradiente do cabeçalho e da timeline, o do botão "Responder" (um por
+   mensagem) e o blur de 1px do horário sobre foto e nos popovers. */
+
+.mesa-conversa .conv-raiz > div:first-child,
+.mesa-conversa .mesa-vazia {
+  color-scheme: light;
+
+  --cm-papel: #ffffff;
+  --cm-nevoa: #eef0f4;
+  --cm-suave: #f3f4f7;
+  --cm-linha: #e3e6ec;
+  --cm-texto: #161a26;
+  --cm-texto-2: #5b6272;
+  --cm-texto-3: #6b7180;
+  --cm-indigo: #4f46e5;
+  --cm-indigo-texto: #3f37c9;
+  --cm-enviada: #e6e4fb;
+  --cm-ia: #5b3fb3;
+
+  /* Tokens do tema que os componentes de dentro leem. Laranja (`chat-orange`)
+     vira âmbar, e não índigo: dentro da conversa ele marca atenção (o rodapé
+     "Pix enviado como texto"). O cobre só enfeitava (citação, "Respondendo"). */
+  --color-chat-text: var(--cm-texto);
+  --color-chat-muted: var(--cm-texto-2);
+  --color-chat-faint: var(--cm-texto-3);
+  --color-chat-icon: var(--cm-texto-2);
+  --color-chat-copper: var(--cm-indigo);
+  --color-chat-orange: #b45309;
+  --color-chat-orange-ink: #ffffff;
+  --color-chat-online: #13855f;
+  --color-chat-canvas: var(--cm-papel);
+  --color-wa-text: var(--cm-texto);
+  --color-wa-muted: var(--cm-texto-2);
+  --color-wa-meta: var(--cm-texto-3);
+  --color-wa-icon: var(--cm-texto-2);
+  --color-wa-border: var(--cm-linha);
+  --color-wa-border-strong: #cfd3dc;
+  --color-wa-panel: var(--cm-papel);
+  --color-wa-field: var(--cm-papel);
+  --color-wa-surface: var(--cm-suave);
+  --color-wa-surface-soft: var(--cm-suave);
+  --color-wa-hover: var(--cm-suave);
+  --color-wa-active: #e9ebf0;
+  --color-wa-avatar: #e8e9f2;
+  --color-wa-avatar-text: #4a5063;
+  --color-wa-error-bg: #fdecea;
+  --color-wa-error-text: #b3261e;
+  --color-wa-warn-bg: #fff4dc;
+  --color-wa-warn-text: #7a4a06;
+  --color-wa-link: var(--cm-indigo-texto);
+  --color-wa-chip: #e5f4ee;
+  --color-wa-chip-text: #11734f;
+  --color-ui-ink-strong: var(--cm-texto);
+  --color-ui-ink-muted: var(--cm-texto-2);
+  --color-ui-ink-faint: var(--cm-texto-3);
+  --color-ui-ink-ai: var(--cm-ia);
+  --color-ui-line: var(--cm-linha);
+  --color-ui-surface-overlay: var(--cm-papel);
+  --color-ui-surface-field: var(--cm-papel);
+  --color-accent: var(--cm-indigo);
+  --color-accent-strong: #4338ca;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: var(--cm-indigo);
+  --color-focus-ring: var(--cm-indigo);
+  --chat-surface-canvas: var(--cm-nevoa);
+  --chat-surface-raised: var(--cm-papel);
+  --chat-surface-input: var(--cm-suave);
+  --chat-surface-ai: #f6f5fe;
+  --chat-line-soft: var(--cm-linha);
+  --chat-ink: var(--cm-texto-2);
+  --chat-accent-soft: var(--cm-indigo);
+  --chat-ai-chip: #e2defb;
+  --chat-ai-chip-ink: #3b2a86;
+  --chat-bubble-in: var(--cm-papel);
+  --chat-bubble-out: var(--cm-enviada);
+  --chat-bubble-ai: var(--cm-enviada);
+  --scroll-thumb: rgba(22, 26, 38, 0.18);
+  --scroll-thumb-hover: rgba(22, 26, 38, 0.32);
+
+  color: var(--cm-texto);
+}
+.chat-workspace .mesa-conversa { background: #eef0f4; }
+.chat-workspace .mesa-conversa .conv-raiz > div:first-child { background: var(--cm-nevoa); }
+
+/* ---------- Cabeçalho ----------
+   Uma linha: voltar (só quando a conversa ocupa a tela), contato e ações.
+   `container-type` porque a largura é a da coluna, não a da janela: com o
+   painel aberto a coluna encolhe e os rótulos das ações cedem primeiro. */
+.mesa-cab { display: flex; align-items: center; gap: 8px; min-height: 60px; padding: 8px 12px 8px 16px; background: var(--cm-papel); border-bottom: 1px solid var(--cm-linha); container-type: inline-size; }
+.mesa-cab-voltar { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin-left: -8px; border-radius: 10px; color: var(--cm-texto-2); }
+.mesa-cab-voltar:hover { background: var(--cm-suave); color: var(--cm-texto); }
+@media (min-width: 1024px) { .mesa-cab-voltar { display: none; } }
+.mesa-cab-contato { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; padding: 4px 6px 4px 4px; margin-left: -4px; border-radius: 10px; text-align: left; }
+.mesa-cab-contato:hover { background: var(--cm-suave); }
+.mesa-cab-contato:focus-visible { outline-offset: -2px; }
+.mesa-cab-identidade { display: flex; flex-direction: column; min-width: 0; }
+.mesa-cab-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--cm-texto); }
+.mesa-cab-estado { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; line-height: 16px; color: var(--cm-texto-2); white-space: nowrap; }
+.mesa-cab-ponto { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cm-texto-3); }
+.mesa-cab-ponto[data-estado='atendimento'] { background: #13855f; }
+.mesa-cab-ponto[data-estado='espera'] { background: #d97706; }
+.mesa-cab-ponto[data-estado='automacao'] { background: #7c3aed; }
+.mesa-cab-canal { min-width: 0; overflow: hidden; text-overflow: ellipsis; margin-left: 6px; color: var(--cm-texto-3); }
+.mesa-cab-acoes { display: flex; align-items: center; gap: 2px; flex: none; margin-left: auto; }
+
+/* Ações sem moldura: ícone e texto, a superfície só aparece no ponteiro. O
+   destaque fica para quem pede decisão — Assumir (índigo) e Encerrar
+   (vermelho no ícone, que é irreversível). */
+.mesa-acao { display: inline-flex; align-items: center; gap: 8px; flex: none; height: 40px; padding: 0 10px; border-radius: 10px; color: var(--cm-texto); font-size: 13.5px; font-weight: 500; white-space: nowrap; transition: background-color .12s, color .12s; }
+.mesa-acao svg { flex: none; color: var(--cm-texto-2); }
+.mesa-acao:hover { background: var(--cm-suave); }
+.mesa-acao:hover svg { color: var(--cm-texto); }
+.mesa-acao[aria-expanded='true'] { background: #ecebfd; color: var(--cm-indigo-texto); }
+.mesa-acao[aria-expanded='true'] svg { color: var(--cm-indigo-texto); }
+.mesa-acao.is-encerrar svg { color: #c2261c; }
+.mesa-acao.is-encerrar:hover { background: #fdecea; }
+.mesa-acao.is-principal { margin-right: 4px; background: var(--cm-indigo); color: #ffffff; font-weight: 600; }
+.mesa-acao.is-principal svg { color: #ffffff; }
+.mesa-acao.is-principal:hover { background: #4338ca; }
+/* Coluna estreita (painel aberto ou tela pequena): as ações viram só ícone —
+   o nome continua no aria-label. Assumir mantém o texto enquanto sobra lugar
+   para o nome do cliente; no celular vira ícone também, com o índigo. */
+@container (max-width: 720px) {
+  .mesa-cab .mesa-acao-texto { display: none; }
+  .mesa-cab .mesa-acao { width: 40px; padding: 0; justify-content: center; }
+  .mesa-cab .mesa-acao.is-principal { width: auto; padding: 0 12px; }
+}
+@container (max-width: 480px) {
+  .mesa-cab .mesa-acao-principal-texto { display: none; }
+  .mesa-cab .mesa-acao.is-principal { width: 44px; padding: 0; }
+}
+@container (max-width: 420px) {
+  .mesa-cab-canal { display: none; }
+}
+
+/* ---------- Faixa de contexto ----------
+   Uma linha fina com o que a conversa já traz, em pares rótulo/valor, e as
+   duas consultas (histórico e dados do cliente) à direita. Quando falta
+   largura, os dados cedem do fim para o começo; as consultas ficam. */
+.mesa-faixa { display: flex; align-items: center; gap: 16px; min-height: 36px; padding: 0 12px 0 16px; background: var(--cm-papel); border-bottom: 1px solid var(--cm-linha); container-type: inline-size; }
+/* Os itens quebram linha e só a primeira aparece (altura de uma linha): quem
+   não cabe inteiro desce e sai inteiro, na ordem do JSX, sem limiar de
+   largura chutado. Só o primeiro encolhe, com reticências, para nunca sumir. */
+.mesa-faixa-dados { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center; column-gap: 18px; row-gap: 0; flex: 1 1 auto; min-width: 0; height: 16px; overflow: hidden; margin: 0; }
+.mesa-faixa-item { display: flex; align-items: baseline; gap: 6px; flex: none; white-space: nowrap; font-size: 12.5px; line-height: 16px; }
+.mesa-faixa-item:first-child { flex: 0 1 auto; min-width: 0; }
+/* A cidade entra na linha se couberem 96 px e cresce até o próprio tamanho. */
+.mesa-faixa-item.is-flexivel { flex: 1 1 96px; min-width: 96px; max-width: max-content; }
+.mesa-faixa-item dt { flex: none; color: var(--cm-texto-3); }
+.mesa-faixa-item dd { min-width: 0; max-width: 190px; overflow: hidden; text-overflow: ellipsis; margin: 0; color: var(--cm-texto); font-weight: 500; }
+.mesa-faixa-acoes { display: flex; align-items: center; gap: 2px; flex: none; margin-left: auto; }
+.mesa-acao.is-faixa { height: 32px; padding: 0 8px; gap: 6px; font-size: 12.5px; color: var(--cm-texto-2); }
+@container (max-width: 640px) {
+  .mesa-faixa .mesa-acao-texto { display: none; }
+  .mesa-faixa .mesa-acao.is-faixa { width: 32px; padding: 0; justify-content: center; }
+}
+
+/* ---------- Timeline ----------
+   Cor lisa, sem padrão nem gradiente. As mensagens se agrupam pelo espaço e
+   pelo canto recortado da primeira de cada grupo — sem borda em volta. */
+.chat-workspace .mesa-conversa .chat-workspace-timeline { background: var(--cm-nevoa); padding: 12px 24px 16px; }
+@media (max-width: 700px) { .chat-workspace .mesa-conversa .chat-workspace-timeline { padding: 10px 12px 12px; } }
+.chat-workspace .mesa-conversa .chat-workspace-system-note { color: var(--cm-texto-3); font-size: 12px; }
+.chat-workspace .mesa-conversa .chat-workspace-day { background: var(--cm-papel); color: var(--cm-texto-2); font-size: 12px; font-weight: 500; padding: 4px 12px; }
+.chat-workspace .mesa-conversa .chat-carregar-anteriores { border: 1px solid var(--cm-linha); background: var(--cm-papel); color: var(--cm-texto-2); }
+.chat-workspace .mesa-conversa .chat-carregar-anteriores:hover { background: var(--cm-suave); color: var(--cm-texto); }
+
+.chat-workspace .mesa-conversa .chat-workspace-bubble:not(.is-sticker) { border: 0; border-radius: 10px; box-shadow: none; }
+.chat-workspace .mesa-conversa .chat-workspace-bubble.is-inbound:not(.is-sticker) { background: var(--cm-papel); border: 0; }
+.chat-workspace .mesa-conversa .chat-workspace-bubble.is-outbound:not(.is-sticker),
+.chat-workspace .mesa-conversa .chat-workspace-bubble.is-ai:not(.is-sticker) { background: var(--cm-enviada); border: 0; }
+.chat-workspace .mesa-conversa .chat-grupo-inicio > .chat-workspace-bubble.is-inbound:not(.is-sticker) { border-top-left-radius: 3px; }
+.chat-workspace .mesa-conversa .chat-grupo-inicio > .chat-workspace-bubble.is-outbound:not(.is-sticker) { border-top-right-radius: 3px; }
+.chat-workspace .mesa-conversa .chat-workspace-message-text { font-size: 14px; line-height: 20px; color: var(--cm-texto); }
+.chat-workspace .mesa-conversa .chat-message-author { margin-bottom: 2px; font-size: 12px; font-weight: 600; color: var(--cm-texto-2); }
+.chat-workspace .mesa-conversa .chat-message-author.is-ai { color: var(--cm-ia); }
+/* Horário e tiques: tinta que passa de 4,5:1 também sobre a enviada. */
+.chat-workspace .mesa-conversa .chat-workspace-bubble .text-chat-faint { color: var(--cm-texto-2); font-size: 11.5px; }
+.chat-workspace .mesa-conversa .chat-workspace-bubble :is([title='Enviado'], [title='Entregue']) { color: var(--cm-texto-3); }
+/* Selo "IA" e tique são irmãos na linha da hora, e a regra do selo no
+   dashboard.css pinta os dois: "lido" perdia o verde e "falha" o vermelho na
+   mensagem da IA. Aqui só o selo leva a cor da IA; o tique volta às classes
+   dele (revert-layer desfaz as regras sem camada e devolve as utilities). */
+.chat-workspace .mesa-conversa .chat-workspace-bubble.is-ai .text-chat-faint > span:not([title]) { background: var(--chat-ai-chip); color: var(--chat-ai-chip-ink); }
+.chat-workspace .mesa-conversa .chat-workspace-bubble.is-ai .text-chat-faint > span[title] { background: revert-layer; color: revert-layer; }
+.chat-workspace .mesa-conversa .chat-workspace-bubble.is-ai .text-chat-faint > span:is([title='Enviado'], [title='Entregue']) { color: var(--cm-texto-3); }
+/* Horário sobre foto: fundo sólido no lugar do blur de 1px. */
+.chat-workspace .mesa-conversa .chat-workspace-bubble > span.rounded-full { backdrop-filter: none; background: rgba(0, 0, 0, 0.5); }
+.chat-workspace .mesa-conversa .chat-workspace-bubble .text-red-400 { color: #b3261e; }
+.chat-workspace .mesa-conversa .chat-citacao { background: rgba(22, 26, 38, 0.05); }
+/* "Responder": sem o gradiente (um por mensagem); aparece com a cor da bolha. */
+.chat-workspace .mesa-conversa .chat-workspace-bubble > button[aria-label='Responder'] { background: var(--cm-papel); border-radius: 0 10px 0 8px; color: var(--cm-texto-2); }
+.chat-workspace .mesa-conversa .chat-workspace-bubble.is-outbound > button[aria-label='Responder'] { background: var(--cm-enviada); }
+
+/* ---------- Avisos entre a timeline e o compositor ----------
+   Janela de 24 h: problema operacional, fica à vista em âmbar — nunca
+   escondido para a tela ficar bonita. */
+.chat-workspace .mesa-conversa .chat-aviso { margin: 0; padding: 10px 16px; border: 0; border-top: 1px solid #f3dfb7; border-radius: 0; background: #fff7e6; color: #5b4a2a; }
+.chat-workspace .mesa-conversa .chat-aviso > span:first-child { color: #b45309; }
+.chat-workspace .mesa-conversa .chat-aviso strong { color: #3f2f10; }
+.chat-workspace .mesa-conversa .chat-aviso button { color: var(--cm-indigo-texto); }
+.chat-workspace .mesa-conversa .chat-ai-suggestion { background: #f6f5fe; border-top: 1px solid var(--cm-linha); }
+.chat-workspace .mesa-conversa .chat-ai-suggestion button:first-child { background: var(--cm-indigo); color: #ffffff; }
+
+/* ---------- Compositor ----------
+   Faixa de papel com a pílula de escrita e a ação à direita (Enviar ou
+   Gravar áudio — alternam como antes, nunca os dois). */
+.chat-workspace .mesa-conversa .chat-workspace-composer { background: var(--cm-papel); }
+.chat-workspace .mesa-conversa .chat-workspace-composer form { border-top: 1px solid var(--cm-linha); padding: 10px 16px; gap: 8px; }
+.chat-workspace .mesa-conversa .chat-workspace-composer form > div { min-height: 48px; gap: 2px; padding: 4px; border: 1px solid transparent; border-radius: 24px; background: var(--cm-suave); }
+.chat-workspace .mesa-conversa .chat-workspace-composer form > div:focus-within { border-color: var(--cm-indigo); background: var(--cm-papel); }
+.chat-workspace .mesa-conversa .chat-workspace-composer form > div > button { width: 40px; height: 40px; border-radius: 50%; color: var(--cm-texto-2); }
+.chat-workspace .mesa-conversa .chat-workspace-composer form > div > button:hover { background: #e6e8ee; color: var(--cm-texto); }
+.chat-workspace .mesa-conversa .chat-workspace-composer textarea { padding: 10px 8px; font-size: 14px; line-height: 20px; color: var(--cm-texto); }
+.chat-workspace .mesa-conversa .chat-workspace-composer textarea::placeholder { color: var(--cm-texto-3); }
+/* O campo é da pílula: o anel de foco do tema desenharia um segundo contorno
+   dentro dela. O foco fica na borda índigo da pílula (acima), e o contorno
+   transparente do tema continua para o alto contraste do Windows. O
+   `!important` é porque a regra do tema pesa (0,7,1) — de propósito, para
+   vencer os `outline-none` dos campos. */
+.mesa-conversa .chat-workspace-composer textarea:focus-visible { box-shadow: none !important; }
+/* Tela estreita: com três ações na pílula e o campo em 16px, o texto de
+   orientação quebrava em duas linhas e a pílula crescia. Alvos de 36px (os de
+   antes tinham 30×32) e respiros menores devolvem a linha ao campo. */
+@media (max-width: 480px) {
+  .chat-workspace .mesa-conversa .chat-workspace-composer form { padding: 8px 10px; gap: 6px; }
+  .chat-workspace .mesa-conversa .chat-workspace-composer form > div { padding: 3px; gap: 0; }
+  .chat-workspace .mesa-conversa .chat-workspace-composer form > div > button { width: 36px; height: 36px; }
+  .chat-workspace .mesa-conversa .chat-workspace-composer textarea { padding: 10px 6px; }
+}
+/* Abaixo de 16px o Safari do celular dá zoom ao focar o campo. */
+@media (pointer: coarse) { .chat-workspace .mesa-conversa .chat-workspace-composer textarea { font-size: 16px; } }
+.chat-workspace .mesa-conversa .chat-workspace-composer :is(button[aria-label='Enviar'], button[aria-label='Parar gravação']) { width: 44px; height: 44px; border-radius: 50%; background: var(--cm-indigo); color: #ffffff; }
+.chat-workspace .mesa-conversa .chat-workspace-composer :is(button[aria-label='Enviar'], button[aria-label='Parar gravação']):hover { background: #4338ca; }
+.chat-workspace .mesa-conversa .chat-workspace-composer button[aria-label='Gravar áudio'] { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--cm-suave); color: var(--cm-texto-2); }
+.chat-workspace .mesa-conversa .chat-workspace-composer button[aria-label='Gravar áudio']:hover { background: #e6e8ee; color: var(--cm-texto); }
+/* Resposta e anexo em preparo: faixa neutra acima da pílula. */
+.chat-workspace .mesa-conversa .chat-workspace-composer > div > .rounded-2xl { background: var(--cm-suave); }
+/* Popovers de emoji e respostas rápidas: papel, filete e sombra curta — sem o
+   blur de antes. */
+.mesa-conversa :is(.dialog-emoji-picker, .dialog-quick-replies) { backdrop-filter: none; background: var(--cm-papel); border-color: var(--cm-linha); box-shadow: 0 6px 18px rgba(20, 23, 40, 0.12); }
+.mesa-conversa :is(.dialog-emoji-picker, .dialog-quick-replies) button:hover { background: var(--cm-suave); }
+
+/* ---------- Aviso de canal (acima das colunas) ----------
+   Mesma faixa, mesma posição e mesmo texto; só o tom de aviso da tela clara. */
+.mesa-aviso-canal { --color-chat-text: #3f2f10; --color-chat-muted: #5b4a2a; --color-chat-orange: #b45309; }
+.mesa-aviso-canal > div[aria-live][class] { border-bottom: 1px solid #f3dfb7; background: #fff7e6; }
+
+/* ---------- Sem conversa aberta ----------
+   A marca da instalação, uma orientação e o registro. Nada de ilustração. */
+.mesa-vazia { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; padding: 24px; text-align: center; background: var(--cm-nevoa); }
+/* A marca vem como fundo (a imagem chega pelo style): é decorativa, e um
+   <img> ganharia do React dois ouvintes (load e error) só para enfeitar. */
+.mesa-vazia-selo { display: block; width: 64px; height: 64px; margin-bottom: 6px; border-radius: 16px; background-color: #1f1b4b; background-position: center; background-size: 40px 40px; background-repeat: no-repeat; }
+.mesa-vazia-monograma { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 6px; border-radius: 16px; background: #1f1b4b; color: #ffffff; font-size: 18px; font-weight: 700; }
+.mesa-vazia-titulo { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; color: var(--cm-texto); }
+.mesa-vazia-texto { max-width: 38ch; font-size: 14px; line-height: 20px; color: var(--cm-texto-2); }
+.mesa-vazia-registro { display: flex; align-items: center; gap: 6px; margin-top: 18px; font-size: 12.5px; color: var(--cm-texto-3); }
+
+@media (prefers-reduced-motion: reduce) { .mesa-acao { transition: none; } }

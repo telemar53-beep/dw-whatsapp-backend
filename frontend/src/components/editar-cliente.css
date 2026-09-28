@@ -1,0 +1,343 @@
+/* Modal "Editar cliente" — a variante contact-edit do diálogo, clara (mockup
+   aprovado em 26/09). Chega junto com o componente, sob demanda.
+
+   Toda regra aqui começa pela variante: os outros diálogos do sistema, que
+   dividem o ui/Dialog e o overlays.css, não mudam em nada. Os valores de cor
+   são os do painel "Dados do cliente" e do SGP.
+
+   Custo: fundo chapado, divisórias de 1px, sombra única e curta. Sem
+   desfoque — nem no diálogo nem no fundo da página, que era o efeito mais caro
+   do modal antigo nos PCs fracos. */
+
+/* O fundo escurecido, sem desfoque. */
+.chat-theme:has(> [data-dialog='contact-edit']) {
+  background: rgba(22, 26, 38, 0.6);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+[data-dialog='contact-edit'].dw-dialog {
+  --ec-papel: #ffffff;
+  --ec-suave: #f6f7f9;
+  --ec-linha: #e3e6ec;
+  --ec-borda: #cfd3dc;
+  --ec-texto: #161a26;
+  --ec-texto-2: #5b6272;
+  --ec-texto-3: #6b7180;
+  --ec-indigo: #4f46e5;
+  --ec-indigo-forte: #4338ca;
+  /* Um pouco mais claro que o índigo normal; com texto branco, 5,1:1. */
+  --ec-indigo-salvando: #5f5ae6;
+  --ec-erro-fundo: #fdecea;
+  --ec-erro-texto: #b3261e;
+  /* Tokens que o cabeçalho e o "×" do diálogo leem. */
+  --color-wa-text: var(--ec-texto);
+  --color-wa-muted: var(--ec-texto-2);
+  --color-wa-panel: var(--ec-papel);
+  --color-wa-surface-line: var(--ec-linha);
+  --color-wa-hover: var(--ec-suave);
+  --color-focus-ring: var(--ec-indigo);
+  color-scheme: light;
+  max-width: 640px;
+  background: var(--ec-papel);
+  color: var(--ec-texto);
+  border: 1px solid var(--ec-linha);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(22, 26, 38, 0.16);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Cabeçalho: título e apoio. A divisória fica recuada na margem do conteúdo,
+   como as das seções. O :has() iguala o seletor do overlays.css que reserva
+   espaço para o "×" — sem ele, os dois empatariam e valeria a ordem de carga. */
+[data-dialog='contact-edit'].dw-dialog:has(.dw-dialog-close) .dw-dialog-heading {
+  margin: 0 24px;
+  padding: 20px 40px 16px 0;
+  border-bottom: 1px solid var(--ec-linha);
+}
+[data-dialog='contact-edit'].dw-dialog .dw-dialog-heading h2 {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ec-texto);
+}
+[data-dialog='contact-edit'].dw-dialog .dw-dialog-heading p {
+  margin-top: 2px;
+  font-size: 13.5px;
+  line-height: 19px;
+  color: var(--ec-texto-2);
+}
+[data-dialog='contact-edit'].dw-dialog .dw-dialog-close {
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--ec-texto-2);
+}
+[data-dialog='contact-edit'].dw-dialog .dw-dialog-close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Corpo: seções separadas por divisória fina; só ele rola. */
+[data-dialog='contact-edit'] .ec-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+[data-dialog='contact-edit'] .ec-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px;
+}
+[data-dialog='contact-edit'] .ec-secao {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--ec-linha);
+}
+[data-dialog='contact-edit'] .ec-secao:last-child {
+  border-bottom: 0;
+}
+[data-dialog='contact-edit'] .ec-titulo {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ec-texto);
+}
+[data-dialog='contact-edit'] .ec-apoio {
+  margin: -8px 0 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ec-texto-2);
+}
+
+/* Campos. O overlays.css dá a todo campo de diálogo fonte de 13 px, padding e
+   raio próprios, com um seletor de especificidade (0,4,1). O daqui passa dele
+   (0,5,1) — senão, no celular, o campo volta a 13 px e o Safari aproxima a
+   tela no foco. */
+[data-dialog='contact-edit'] .ec-linha {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+[data-dialog='contact-edit'] .ec-campo {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  align-content: start;
+}
+[data-dialog='contact-edit'] .ec-rotulo {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--ec-texto-2);
+}
+[data-dialog='contact-edit'].dw-dialog .ec-form .ec-corpo .ec-controle:is(input, select, textarea) {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--ec-borda);
+  border-radius: 8px;
+  background: var(--ec-papel);
+  color: var(--ec-texto);
+  font-size: 15px;
+  line-height: 20px;
+}
+[data-dialog='contact-edit'].dw-dialog .ec-form .ec-corpo .ec-controle.is-texto {
+  min-height: 96px;
+  padding: 10px 12px;
+  line-height: 21px;
+  resize: vertical;
+}
+[data-dialog='contact-edit'].dw-dialog .ec-form .ec-corpo .ec-controle:is(input, select, textarea):focus-visible {
+  border-color: var(--ec-indigo);
+}
+[data-dialog='contact-edit'].dw-dialog .ec-form .ec-corpo .ec-controle:is(input, select, textarea):disabled {
+  background: var(--ec-suave);
+  color: var(--ec-texto-3);
+  cursor: not-allowed;
+}
+[data-dialog='contact-edit'] .ec-dica {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--ec-texto-3);
+}
+
+/* Mensagens: a carga dos municípios e o erro ao salvar. */
+[data-dialog='contact-edit'] .ec-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 8px;
+  background: var(--ec-erro-fundo);
+  color: var(--ec-erro-texto);
+  font-size: 13.5px;
+  line-height: 19px;
+}
+[data-dialog='contact-edit'] .ec-aviso-acao {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+}
+[data-dialog='contact-edit'] .ec-erro {
+  flex: none;
+  margin: 0 24px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ec-erro-fundo);
+  color: var(--ec-erro-texto);
+  font-size: 13.5px;
+  line-height: 19px;
+}
+
+/* Rodapé: Cancelar em texto; índigo só na ação principal. Divisória recuada,
+   como a do cabeçalho. */
+[data-dialog='contact-edit'].dw-dialog .ec-rodape {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 0 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--ec-linha);
+}
+[data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+[data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao.is-secundario {
+  background: transparent;
+  color: var(--ec-texto-2);
+}
+[data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao.is-principal {
+  background: var(--ec-indigo);
+  color: #ffffff;
+}
+[data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* "Salvando…": índigo sólido e texto branco. Sem opacidade — no botão
+   inteiro ela lavava o texto junto com o fundo (2,5:1). */
+[data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao.is-principal[aria-disabled='true'] {
+  background: var(--ec-indigo-salvando);
+  color: #ffffff;
+  cursor: not-allowed;
+}
+[data-dialog='contact-edit'] :is(.ec-botao, .ec-aviso-acao):focus-visible {
+  outline: 2px solid var(--ec-indigo);
+  outline-offset: 2px;
+}
+
+/* Sobre (hover) só onde há ponteiro que paira: no toque, o :hover gruda
+   depois do toque e o botão fica na cor de "sobre". */
+@media (hover: hover) {
+  [data-dialog='contact-edit'].dw-dialog .dw-dialog-close:hover:not(:disabled) {
+    background: var(--ec-suave);
+    color: var(--ec-texto);
+  }
+  [data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao.is-secundario:hover:not(:disabled) {
+    background: var(--ec-suave);
+    color: var(--ec-texto);
+  }
+  [data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao.is-principal:hover:not([aria-disabled='true']) {
+    background: var(--ec-indigo-forte);
+  }
+}
+
+/* Toque em tela maior (tablet): campos de 16 px e alvos de 44 px. Vem antes
+   do bloco do celular, que também é toque e fica com os 48 px dele. */
+@media (pointer: coarse) {
+  [data-dialog='contact-edit'].dw-dialog .ec-form .ec-corpo .ec-controle:is(input, select, textarea) {
+    font-size: 16px;
+  }
+  [data-dialog='contact-edit'].dw-dialog .dw-dialog-close,
+  [data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Celular: folha quase em tela inteira, uma coluna, campos de 16 px (o
+   Safari não aproxima a tela no foco) e alvos de 44 px ou mais; ações presas
+   embaixo, de ponta a ponta, longe da área do gesto do aparelho. */
+@media (max-width: 600px) {
+  .chat-theme:has(> [data-dialog='contact-edit']) {
+    align-items: flex-end;
+    padding: max(12px, env(safe-area-inset-top)) 0 0;
+  }
+  [data-dialog='contact-edit'].dw-dialog {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    border-width: 1px 0 0;
+    border-radius: 16px 16px 0 0;
+  }
+  [data-dialog='contact-edit'].dw-dialog:has(.dw-dialog-close) .dw-dialog-heading {
+    margin: 0 16px;
+    padding: 16px 48px 14px 0;
+  }
+  [data-dialog='contact-edit'].dw-dialog .dw-dialog-close {
+    top: 8px;
+    right: 8px;
+    width: 44px;
+    height: 44px;
+  }
+  [data-dialog='contact-edit'] .ec-corpo {
+    padding: 0 16px;
+  }
+  [data-dialog='contact-edit'] .ec-linha {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  [data-dialog='contact-edit'].dw-dialog .ec-form .ec-corpo .ec-controle:is(input, select, textarea) {
+    min-height: 48px;
+    font-size: 16px;
+  }
+  /* Aviso em coluna: o texto do "Tentar novamente" alinha com o da mensagem
+     (o botão tem 8 px de respiro dos lados). */
+  [data-dialog='contact-edit'] .ec-aviso {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  [data-dialog='contact-edit'] .ec-aviso-acao {
+    min-height: 44px;
+    margin-left: -8px;
+  }
+  [data-dialog='contact-edit'] .ec-erro {
+    margin: 0 16px 12px;
+  }
+  [data-dialog='contact-edit'].dw-dialog .ec-rodape {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin: 0;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  [data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao {
+    min-height: 48px;
+  }
+  [data-dialog='contact-edit'].dw-dialog .ec-rodape .ec-botao.is-secundario {
+    border: 1px solid var(--ec-linha);
+    background: var(--ec-suave);
+    color: var(--ec-texto);
+  }
+}

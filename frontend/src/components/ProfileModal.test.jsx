@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProfileModal from './ProfileModal';
@@ -174,5 +174,84 @@ describe('Meu perfil: estados e comportamento', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Descartar' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+function largura(px) {
+  vi.stubGlobal('matchMedia', (consulta) => {
+    const max = /max-width:\s*(\d+)px/.exec(consulta);
+    return { matches: Boolean(max) && px <= Number(max[1]), media: consulta, addEventListener() {}, removeEventListener() {} };
+  });
+}
+
+// Bloco 1 (28/09): claro, um só jeito de sair por largura, erro fixo acima do
+// rodapé e só os campos que existem (nome e telefone; o e-mail é só leitura).
+describe('Meu perfil claro', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('desktop: claro, "Fechar" no cabeçalho, sem "×", e sem "Sair" no formulário', async () => {
+    render(<ProfileModal onClose={vi.fn()} />);
+    await screen.findByDisplayValue('Ana');
+    const dialogo = screen.getByRole('dialog', { name: 'Meu perfil' });
+    expect(dialogo).toHaveClass('mc');
+    expect(dialogo).not.toHaveClass('is-celular');
+    expect(screen.getAllByRole('button', { name: 'Fechar' })).toHaveLength(1);
+    expect(document.querySelector('[data-dialog-close]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /sair/i })).not.toBeInTheDocument();
+    // Só nome e telefone são campos; e-mail, setor e papel não viram edição.
+    expect(screen.queryByLabelText(/e-mail/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/setor|papel|função/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/nome completo/i)).toHaveClass('mc-entrada');
+  });
+
+  test('celular: tela cheia, a seta de voltar é a única saída do cabeçalho', async () => {
+    largura(390);
+    const onClose = vi.fn();
+    render(<ProfileModal onClose={onClose} />);
+    await screen.findByDisplayValue('Ana');
+    expect(screen.getByRole('dialog', { name: 'Meu perfil' })).toHaveClass('is-celular');
+    expect(screen.queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('Escape com edição pergunta antes de descartar, com título', async () => {
+    const onClose = vi.fn();
+    render(<ProfileModal onClose={onClose} />);
+    await screen.findByDisplayValue('Ana');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '1');
+    await userEvent.keyboard('{Escape}');
+    expect(await screen.findByRole('alertdialog', { name: 'Descartar alterações?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Descartar' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('erro ao salvar: fixo acima do rodapé, fora do corpo que rola; um envio por clique', async () => {
+    api.updateMyProfile.mockRejectedValue({ body: { error: 'Internal server error' } });
+    render(<ProfileModal onClose={vi.fn()} />);
+    await screen.findByDisplayValue('Ana');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    const erro = await screen.findByRole('alert');
+    expect(erro).toHaveTextContent('O servidor encontrou um erro. Tente de novo em instantes.');
+    expect(erro).toHaveClass('mc-erro');
+    expect(erro.closest('.mc-corpo')).toBeNull();
+    expect(api.updateMyProfile).toHaveBeenCalledTimes(1);
+  });
+
+  test('salvo com sucesso: a confirmação aparece no rodapé, junto do botão', async () => {
+    api.updateMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null });
+    render(<ProfileModal onClose={vi.fn()} />);
+    await screen.findByDisplayValue('Ana');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    const ok = await screen.findByText('Perfil atualizado.');
+    expect(ok.closest('.mc-rodape')).not.toBeNull();
+  });
+
+  test('carregando: diz que carrega, sem formulário', () => {
+    api.getMyProfile.mockReturnValue(new Promise(() => {}));
+    render(<ProfileModal onClose={vi.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Carregando o seu perfil…');
+    expect(screen.queryByLabelText(/nome completo/i)).not.toBeInTheDocument();
   });
 });

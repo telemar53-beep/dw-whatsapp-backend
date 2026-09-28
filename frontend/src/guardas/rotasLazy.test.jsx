@@ -94,9 +94,12 @@ describe('code splitting por rota: leitura do App.jsx', () => {
     expect(paginasEstaticas).toEqual(['./pages/LoginPage']);
   });
 
+  // A casca chega dentro da AreaAutenticada, junto dos provedores que só
+  // existem com sessão (ver guardas/loginCaminhoInicial.test.jsx).
   test('a casca autenticada (AppShell) chega sob demanda, não no carregamento inicial', () => {
     expect(IMPORTS_ESTATICOS).not.toContain('./components/AppShell');
-    expect(IMPORTS_LAZY).toContain('./components/AppShell');
+    expect(IMPORTS_ESTATICOS).not.toContain('./components/AreaAutenticada');
+    expect(IMPORTS_LAZY).toContain('./components/AreaAutenticada');
   });
 
   test('todo componente passado para lazyEl(...) foi declarado com lazy', () => {

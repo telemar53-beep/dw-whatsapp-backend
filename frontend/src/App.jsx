@@ -1,11 +1,8 @@
 import { lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useTituloDaAba } from './hooks/useTituloDaAba';
-import { SocketProvider } from './contexts/SocketContext';
-import { AgentsProvider } from './contexts/AgentsContext';
 import { CompanyProvider } from './contexts/CompanyContext';
-import { MediaTokenProvider } from './contexts/MediaTokenContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import RotaLazy from './components/RotaLazy';
 import LoginPage from './pages/LoginPage';
@@ -19,7 +16,11 @@ import { LEGACY_REDIRECTS } from './navigation/navItems';
 // Todo o resto é área autenticada e sai do carregamento inicial. Quem abre o
 // sistema não baixa mais a mesa de atendimento, Configurações, Relatórios,
 // Supervisão nem Campanhas para ver um formulário de e-mail e senha.
-const AppShell = lazy(() => import('./components/AppShell'));
+//
+// A casca chega junto dos provedores que só existem com sessão (socket, token
+// de mídia, atendentes): o socket.io-client também saiu do carregamento
+// inicial. Ver components/AreaAutenticada.jsx.
+const AreaAutenticada = lazy(() => import('./components/AreaAutenticada'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const SupervisionPage = lazy(() => import('./pages/SupervisionPage'));
@@ -87,10 +88,19 @@ function Shell({ dense = false }) {
   return (
     <ProtectedRoute level="auth">
       <RotaLazy>
-        <AppShell dense={dense} />
+        <AreaAutenticada dense={dense} />
       </RotaLazy>
     </ProtectedRoute>
   );
+}
+
+// Com sessão aberta, /login leva para a mesa: ninguém troca de conta por cima
+// da sessão sem sair dela antes. A guarda fica na rota, e não na LoginPage,
+// para a página continuar testável sozinha (LoginPage.sessaoAberta.test.jsx).
+function RotaDeEntrada() {
+  const { token } = useAuth();
+  if (token) return <Navigate to="/" replace />;
+  return <LoginPage />;
 }
 
 // Fica dentro do Router só para poder viver em um componente; o título não
@@ -109,111 +119,100 @@ function App() {
           o seu, e eram duas requisicoes com dois preflights no login. */}
       <CompanyProvider>
       <AuthProvider>
-        {/* Dentro do AuthProvider porque precisa do JWT da sessão para pedir o
-            token de mídia; fora do SocketProvider porque não depende dele — a
-            emissão é uma chamada HTTP a cada 25 minutos, não um evento. */}
-        <MediaTokenProvider>
-        <SocketProvider>
-          {/* Uma cópia só da lista de atendentes para a sessão. Não busca nada
-              enquanto nenhum useAgents() estiver montado. */}
-          <AgentsProvider>
-          <TituloDaAba />
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
+        <TituloDaAba />
+        <Routes>
+          <Route path="/login" element={<RotaDeEntrada />} />
 
-            <Route element={<Shell />}>
-              <Route path="/" element={lazyEl(DashboardPage)} />
-              <Route
-                path="/campanhas"
-                element={
-                  <ProtectedRoute level="admin" areaLabel="Campanhas">
-                    {lazyEl(CampaignsPage)}
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/campanhas/:id"
-                element={
-                  <ProtectedRoute level="admin" areaLabel="Campanhas">
-                    {lazyEl(CampaignDetailPage)}
-                  </ProtectedRoute>
-                }
-              />
-            </Route>
+          <Route element={<Shell />}>
+            <Route path="/" element={lazyEl(DashboardPage)} />
+            <Route
+              path="/campanhas"
+              element={
+                <ProtectedRoute level="admin" areaLabel="Campanhas">
+                  {lazyEl(CampaignsPage)}
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/campanhas/:id"
+              element={
+                <ProtectedRoute level="admin" areaLabel="Campanhas">
+                  {lazyEl(CampaignDetailPage)}
+                </ProtectedRoute>
+              }
+            />
+          </Route>
 
-            <Route element={<Shell dense />}>
-              <Route path="/relatorios" element={lazyEl(ReportsPage)} />
-              <Route
-                path="/supervisao"
-                element={
-                  <ProtectedRoute level="admin" areaLabel="Supervisão">
-                    {lazyEl(SupervisionPage)}
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuracoes"
-                element={
-                  <ProtectedRoute level="admin" areaLabel="Configurações">
-                    {lazyEl(SettingsLayout)}
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={lazyEl(SettingsIndex)} />
-                <Route path="canais" element={lazyEl(ChannelsListPage)} />
-                <Route path="canais/:id" element={lazyEl(ChannelDetailPage)}>
-                  <Route index element={<Navigate to="conexao" replace />} />
-                  <Route path="conexao" element={lazyEl(ChannelConnectionTab)} />
-                  <Route path="atendimento" element={lazyEl(ChannelBehaviorTab)} />
+          <Route element={<Shell dense />}>
+            <Route path="/relatorios" element={lazyEl(ReportsPage)} />
+            <Route
+              path="/supervisao"
+              element={
+                <ProtectedRoute level="admin" areaLabel="Supervisão">
+                  {lazyEl(SupervisionPage)}
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/configuracoes"
+              element={
+                <ProtectedRoute level="admin" areaLabel="Configurações">
+                  {lazyEl(SettingsLayout)}
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={lazyEl(SettingsIndex)} />
+              <Route path="canais" element={lazyEl(ChannelsListPage)} />
+              <Route path="canais/:id" element={lazyEl(ChannelDetailPage)}>
+                <Route index element={<Navigate to="conexao" replace />} />
+                <Route path="conexao" element={lazyEl(ChannelConnectionTab)} />
+                <Route path="atendimento" element={lazyEl(ChannelBehaviorTab)} />
+              </Route>
+              <Route path="equipe" element={lazyEl(TeamLayout)}>
+                <Route index element={<Navigate to="usuarios" replace />} />
+                <Route path="usuarios" element={lazyEl(UsersPage)} />
+                <Route path="setores" element={lazyEl(SectorsPage)} />
+                <Route path="perfis" element={lazyEl(RolesPage)} />
+              </Route>
+              <Route path="cadastros" element={lazyEl(RegistersLayout)}>
+                <Route index element={<Navigate to="motivos" replace />} />
+                <Route path="motivos" element={lazyEl(ReasonsPage)} />
+                <Route path="cidades" element={lazyEl(CitiesPage)} />
+                <Route path="planos" element={lazyEl(PlansPage)} />
+              </Route>
+              <Route path="empresa" element={lazyEl(CompanyPage)} />
+              <Route path="mensagens" element={lazyEl(MessagesLayout)}>
+                <Route index element={<Navigate to="boas-vindas" replace />} />
+                <Route path="boas-vindas" element={lazyEl(WelcomePage)} />
+                <Route path="abertura-encerramento" element={lazyEl(AssignmentPage)} />
+                <Route path="avisos-cidade" element={lazyEl(CityNoticesPage)} />
+                <Route path="respostas-rapidas" element={lazyEl(QuickRepliesPage)} />
+                <Route path="templates" element={lazyEl(TemplatesPage)} />
+              </Route>
+              <Route path="regras/horario" element={lazyEl(BusinessHoursPage)} />
+              <Route path="automacao/triagem-menu" element={lazyEl(MenuTriagePage)} />
+              <Route path="automacao/ia" element={lazyEl(AiTriagePage)} />
+              <Route path="automacao/identificacao" element={lazyEl(IdentificationPage)} />
+              <Route path="automacao/transcricao" element={lazyEl(TranscriptionPage)} />
+              <Route path="automacao/noturno" element={lazyEl(NightModePage)} />
+              <Route path="automacao/ferramentas" element={lazyEl(AiToolsPage)} />
+              <Route path="integracoes" element={lazyEl(IntegrationsLayout)}>
+                <Route index element={<Navigate to="sgp/consultas" replace />} />
+                <Route path="sgp" element={lazyEl(SgpIntegrationLayout)}>
+                  <Route index element={<Navigate to="consultas" replace />} />
+                  <Route path="consultas" element={lazyEl(SgpQueryPage)} />
+                  <Route path="envios" element={lazyEl(SgpChannelPage)} />
                 </Route>
-                <Route path="equipe" element={lazyEl(TeamLayout)}>
-                  <Route index element={<Navigate to="usuarios" replace />} />
-                  <Route path="usuarios" element={lazyEl(UsersPage)} />
-                  <Route path="setores" element={lazyEl(SectorsPage)} />
-                  <Route path="perfis" element={lazyEl(RolesPage)} />
-                </Route>
-                <Route path="cadastros" element={lazyEl(RegistersLayout)}>
-                  <Route index element={<Navigate to="motivos" replace />} />
-                  <Route path="motivos" element={lazyEl(ReasonsPage)} />
-                  <Route path="cidades" element={lazyEl(CitiesPage)} />
-                  <Route path="planos" element={lazyEl(PlansPage)} />
-                </Route>
-                <Route path="empresa" element={lazyEl(CompanyPage)} />
-                <Route path="mensagens" element={lazyEl(MessagesLayout)}>
-                  <Route index element={<Navigate to="boas-vindas" replace />} />
-                  <Route path="boas-vindas" element={lazyEl(WelcomePage)} />
-                  <Route path="abertura-encerramento" element={lazyEl(AssignmentPage)} />
-                  <Route path="avisos-cidade" element={lazyEl(CityNoticesPage)} />
-                  <Route path="respostas-rapidas" element={lazyEl(QuickRepliesPage)} />
-                  <Route path="templates" element={lazyEl(TemplatesPage)} />
-                </Route>
-                <Route path="regras/horario" element={lazyEl(BusinessHoursPage)} />
-                <Route path="automacao/triagem-menu" element={lazyEl(MenuTriagePage)} />
-                <Route path="automacao/ia" element={lazyEl(AiTriagePage)} />
-                <Route path="automacao/identificacao" element={lazyEl(IdentificationPage)} />
-                <Route path="automacao/transcricao" element={lazyEl(TranscriptionPage)} />
-                <Route path="automacao/noturno" element={lazyEl(NightModePage)} />
-                <Route path="automacao/ferramentas" element={lazyEl(AiToolsPage)} />
-                <Route path="integracoes" element={lazyEl(IntegrationsLayout)}>
-                  <Route index element={<Navigate to="sgp/consultas" replace />} />
-                  <Route path="sgp" element={lazyEl(SgpIntegrationLayout)}>
-                    <Route index element={<Navigate to="consultas" replace />} />
-                    <Route path="consultas" element={lazyEl(SgpQueryPage)} />
-                    <Route path="envios" element={lazyEl(SgpChannelPage)} />
-                  </Route>
-                  <Route path="openai" element={lazyEl(OpenAiPage)} />
-                </Route>
+                <Route path="openai" element={lazyEl(OpenAiPage)} />
               </Route>
             </Route>
+          </Route>
 
-            {LEGACY_REDIRECTS.map((r) => (
-              <Route key={r.from} path={r.from} element={<LegacyRedirect to={r.to} />} />
-            ))}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-          </AgentsProvider>
-        </SocketProvider>
-        </MediaTokenProvider>
+          {LEGACY_REDIRECTS.map((r) => (
+            <Route key={r.from} path={r.from} element={<LegacyRedirect to={r.to} />} />
+          ))}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </AuthProvider>
       </CompanyProvider>
     </BrowserRouter>

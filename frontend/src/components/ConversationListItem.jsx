@@ -19,14 +19,14 @@ const MEDIA_TYPE_LABELS = {
 // O filete lateral diz o estado sem gastar uma linha de texto. Mesmo
 // vocabulario de Supervisao: laranja em atendimento, ambar esperando, roxo com
 // a IA. Deriva so de campos que a lista ja recebe.
-function estadoDaConversa(conversation) {
+export function estadoDaConversa(conversation) {
   if (conversation.status === 'closed') return 'encerrado';
   if (conversation.assignedAgentId || conversation.status === 'assigned') return 'atendimento';
   if (conversation.triageState === 'pending') return 'automacao';
   return 'espera';
 }
 
-function getPreviewText(conversation) {
+export function getPreviewText(conversation) {
   // O conteúdo de uma mensagem 'pix' é o código copia e cola — nunca deve aparecer
   // na prévia da lista, então esse tipo é checado antes do lastMessageContent.
   if (conversation.lastMessageType === 'pix') return MEDIA_TYPE_LABELS.pix;
@@ -35,7 +35,7 @@ function getPreviewText(conversation) {
   return conversation.contactPhoneNumber;
 }
 
-function formatMessageTime(lastMessageAt) {
+export function formatMessageTime(lastMessageAt) {
   if (!lastMessageAt) return null;
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
@@ -85,10 +85,18 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
     }
   }
 
-  async function handleQuickClose(event) {
+  // A confirmação espera a resposta do servidor (A4-4): falhou, o erro fica
+  // nela, e ela continua aberta.
+  function handleQuickClose(event) {
     event.stopPropagation();
-    const ok = await confirm('Finalizar esse atendimento sem informar o motivo?', { danger: true, confirmLabel: 'Finalizar' });
-    if (ok) onQuickClose(conversation.id);
+    confirm(`O atendimento de ${nameLabel} será finalizado sem informar o motivo.`, {
+      title: 'Finalizar sem motivo?',
+      danger: true,
+      confirmLabel: 'Finalizar',
+      busyLabel: 'Finalizando…',
+      erroPadrao: 'Não foi possível finalizar este atendimento. Tente de novo.',
+      acao: () => onQuickClose(conversation.id),
+    });
   }
 
   // O hook fica aqui, antes de qualquer retorno: chamar hook dentro do

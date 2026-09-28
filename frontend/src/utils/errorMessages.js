@@ -111,6 +111,12 @@ const TRADUCOES = {
   'Notice not found': 'Aviso não encontrado.',
   'Quick reply not found': 'Resposta rápida não encontrada.',
   'Contact not found': 'Contato não encontrado.',
+  // Validações da edição do contato (PATCH /api/contacts/:id).
+  'locality does not belong to city': 'A localidade escolhida não pertence a este município. Escolha outra ou deixe em branco.',
+  'displayName must be a string or null': 'O nome informado não é válido.',
+  'cityId must be a UUID or null': 'O município escolhido não é válido. Escolha outro.',
+  'localityId must be a UUID or null': 'A localidade escolhida não é válida. Escolha outra.',
+  'internalNote must be a string or null': 'A nota interna informada não é válida.',
   'Integration not found': 'Integração não encontrada.',
   'Triage option not found': 'Opção de triagem não encontrada.',
   'An option with this number already exists': 'Já existe uma opção com este número.',

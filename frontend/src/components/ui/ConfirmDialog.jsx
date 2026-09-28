@@ -1,39 +1,77 @@
 import { useId } from 'react';
 import { Dialog } from './Dialog';
-import { Button } from './Button';
-import { IconWarning, IconInfo } from '../icons/WaIcons';
 
-// A API externa não mudou: `useConfirm` e os sete arquivos que o usam seguem
-// iguais. O que mudou é por dentro — antes isto era um `role="alertdialog"`
-// dentro de um `role="dialog"`, com `aria-modal` duplicado e um trap de Tab
-// artesanal que só funcionava porque havia exatamente dois botões.
-export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, onConfirm, onCancel }) {
-  const messageId = useId();
+// A API externa não mudou: `useConfirm` e os arquivos que o usam seguem
+// iguais. Por dentro, desde o Bloco 1 (28/09): moldura clara e sólida, sem o
+// ícone em ladrilho (ele repetia o que o botão vermelho já diz), e o
+// destrutivo com o verbo escrito — a cor só reforça.
+//
+// `ocupado` e `erro` são da confirmação que espera a resposta (A4-4, ver
+// useConfirm): enquanto a ação corre, as saídas ficam presas e o botão diz o
+// que está acontecendo; se ela falha, o erro aparece aqui dentro e o diálogo
+// continua aberto para tentar de novo ou desistir.
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  busyLabel = 'Aguarde…',
+  danger = false,
+  ocupado = false,
+  erro = null,
+  onConfirm,
+  onCancel,
+}) {
+  const id = useId();
+  const tituloId = `${id}-titulo`;
+  const messageId = `${id}-mensagem`;
 
   if (!open) return null;
 
   return (
     <Dialog
+      claro
       role="alertdialog"
       variant="confirm"
-      size="max-w-sm"
-      title={title}
+      size=""
+      labelledBy={title ? tituloId : undefined}
       ariaLabel={title ? undefined : message}
       describedBy={messageId}
       // Sem "x": Cancelar ja e a saida explicita, e dois jeitos de dizer nao
       // lado a lado so criam duvida sobre a diferenca entre eles.
       dismissible={false}
       onClose={onCancel}
+      closeOnEsc={!ocupado}
       // Confirmação não fecha por clique no fundo: é decisão, não leitura.
       closeOnBackdrop={false}
+      className="mc-pequeno"
     >
-      <div className="dialog-confirm-body px-6 pb-4 pt-5">
-        <span className="dialog-confirm-icon" data-danger={danger} aria-hidden="true">{danger ? <IconWarning size={22} /> : <IconInfo size={22} />}</span>
-        <p id={messageId} className="text-[15px] leading-[22px] text-wa-text">{message}</p>
-        <div className="mt-5 flex justify-end gap-2">
+      <div className="mc-aviso" data-tom={danger ? 'destrutivo' : 'informativo'}>
+        {title && <h2 id={tituloId} className="mc-aviso-titulo">{title}</h2>}
+        <p id={messageId} className="mc-aviso-texto">{message}</p>
+        {erro && <p role="alert" className="mc-erro">{erro}</p>}
+      </div>
+      <div className="mc-rodape is-aviso">
+        <div className="mc-acoes">
           {/* O foco inicial é a saída segura, nunca a ação destrutiva. */}
-          <Button data-autofocus="" variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
+          <button type="button" data-autofocus="" className="mc-botao" onClick={onCancel} disabled={ocupado}>
+            {cancelLabel}
+          </button>
+          {/* Ocupado, o botão continua focável (aria-disabled, e não
+              disabled): tirar o foco dele no meio do envio o jogaria para
+              fora do diálogo. Quem barra o segundo clique é o useConfirm. */}
+          <button
+            type="button"
+            className={`mc-botao ${danger ? 'is-perigo' : 'is-principal'}`}
+            // O mesmo marcador do ui/Button: ação destrutiva nunca recebe o
+            // foco inicial (ui/Dialog).
+            data-danger={danger ? '' : undefined}
+            onClick={onConfirm}
+            aria-disabled={ocupado ? 'true' : undefined}
+          >
+            {ocupado ? busyLabel : confirmLabel}
+          </button>
         </div>
       </div>
     </Dialog>

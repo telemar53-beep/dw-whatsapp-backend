@@ -1,12 +1,16 @@
 import ConversationListItem from './ConversationListItem';
+import LinhaDaMesa from './LinhaDaMesa';
 import { AsyncState } from './ui';
 
-function QueueList({ conversations, status, onSelect, onQuickClose, emptyMessage = 'Nenhum atendimento em espera.', selectedId, unreadIds, compact = false, rail = false, soLocalidade = false }) {
+function QueueList({ conversations, status, onSelect, onQuickClose, emptyMessage = 'Nenhum atendimento em espera.', selectedId, unreadIds, compact = false, rail = false, soLocalidade = false, variante }) {
+  // Na mesa, a linha é a da mesa; no modo rail (72px) continua a do
+  // ConversationListItem, que só mostra o avatar.
+  const Linha = variante === 'mesa' && !rail ? LinhaDaMesa : ConversationListItem;
   return (
     <AsyncState status={status} isEmpty={conversations.length === 0} emptyMessage={<span className="block px-4 pt-4 text-center">{emptyMessage}</span>}>
       <ul>
         {conversations.map((conversation) => (
-          <ConversationListItem
+          <Linha
             key={conversation.id}
             conversation={conversation}
             onSelect={onSelect}

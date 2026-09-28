@@ -53,6 +53,12 @@ function mostrar(conversa) {
   return <ConversationView conversation={conversa} onTransferClick={vi.fn()} onBack={vi.fn()} />;
 }
 
+// O painel do SGP abre só pelo botão (e chega sob demanda).
+async function abrirSgp() {
+  await userEvent.click(screen.getByLabelText('Consultar SGP'));
+  await screen.findByRole('region', { name: 'Consulta SGP' });
+}
+
 async function responderConsulta(cpf) {
   await waitFor(() => expect(consultas[cpf]).toBeDefined());
   await act(async () => {
@@ -212,9 +218,11 @@ describe('mensagem do socket durante a carga inicial', () => {
 describe('trocar de conversa com a consulta do SGP no caminho', () => {
   test('a consulta atrasada do cliente de A não aparece com a conversa de B aberta', async () => {
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await waitFor(() => expect(consultas[CPF_A]).toBeDefined());
 
     rerender(mostrar(CONVERSA_B));
+    await abrirSgp();
     await responderConsulta(CPF_B);
     expect(await screen.findByText('Bruno Lima')).toBeInTheDocument();
 
@@ -231,16 +239,18 @@ describe('trocar de conversa com a consulta do SGP no caminho', () => {
   test('nenhum envio de Pix sai com o contrato de A para a conversa de B', async () => {
     api.sendSgpPix.mockResolvedValue([]);
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await waitFor(() => expect(consultas[CPF_A]).toBeDefined());
     rerender(mostrar(CONVERSA_B));
+    await abrirSgp();
     await responderConsulta(CPF_B);
     await act(async () => {
       consultas[CPF_A].resolve(CLIENTE[CPF_A]);
     });
 
     // O atendente, com B aberta, usa o que o painel mostra.
-    await userEvent.click(await screen.findByRole('button', { name: 'Consultar fatura em aberto' }));
-    await userEvent.click(await screen.findByRole('button', { name: /cód pix/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Consultar 2ª via' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
 
     await waitFor(() => expect(api.sendSgpPix).toHaveBeenCalledTimes(1));
     expect(api.sendSgpPix).toHaveBeenCalledWith(
@@ -259,15 +269,16 @@ describe('trocar de conversa com a consulta do SGP no caminho', () => {
     api.sendSgpPix.mockResolvedValue([]);
     const MESMO_CONTATO_EM_B = { ...CONVERSA_B, contactSgpDocument: CPF_A };
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await responderConsulta(CPF_A);
-    await userEvent.click(await screen.findByRole('button', { name: 'Consultar fatura em aberto' }));
-    await userEvent.click(await screen.findByRole('button', { name: /cód pix/i }));
-    expect(await screen.findByText('Cód Pix enviado para o cliente')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Consultar 2ª via' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
+    expect(await screen.findByText('Código Pix enviado para o cliente')).toBeInTheDocument();
 
     rerender(mostrar(MESMO_CONTATO_EM_B));
 
     // Nada foi enviado em B: o painel não pode dizer que foi.
-    expect(screen.queryByText('Cód Pix enviado para o cliente')).not.toBeInTheDocument();
+    expect(screen.queryByText('Código Pix enviado para o cliente')).not.toBeInTheDocument();
     expect(api.sendSgpPix).toHaveBeenCalledTimes(1);
     expect(api.sendSgpPix).toHaveBeenCalledWith(1001, 'conv-A', expect.anything(), 'tok-123');
   });
@@ -297,9 +308,10 @@ describe('envio que termina com outra conversa aberta', () => {
     const envioPix = adiado();
     api.sendSgpPix.mockReturnValueOnce(envioPix.promise);
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await responderConsulta(CPF_A);
-    await userEvent.click(await screen.findByRole('button', { name: 'Consultar fatura em aberto' }));
-    await userEvent.click(await screen.findByRole('button', { name: /cód pix/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Consultar 2ª via' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
     await waitFor(() => expect(api.sendSgpPix).toHaveBeenCalledTimes(1));
 
     rerender(mostrar(B_SEM_SGP));
@@ -337,5 +349,97 @@ describe('envio que termina com outra conversa aberta', () => {
     });
     // Nada foi repetido: um envio por conversa.
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
+  });
+});
+
+// "Editar cliente" com o salvamento ainda no caminho quando a conversa troca.
+// A resposta pertence à conversa (e ao contato) de onde saiu: nunca pode
+// renomear o cliente seguinte, nem fechar a edição que estiver aberta nele.
+describe('edição do contato: a resposta volta para a conversa de onde saiu', () => {
+  const A = { ...A_SEM_SGP, contactId: 'contato-A', contactInternalNote: 'Nota de A' };
+  const B = { ...B_SEM_SGP, contactId: 'contato-B', contactInternalNote: 'Nota de B' };
+
+  const naMesa = (conversa) => <ConversationView conversation={conversa} onTransferClick={vi.fn()} onBack={vi.fn()} workspace />;
+  const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
+  const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
+  // O modal de edição chega sob demanda.
+  async function abrirEdicao(nome) {
+    await userEvent.click(screen.getByRole('button', { name: `Editar cliente: ${nome}` }));
+    return screen.findByRole('dialog', { name: 'Editar cliente' });
+  }
+  // O painel só existe aberto, e trocar de conversa o fecha.
+  const abrirPainel = () => userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+  async function escrever(dialogo, rotulo, texto) {
+    const campo = within(dialogo).getByLabelText(rotulo);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, texto);
+  }
+
+  beforeEach(() => {
+    // clearAllMocks não esvazia a fila de mockResolvedValueOnce: a resposta
+    // que um teste não consumiu iria para o seguinte.
+    api.updateContact.mockReset();
+    api.listCities.mockResolvedValue([]);
+  });
+
+  test('salvar em A, trocar para B e só então A responder não muda nada em B', async () => {
+    const salvarA = adiado();
+    api.updateContact.mockReturnValueOnce(salvarA.promise);
+    const { rerender } = render(naMesa(A));
+    await screen.findByText('Mensagem de conv-A');
+
+    const dialogoA = await abrirEdicao('Contato A');
+    await escrever(dialogoA, 'Nome', 'Contato A editado');
+    await escrever(dialogoA, 'Nota interna', 'Nota de A editada');
+    await userEvent.click(within(dialogoA).getByRole('button', { name: 'Salvar alterações' }));
+    expect(api.updateContact).toHaveBeenCalledWith('contato-A', expect.objectContaining({ displayName: 'Contato A editado' }), 'tok-123');
+
+    rerender(naMesa(B));
+    await screen.findByText('Mensagem de conv-B');
+    await abrirPainel();
+    // A edição de B já está aberta quando a resposta de A chega.
+    const dialogoB = await abrirEdicao('Contato B');
+
+    await act(async () => {
+      salvarA.resolve({ id: 'contato-A', displayName: 'Contato A editado', cityId: null, localityId: null, internalNote: 'Nota de A editada' });
+    });
+
+    expect(screen.getByRole('dialog', { name: 'Editar cliente' })).toBe(dialogoB);
+    expect(within(dialogoB).getByLabelText('Nome')).toHaveValue('Contato B');
+    expect(within(dialogoB).getByLabelText('Nota interna')).toHaveValue('Nota de B');
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato B' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Contato B')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota de B')).toBeInTheDocument();
+    expect(screen.queryByText('Contato A editado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nota de A editada')).not.toBeInTheDocument();
+  });
+
+  test('voltar para A depois de salvar em B não traz nada de B', async () => {
+    api.updateContact.mockResolvedValueOnce({ id: 'contato-B', displayName: 'Contato B editado', cityId: null, localityId: null, internalNote: 'Nota de B editada' });
+    const { rerender } = render(naMesa(A));
+    await screen.findByText('Mensagem de conv-A');
+    rerender(naMesa(B));
+    await screen.findByText('Mensagem de conv-B');
+    await abrirPainel();
+
+    const dialogoB = await abrirEdicao('Contato B');
+    await escrever(dialogoB, 'Nome', 'Contato B editado');
+    await escrever(dialogoB, 'Nota interna', 'Nota de B editada');
+    await userEvent.click(within(dialogoB).getByRole('button', { name: 'Salvar alterações' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+    expect(within(painel()).getByText('Nota de B editada')).toBeInTheDocument();
+
+    rerender(naMesa(A));
+    await screen.findByText('Mensagem de conv-A');
+    await abrirPainel();
+
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato A' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Contato A')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota de A')).toBeInTheDocument();
+    expect(screen.queryByText('Contato B editado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nota de B editada')).not.toBeInTheDocument();
+    const dialogoA = await abrirEdicao('Contato A');
+    expect(within(dialogoA).getByLabelText('Nome')).toHaveValue('Contato A');
+    expect(within(dialogoA).getByLabelText('Nota interna')).toHaveValue('Nota de A');
   });
 });

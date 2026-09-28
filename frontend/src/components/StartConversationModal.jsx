@@ -1,9 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listChannelsForAgent, startConversation, listTemplatesForChannel } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
-import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
+import { DialogoClaro, useCelular } from './ui/DialogoClaro';
 import { descreverErro } from '../utils/errorMessages';
+import './dialogo-nova-conversa.css';
+
+// "Nova conversa", clara (Bloco 1). Chega sob demanda pela mesa: a página não
+// baixa este formulário antes do clique em "Nova conversa".
+//
+// O fluxo é o de sempre — canal, país, telefone e, conforme o tipo do canal,
+// a mensagem inicial (Baileys) ou o template de abertura (canal oficial). O
+// que mudou:
+// - a seção de conteúdo só aparece quando o tipo do canal é conhecido (A1-6):
+//   antes o campo de mensagem aparecia e trocava pelo template;
+// - a lista de templates tem carregando, erro com "Tentar de novo" e vazio de
+//   verdade — a falha dela era uma rejeição sem tratamento, e a tela dizia
+//   "nenhum template aprovado";
+// - resposta atrasada de outro canal não vira a lista do canal escolhido;
+// - o erro do envio fica fixo entre o corpo e o rodapé (A1-7).
 
 const COUNTRY_CODES = [
   { code: '55', label: 'Brasil (+55)' },
@@ -17,6 +32,7 @@ const COUNTRY_CODES = [
 
 function StartConversationModal({ onClose, onCreated }) {
   const { token } = useAuth();
+  const celular = useCelular();
   const [channels, setChannels] = useState([]);
   const [channelId, setChannelId] = useState('');
   const [ddi, setDdi] = useState('55');
@@ -28,18 +44,25 @@ function StartConversationModal({ onClose, onCreated }) {
   const [conteudoErro, setConteudoErro] = useState(null);
   const [content, setContent] = useState('');
   const [templates, setTemplates] = useState([]);
+  // 'idle' (canal não oficial) | 'loading' | 'ready' | 'error'
+  const [templatesStatus, setTemplatesStatus] = useState('idle');
+  const [tentativaDeTemplates, setTentativaDeTemplates] = useState(0);
   const [templateId, setTemplateId] = useState('');
   const [templateVariableValues, setTemplateVariableValues] = useState([]);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // O ref barra o segundo clique antes mesmo de o botão desabilitar.
+  const enviandoRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
   const phoneDigits = phone.replace(/\D/g, '');
 
   useEffect(() => {
+    let valendo = true;
     listChannelsForAgent(token)
       .then((data) => {
+        if (!valendo) return;
         const eligible = data.filter(
           (channel) => (channel.type === 'baileys' && channel.status === 'connected') || isOfficialChannelType(channel.type)
         );
@@ -49,38 +72,45 @@ function StartConversationModal({ onClose, onCreated }) {
         }
       })
       .catch(() => {
-        setLoadError(true);
+        if (valendo) setLoadError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (valendo) setLoading(false);
+      });
+    return () => { valendo = false; };
   }, [token]);
 
   const selectedChannel = channels.find((channel) => channel.id === channelId);
-  const isOfficialChannel = selectedChannel && isOfficialChannelType(selectedChannel.type);
+  // O tipo do canal só é conhecido com a lista pronta e um canal escolhido.
+  const tipoConhecido = !loading && !loadError && Boolean(selectedChannel);
+  const isOfficialChannel = Boolean(selectedChannel) && isOfficialChannelType(selectedChannel.type);
   const selectedTemplate = templates.find((tpl) => tpl.id === templateId);
-  const startDisabled = submitting || loading || loadError || channels.length === 0 || (isOfficialChannel && templates.length === 0);
-  const disabledReason = submitting
-    ? 'Iniciando conversa…'
-    : loading
-      ? 'Aguarde a lista de canais.'
-      : loadError
-        ? 'Falha no carregamento impede iniciar.'
-        : channels.length === 0
-          ? 'Nenhum canal disponível para iniciar.'
-          : isOfficialChannel && templates.length === 0
-            ? 'Este canal precisa de um template aprovado para iniciar.'
-            : null;
 
   useEffect(() => {
     if (!isOfficialChannel || !channelId) {
       setTemplates([]);
       setTemplateId('');
-      return;
+      setTemplatesStatus('idle');
+      return undefined;
     }
-    listTemplatesForChannel(channelId, token, 'atendimento').then((data) => {
-      setTemplates(data);
-      setTemplateId(data[0]?.id || '');
-    });
-  }, [isOfficialChannel, channelId, token]);
+    // A resposta que chegar depois de trocar de canal é de outro canal: não
+    // entra na tela.
+    let valendo = true;
+    setTemplates([]);
+    setTemplateId('');
+    setTemplatesStatus('loading');
+    listTemplatesForChannel(channelId, token, 'atendimento')
+      .then((data) => {
+        if (!valendo) return;
+        setTemplates(data);
+        setTemplateId(data[0]?.id || '');
+        setTemplatesStatus('ready');
+      })
+      .catch(() => {
+        if (valendo) setTemplatesStatus('error');
+      });
+    return () => { valendo = false; };
+  }, [isOfficialChannel, channelId, token, tentativaDeTemplates]);
 
   useEffect(() => {
     setTemplateVariableValues(selectedTemplate ? Array(selectedTemplate.variableCount).fill('') : []);
@@ -94,8 +124,27 @@ function StartConversationModal({ onClose, onCreated }) {
     });
   }
 
+  // O que falta para iniciar, dito no rodapé ao lado do botão.
+  const disabledReason = submitting
+    ? 'Iniciando conversa…'
+    : loading
+      ? 'Aguarde a lista de canais.'
+      : loadError
+        ? 'Falha no carregamento impede iniciar.'
+        : channels.length === 0
+          ? 'Nenhum canal disponível para iniciar.'
+          : isOfficialChannel && templatesStatus === 'loading'
+            ? 'Aguarde a lista de templates.'
+            : isOfficialChannel && templatesStatus === 'error'
+              ? 'Sem a lista de templates não dá para iniciar.'
+              : isOfficialChannel && templates.length === 0
+                ? 'Este canal precisa de um template aprovado para iniciar.'
+                : null;
+  const startDisabled = Boolean(disabledReason);
+
   async function handleSubmit(event) {
     event.preventDefault();
+    if (enviandoRef.current || startDisabled) return;
     setError(null);
     setPhoneError(null);
     setVariaveisErro(null);
@@ -115,6 +164,7 @@ function StartConversationModal({ onClose, onCreated }) {
     }
     if (invalido) return;
     const phoneNumber = `${ddi}${phoneDigits}`;
+    enviandoRef.current = true;
     setSubmitting(true);
     try {
       const conversation = isOfficialChannel
@@ -124,181 +174,163 @@ function StartConversationModal({ onClose, onCreated }) {
     } catch (err) {
       setError(descreverErro(err, 'Falha ao iniciar conversa'));
     } finally {
+      enviandoRef.current = false;
       setSubmitting(false);
     }
   }
 
+  let conteudo = null;
+  if (tipoConhecido && isOfficialChannel) {
+    conteudo = (
+      <section className="nc-secao">
+        <h3 className="nc-secao-titulo">Template de abertura</h3>
+        <p className="mc-ajuda">Este canal requer o uso de template para iniciar o atendimento.</p>
+        {templatesStatus === 'loading' && <p role="status" className="mc-carregando nc-estado">Carregando templates…</p>}
+        {templatesStatus === 'error' && (
+          <div role="alert" className="mc-falha">
+            <span>Não foi possível carregar os templates.</span>
+            <button type="button" className="mc-botao" onClick={() => setTentativaDeTemplates((n) => n + 1)}>Tentar de novo</button>
+          </div>
+        )}
+        {templatesStatus === 'ready' && templates.length === 0 && (
+          <p className="mc-vazio nc-estado">Nenhum template aprovado para este canal.</p>
+        )}
+        {templatesStatus === 'ready' && templates.length > 0 && (
+          // O <label> acompanha o <select>: quando nao ha template o campo nao
+          // existe, e um `for` apontando para id inexistente e referencia quebrada.
+          <div className="mc-campo nc-template">
+            <label htmlFor="start-conversation-template" className="mc-rotulo">Template</label>
+            <select id="start-conversation-template" value={templateId} onChange={(e) => setTemplateId(e.target.value)} className="mc-entrada">
+              {templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {/* Template não abre a janela de 24h — só a resposta do cliente abre.
+            Botão é o caminho de um toque para ele responder; sem botão, a
+            conversa fica esperando ele escrever por conta. */}
+        {selectedTemplate && (
+          <div className="nc-depois">
+            {(selectedTemplate.buttons || []).length > 0 && (
+              <div className="nc-botoes">
+                {(selectedTemplate.buttons || []).map((texto) => (
+                  <span key={texto} className="nc-botao-previa">{texto}</span>
+                ))}
+              </div>
+            )}
+            <p className="mc-ajuda">
+              {(selectedTemplate.buttons || []).length > 0
+                ? 'O cliente responde com um toque no botão — e é essa resposta que abre a conversa para você escrever.'
+                : 'Este template não tem botões: a conversa só continua depois que o cliente responder.'}
+            </p>
+          </div>
+        )}
+        {templateVariableValues.length > 0 && (
+          <div className="nc-variaveis">
+            {templateVariableValues.map((value, index) => (
+              <div key={index} className="mc-campo">
+                <label htmlFor={`start-conversation-variable-${index}`} className="mc-rotulo">Variável {index + 1}</label>
+                <input
+                  id={`start-conversation-variable-${index}`}
+                  value={value}
+                  onChange={(e) => handleVariableChange(index, e.target.value)}
+                  className="mc-entrada"
+                  aria-invalid={variaveisErro && !String(value).trim() ? 'true' : 'false'}
+                  aria-describedby={variaveisErro ? 'start-conversation-variables-error' : undefined}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        {variaveisErro && <p role="alert" id="start-conversation-variables-error" className="mc-campo-erro">{variaveisErro}</p>}
+      </section>
+    );
+  } else if (tipoConhecido) {
+    conteudo = (
+      <section className="nc-secao">
+        <div className="mc-campo">
+          <label htmlFor="start-conversation-message" className="mc-rotulo">Mensagem inicial</label>
+          <textarea
+            id="start-conversation-message"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={4}
+            className="mc-entrada"
+            aria-invalid={conteudoErro ? 'true' : 'false'}
+            aria-describedby={conteudoErro ? 'start-conversation-message-error' : undefined}
+          />
+          {conteudoErro && <p role="alert" id="start-conversation-message-error" className="mc-campo-erro">{conteudoErro}</p>}
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <WaDialog variant="start-conversation" title="Iniciar conversa" onClose={onClose} size="max-w-3xl">
-      <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
-        <div className="wa-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-3 sm:px-6">
-          <div className="grid gap-4 border-b border-wa-border pb-5 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.6fr)]">
-            <div>
-            <label htmlFor="start-conversation-channel" className={waLabelClass}>
-              Canal
-            </label>
+    <DialogoClaro variant="start-conversation" titulo="Nova conversa" onClose={onClose} celular={celular} className="nc-dialogo">
+      <form onSubmit={handleSubmit} noValidate className="nc-form">
+        <div className="mc-corpo nc-corpo">
+          <div className="mc-campo">
+            <label htmlFor="start-conversation-channel" className="mc-rotulo">Canal</label>
             {loading ? (
-              <p role="status" className="text-[14px] text-wa-muted">Carregando canais…</p>
+              <p role="status" className="mc-carregando nc-estado">Carregando canais…</p>
             ) : loadError ? (
-              <p role="alert" className="text-[14px] text-wa-error-text">Não foi possível carregar os canais. Feche e tente novamente.</p>
+              <p role="alert" className="mc-falha">Não foi possível carregar os canais. Feche e tente novamente.</p>
             ) : channels.length === 0 ? (
-              <p role="status" className="text-[14px] text-wa-muted">Nenhum canal conectado no momento.</p>
+              <p role="status" className="mc-vazio nc-estado">Nenhum canal conectado no momento.</p>
             ) : (
-              <select
-                id="start-conversation-channel"
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-                className={waInputClass}
-              >
+              <select id="start-conversation-channel" value={channelId} onChange={(e) => setChannelId(e.target.value)} className="mc-entrada">
                 {channels.map((channel) => (
-                  <option key={channel.id} value={channel.id}>
-                    {channel.name}
-                  </option>
+                  <option key={channel.id} value={channel.id}>{channel.name}</option>
                 ))}
               </select>
             )}
+          </div>
+
+          <div className="nc-fone">
+            <div className="mc-campo">
+              <label htmlFor="start-conversation-ddi" className="mc-rotulo">País</label>
+              <select id="start-conversation-ddi" value={ddi} onChange={(e) => setDdi(e.target.value)} className="mc-entrada">
+                {COUNTRY_CODES.map((country) => <option key={country.code} value={country.code}>{country.label}</option>)}
+              </select>
             </div>
-            <div className="dialog-inicio-linha">
-              {/* Esta grade nao tinha prefixo responsivo nenhum: o `minmax(120px)`
-                  do Pais nunca cedia e, em viewports de ate 360px, o Telefone
-                  ficava com pouco mais de 100px. Colapsa por `@container`
-                  sobre o espaco REAL do dialogo, que dentro de um modal nao e a
-                  largura da janela. */}
-              <div className="dialog-inicio-fone">
-                <div>
-                  <label htmlFor="start-conversation-ddi" className={waLabelClass}>País</label>
-                  <select id="start-conversation-ddi" value={ddi} onChange={(e) => setDdi(e.target.value)} className={waInputClass}>
-                    {COUNTRY_CODES.map((country) => <option key={country.code} value={country.code}>{country.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="start-conversation-phone" className={waLabelClass}>Telefone</label>
-                  <input
-                    id="start-conversation-phone"
-                    data-autofocus=""
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="98 98500-4187"
-                    inputMode="tel"
-                    className={waInputClass}
-                    aria-invalid={phoneError ? 'true' : 'false'}
-                    aria-describedby={phoneError ? 'start-conversation-phone-error' : undefined}
-                  />
-                </div>
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 text-[12px] leading-[17px] text-wa-muted">
-                <span>Digite com DDD. Com ou sem o 9, o sistema confere no WhatsApp qual forma existe.</span>
-                {phoneDigits.length > 0 && <span className="shrink-0 tabular-nums">Número completo: {ddi}{phoneDigits}</span>}
-              </div>
-              {phoneError && <WaError id="start-conversation-phone-error" className="mt-2">{phoneError}</WaError>}
+            <div className="mc-campo">
+              <label htmlFor="start-conversation-phone" className="mc-rotulo">Telefone</label>
+              <input
+                id="start-conversation-phone"
+                data-autofocus=""
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(00) 00000-0000"
+                inputMode="tel"
+                autoComplete="tel-national"
+                className="mc-entrada"
+                aria-invalid={phoneError ? 'true' : 'false'}
+                aria-describedby={phoneError ? 'start-conversation-phone-error' : 'start-conversation-phone-help'}
+              />
             </div>
           </div>
-          <section>
-          {isOfficialChannel ? (
-            <>
-              <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h3 className="text-[14px] font-semibold text-wa-text">Template de abertura</h3>
-                <p className="border-l-2 border-wa-warn-text pl-2 text-[12.5px] text-wa-warn-text">Este canal requer o uso de template para iniciar o atendimento!</p>
-              </div>
-              <div className="max-w-[420px]">
-                {/* O <label> acompanha o <select>: quando nao ha template o
-                    campo nao existe, e um `for` apontando para id inexistente e
-                    referencia quebrada. */}
-                {templates.length === 0 ? (
-                  <p className="text-[14px] text-wa-muted">Nenhum template aprovado para este canal.</p>
-                ) : (
-                  <>
-                  <label htmlFor="start-conversation-template" className={waLabelClass}>
-                    Template
-                  </label>
-                  <select
-                    id="start-conversation-template"
-                    value={templateId}
-                    onChange={(e) => setTemplateId(e.target.value)}
-                    className={waInputClass}
-                  >
-                    {templates.map((tpl) => (
-                      <option key={tpl.id} value={tpl.id}>
-                        {tpl.name}
-                      </option>
-                    ))}
-                  </select>
-                  </>
-                )}
-              </div>
-              {/* Template não abre a janela de 24h — só a resposta do cliente
-                  abre. Botão é o caminho de um toque para ele responder; sem
-                  botão, a conversa fica esperando ele escrever por conta. */}
-              {selectedTemplate && (
-                <div className="mt-3">
-                  {(selectedTemplate.buttons || []).length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {(selectedTemplate.buttons || []).map((texto) => (
-                        <div key={texto} className="rounded-[8px] border border-wa-border bg-wa-field px-3 py-1.5 text-[12.5px] font-medium text-[#53bdeb]">{texto}</div>
-                      ))}
-                    </div>
-                  )}
-                  <p className="mt-1.5 text-[12.5px] leading-[17px] text-wa-muted">
-                    {(selectedTemplate.buttons || []).length > 0
-                      ? 'O cliente responde com um toque no botão — e é essa resposta que abre a conversa para você escrever.'
-                      : 'Este template não tem botões: a conversa só continua depois que o cliente responder.'}
-                  </p>
-                </div>
-              )}
-              {templateVariableValues.length > 0 && (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {templateVariableValues.map((value, index) => (
-                    <div key={index}>
-                      <label htmlFor={`start-conversation-variable-${index}`} className={waLabelClass}>Variável {index + 1}</label>
-                      <input id={`start-conversation-variable-${index}`} value={value} onChange={(e) => handleVariableChange(index, e.target.value)} className={waInputClass} aria-invalid={variaveisErro && !String(value).trim() ? 'true' : 'false'} aria-describedby={variaveisErro ? 'start-conversation-variables-error' : undefined} />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {variaveisErro && <WaError id="start-conversation-variables-error" className="mt-2">{variaveisErro}</WaError>}
-            </>
-          ) : (
-            <div>
-              <h3 className="mb-2 text-[14px] font-semibold text-wa-text">Mensagem inicial</h3>
-              <label htmlFor="start-conversation-message" className={waLabelClass}>Mensagem</label>
-              <textarea
-                id="start-conversation-message"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={3}
-                className={`${waInputClass} resize-y`}
-                aria-invalid={conteudoErro ? 'true' : 'false'}
-                aria-describedby={conteudoErro ? 'start-conversation-message-error' : undefined}
-              />
-              {conteudoErro && <WaError id="start-conversation-message-error" className="mt-2">{conteudoErro}</WaError>}
-            </div>
-          )}
-          </section>
-          {error && <WaError>{error}</WaError>}
+          <div id="start-conversation-phone-help" className="nc-fone-ajuda">
+            <span>Digite com DDD. Com ou sem o 9, o sistema confere no WhatsApp qual forma existe.</span>
+            {phoneDigits.length > 0 && <span className="nc-fone-completo">Número completo: {ddi}{phoneDigits}</span>}
+          </div>
+          {phoneError && <p role="alert" id="start-conversation-phone-error" className="mc-campo-erro">{phoneError}</p>}
+
+          {conteudo}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-wa-border bg-wa-panel-header px-5 py-3 sm:px-6">
-          {/* `min-w-0 flex-1` deixava o aviso encolher até ~35px e virar uma
-              coluna de nove linhas de uma palavra ao lado de "Cancelar", em vez
-              de o rodapé quebrar. Com uma largura mínima QUANDO há aviso, ele
-              toma a primeira linha e os botões descem. Sem aviso a largura
-              mínima sai do caminho, senão sobraria uma linha vazia acima dos
-              botões. Padrão reaproveitável para rodapé com aviso + ações. */}
-          <p role="status" className={`flex-1 text-[12.5px] text-wa-warn-text ${startDisabled ? 'min-w-[14rem]' : 'min-w-0'}`}>{startDisabled ? disabledReason : ''}</p>
-          <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className={waGhostButtonClass}>
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={startDisabled}
-            className={waPrimaryButtonClass}
-          >
-            Iniciar conversa
-          </button>
+
+        {/* Fora do corpo que rola (A1-7): o erro do envio fica logo acima do botão. */}
+        {error && <p role="alert" className="mc-erro">{error}</p>}
+        <div className="mc-rodape">
+          <p role="status" className="mc-nota">{startDisabled ? disabledReason : ''}</p>
+          <div className="mc-acoes">
+            <button type="button" onClick={onClose} className="mc-botao">Cancelar</button>
+            <button type="submit" disabled={startDisabled} className="mc-botao is-principal">Iniciar conversa</button>
           </div>
         </div>
       </form>
-    </WaDialog>
+    </DialogoClaro>
   );
 }
 

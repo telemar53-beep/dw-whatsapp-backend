@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { applyContactAvatarUpdate } from '../utils/contactAvatar';
+import { aplicarContatoSalvo } from '../utils/contatoSalvo';
 import { getMyConversations } from '../services/api';
 
 export function useMyConversations() {
@@ -95,5 +96,12 @@ export function useMyConversations() {
     };
   }, [socket]);
 
-  return { conversations, status, loading: status === 'loading' };
+  // "Editar cliente" salvou, e a rota não emite evento: a lista guarda o que
+  // voltou do servidor, só nas conversas daquele contato. Estável, porque a
+  // página a repassa à conversa aberta, que é memo.
+  const aplicarContatoSalvoNaLista = useCallback((salvo) => {
+    setConversations((prev) => aplicarContatoSalvo(prev, salvo));
+  }, []);
+
+  return { conversations, status, loading: status === 'loading', aplicarContatoSalvo: aplicarContatoSalvoNaLista };
 }

@@ -1,0 +1,502 @@
+/* ---------- Transferir atendimento (mesa e Supervisão) ----------
+   Chega junto com o diálogo, sob demanda: nenhuma página carrega esta folha.
+   Claro e sólido, no desenho do mockup aprovado: branco e cinza muito claro;
+   índigo só na escolha, no foco e na ação principal; verde só para quem está
+   disponível; vermelho só na carga alta e no erro. Sem desfoque, gradiente,
+   animação, filtro ou sombra pesada — e nada de laranja.
+
+   Toda regra começa em [data-dialog='transfer']: a folha não alcança outro
+   diálogo. A base (overlays.css) não está em @layer e tem regras largas
+   (campo 0,4,1; botão 0,1,1); as daqui vêm com o prefixo do diálogo para
+   vencer sem !important. */
+
+[data-dialog='transfer'] {
+  --tr-papel: #ffffff;
+  --tr-suave: #f6f7f9;
+  --tr-linha: #e3e6ec;
+  --tr-borda: #d4d8e0;
+  --tr-texto: #161a26;
+  --tr-texto-2: #5b6272;
+  --tr-texto-3: #6b7180;
+  --tr-indigo: #4f46e5;
+  --tr-indigo-forte: #4338ca;
+  --tr-indigo-claro: #eef0ff;
+  --tr-indigo-linha: #c9c5fa;
+  --tr-verde: #11704f;
+  --tr-verde-ponto: #1f9d63;
+  --tr-cinza-ponto: #9aa1ad;
+  --tr-vermelho: #b3261e;
+  --tr-vermelho-ponto: #d93025;
+  --tr-erro-fundo: #fdecea;
+  --tr-erro-texto: #8c1d18;
+  /* O avatar e o contorno de foco vêm de tokens do tema escuro: aqui, claros. */
+  --color-wa-avatar: #e9ebf0;
+  --color-wa-avatar-text: #3d4452;
+  --color-focus-ring: #4f46e5;
+  color-scheme: light;
+}
+
+/* ---------- Fundo e moldura ---------- */
+.chat-theme:has(> [data-dialog='transfer']) {
+  background: rgba(22, 26, 38, 0.44);
+  backdrop-filter: none;
+  padding: 24px;
+}
+[data-dialog='transfer'].dw-dialog {
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+  max-height: min(640px, calc(100dvh - 48px));
+  border: 1px solid #d9dde5;
+  border-radius: 12px;
+  background: var(--tr-papel);
+  color: var(--tr-texto);
+  box-shadow: 0 18px 40px -18px rgba(20, 23, 40, 0.24);
+  animation: none;
+  backdrop-filter: none;
+}
+/* O diálogo recebe o foco só como ponto de partida (no celular); o contorno
+   útil é o do controle, não o da moldura inteira. */
+[data-dialog='transfer'].dw-dialog:focus { outline: none; }
+
+/* ---------- Cabeçalho ---------- */
+[data-dialog='transfer'].dw-dialog .tr-cab {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  padding: 18px 20px 14px;
+}
+[data-dialog='transfer'].dw-dialog .tr-cab-icone {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #ecebfd;
+  color: var(--tr-indigo);
+}
+[data-dialog='transfer'].dw-dialog .tr-cab-texto { min-width: 0; flex: 1; }
+[data-dialog='transfer'].dw-dialog .tr-cab-texto h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--tr-texto);
+}
+[data-dialog='transfer'].dw-dialog .tr-cab-texto p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--tr-texto-2);
+}
+[data-dialog='transfer'].dw-dialog .tr-fechar {
+  flex: none;
+  align-self: flex-start;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--tr-texto-2);
+  cursor: pointer;
+}
+[data-dialog='transfer'].dw-dialog .tr-fechar:hover { background: var(--tr-suave); color: var(--tr-texto); }
+[data-dialog='transfer'].dw-dialog .tr-voltar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--tr-texto-2);
+  cursor: pointer;
+}
+
+/* ---------- Busca e ordenação ---------- */
+[data-dialog='transfer'].dw-dialog .tr-ferramentas {
+  display: flex;
+  gap: 10px;
+  flex: none;
+  padding: 0 20px 10px;
+}
+[data-dialog='transfer'].dw-dialog .tr-busca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 240px;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--tr-borda);
+  border-radius: 9px;
+  background: var(--tr-papel);
+  color: var(--tr-texto-3);
+  font-size: 14px;
+}
+[data-dialog='transfer'].dw-dialog .tr-busca svg { flex: none; }
+[data-dialog='transfer'].dw-dialog.tr-dialogo .tr-ferramentas .tr-busca input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--tr-texto);
+  outline: none;
+}
+[data-dialog='transfer'].dw-dialog.tr-dialogo .tr-ferramentas .tr-busca input::placeholder { color: var(--tr-texto-3); }
+[data-dialog='transfer'].dw-dialog .tr-ordem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: none;
+  width: 176px;
+  height: 42px;
+  padding: 2px 34px 2px 12px;
+  border: 1px solid var(--tr-borda);
+  border-radius: 9px;
+  background: var(--tr-papel);
+}
+[data-dialog='transfer'].dw-dialog .tr-ordem-rotulo {
+  font-size: 11px;
+  line-height: 13px;
+  color: var(--tr-texto-3);
+}
+[data-dialog='transfer'].dw-dialog.tr-dialogo .tr-ferramentas .tr-ordem select {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  color: var(--tr-texto);
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+}
+[data-dialog='transfer'].dw-dialog .tr-ordem-seta {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  margin-top: -9px;
+  color: var(--tr-texto-2);
+  pointer-events: none;
+}
+/* Um indicador de foco só, na caixa inteira: o anel global do campo (0,7,1,
+   index.css) desenharia um segundo traço por dentro dela. */
+[data-dialog='transfer'].dw-dialog .tr-busca:focus-within,
+[data-dialog='transfer'].dw-dialog .tr-ordem:focus-within {
+  border-color: var(--tr-indigo);
+  outline: 1px solid var(--tr-indigo);
+  outline-offset: 0;
+}
+[data-dialog='transfer'].dw-dialog.tr-dialogo.tr-dialogo .tr-ferramentas .tr-busca input:focus-visible,
+[data-dialog='transfer'].dw-dialog.tr-dialogo.tr-dialogo .tr-ferramentas .tr-ordem select:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ---------- Lista ---------- */
+[data-dialog='transfer'].dw-dialog .tr-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 10px;
+}
+[data-dialog='transfer'].dw-dialog .tr-grupo-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 4px 6px;
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tr-texto-2);
+}
+[data-dialog='transfer'].dw-dialog .tr-grupo-titulo i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tr-cinza-ponto);
+}
+[data-dialog='transfer'].dw-dialog .tr-grupo-titulo i[data-on] { background: var(--tr-verde-ponto); }
+[data-dialog='transfer'].dw-dialog .tr-grupo-titulo b { margin-left: auto; font-weight: 600; }
+[data-dialog='transfer'].dw-dialog .tr-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--tr-linha);
+}
+[data-dialog='transfer'].dw-dialog .tr-lista > li + li { border-top: 1px solid var(--tr-linha); }
+[data-dialog='transfer'].dw-dialog .tr-linha {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 58px;
+  margin: 1px 0;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  color: var(--tr-texto);
+  cursor: pointer;
+}
+[data-dialog='transfer'].dw-dialog .tr-linha:hover { background: var(--tr-suave); }
+[data-dialog='transfer'].dw-dialog .tr-linha[aria-checked='true'] {
+  background: var(--tr-indigo-claro);
+  border-color: var(--tr-indigo-linha);
+}
+[data-dialog='transfer'].dw-dialog .tr-linha:focus-visible {
+  outline: 2px solid var(--tr-indigo);
+  outline-offset: -2px;
+}
+[data-dialog='transfer'].dw-dialog .tr-avatar { display: flex; }
+[data-dialog='transfer'].dw-dialog .tr-quem,
+[data-dialog='transfer'].dw-dialog .tr-carga {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+[data-dialog='transfer'].dw-dialog .tr-carga {
+  padding-left: 14px;
+  border-left: 1px solid var(--tr-linha);
+}
+[data-dialog='transfer'].dw-dialog .tr-nome {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tr-texto);
+}
+[data-dialog='transfer'].dw-dialog .tr-presenca {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--tr-texto-2);
+}
+[data-dialog='transfer'].dw-dialog .tr-presenca i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tr-cinza-ponto);
+}
+[data-dialog='transfer'].dw-dialog .tr-presenca[data-tom='verde'] { color: var(--tr-verde); }
+[data-dialog='transfer'].dw-dialog .tr-presenca[data-tom='verde'] i { background: var(--tr-verde-ponto); }
+[data-dialog='transfer'].dw-dialog .tr-presenca[data-tom='alerta'] { color: var(--tr-vermelho); font-weight: 600; }
+[data-dialog='transfer'].dw-dialog .tr-presenca[data-tom='alerta'] i { background: var(--tr-vermelho-ponto); }
+[data-dialog='transfer'].dw-dialog .tr-carga-num {
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--tr-texto);
+}
+[data-dialog='transfer'].dw-dialog .tr-carga-num strong { font-weight: 600; }
+[data-dialog='transfer'].dw-dialog .tr-carga-dica {
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 17px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--tr-texto-2);
+}
+[data-dialog='transfer'].dw-dialog .tr-carga-dica[data-alerta] { color: var(--tr-vermelho); font-weight: 600; }
+/* A marca de escolha: o anel vira anel grosso índigo (o miolo branco fica),
+   como o rádio nativo. Sem gradiente. */
+[data-dialog='transfer'].dw-dialog .tr-marca {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #b3b9c4;
+  border-radius: 50%;
+  background: var(--tr-papel);
+}
+[data-dialog='transfer'].dw-dialog .tr-linha[aria-checked='true'] .tr-marca { border: 5px solid var(--tr-indigo); }
+
+/* ---------- Estados ---------- */
+[data-dialog='transfer'].dw-dialog .tr-carregando { padding: 8px 0; }
+[data-dialog='transfer'].dw-dialog .tr-carregando-texto {
+  display: block;
+  padding: 6px 4px 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--tr-texto-2);
+}
+[data-dialog='transfer'].dw-dialog .tr-carregando-linha {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  height: 58px;
+  padding: 0 12px;
+  border-top: 1px solid var(--tr-linha);
+}
+[data-dialog='transfer'].dw-dialog .tr-carregando-linha i {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #eef0f4;
+}
+[data-dialog='transfer'].dw-dialog .tr-carregando-linha b {
+  height: 12px;
+  width: 70%;
+  border-radius: 6px;
+  background: #eef0f4;
+}
+[data-dialog='transfer'].dw-dialog :is(.tr-vazio, .tr-aviso) {
+  margin: 0;
+  padding: 18px 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--tr-texto-2);
+}
+[data-dialog='transfer'].dw-dialog .tr-falha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--tr-erro-fundo);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--tr-erro-texto);
+}
+[data-dialog='transfer'].dw-dialog .tr-falha.is-aviso {
+  border: 1px solid var(--tr-borda);
+  background: var(--tr-suave);
+  color: #3d4452;
+}
+[data-dialog='transfer'].dw-dialog .tr-erro {
+  flex: none;
+  margin: 0 20px 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--tr-erro-fundo);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--tr-erro-texto);
+}
+
+/* ---------- Rodapé ---------- */
+[data-dialog='transfer'].dw-dialog .tr-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex: none;
+  padding: 12px 20px;
+  border-top: 1px solid var(--tr-linha);
+}
+[data-dialog='transfer'].dw-dialog .tr-nota {
+  min-width: 0;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--tr-texto-2);
+}
+[data-dialog='transfer'].dw-dialog .tr-acoes { display: flex; flex: none; gap: 10px; }
+[data-dialog='transfer'].dw-dialog .tr-botao {
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--tr-borda);
+  border-radius: 9px;
+  background: var(--tr-papel);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--tr-texto);
+  cursor: pointer;
+}
+[data-dialog='transfer'].dw-dialog .tr-botao:hover { background: var(--tr-suave); }
+[data-dialog='transfer'].dw-dialog .tr-botao.is-principal {
+  border-color: var(--tr-indigo);
+  background: var(--tr-indigo);
+  color: #ffffff;
+}
+[data-dialog='transfer'].dw-dialog .tr-botao.is-principal:hover:not(:disabled) { background: var(--tr-indigo-forte); }
+[data-dialog='transfer'].dw-dialog .tr-botao:disabled { cursor: default; }
+[data-dialog='transfer'].dw-dialog .tr-falha .tr-botao { height: 34px; padding: 0 12px; font-size: 13px; }
+
+/* ---------- Tablet: o desenho do desktop, com margem menor ---------- */
+@media (max-width: 1023px) {
+  .chat-theme:has(> [data-dialog='transfer']) { padding: 16px; }
+  [data-dialog='transfer'].dw-dialog { max-height: calc(100dvh - 32px); }
+}
+
+/* ---------- Celular: tela cheia, uma coluna, rodapé fixo ----------
+   A classe vem do componente (o mesmo corte de 767 px do popup), junto com a
+   troca de "Fechar" pela seta de voltar. */
+.chat-theme:has(> [data-dialog='transfer'].is-celular) {
+  align-items: stretch;
+  padding: 0;
+}
+[data-dialog='transfer'].dw-dialog.is-celular {
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-dialog='transfer'].dw-dialog.is-celular .tr-cab { gap: 8px; padding: 8px 12px 10px 4px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-cab-texto h2 { font-size: 16.5px; line-height: 22px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-cab-texto p { font-size: 12.5px; line-height: 17px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-ferramentas { flex-direction: column; gap: 8px; padding: 0 12px 8px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-busca { flex: none; height: 44px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-ordem {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  width: 100%;
+  height: 44px;
+}
+[data-dialog='transfer'].dw-dialog.is-celular .tr-ordem-rotulo { flex: none; font-size: 13.5px; line-height: 19px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-ordem-rotulo::after { content: ':'; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-corpo { padding: 0 12px 8px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-linha {
+  grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.15fr) 18px;
+  gap: 10px;
+  min-height: 54px;
+  padding: 6px 8px;
+}
+[data-dialog='transfer'].dw-dialog.is-celular .tr-carga { padding-left: 10px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-nome { font-size: 13.5px; line-height: 18px; }
+[data-dialog='transfer'].dw-dialog.is-celular :is(.tr-presenca, .tr-carga-num) { font-size: 12px; line-height: 16px; }
+/* No celular a descrição da carga quebra a linha em vez de sumir nas reticências. */
+[data-dialog='transfer'].dw-dialog.is-celular .tr-carga-dica { font-size: 11.5px; line-height: 15px; white-space: normal; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-erro { margin: 0 12px 8px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-rodape {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+}
+[data-dialog='transfer'].dw-dialog.is-celular .tr-nota { font-size: 12px; line-height: 16px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+[data-dialog='transfer'].dw-dialog.is-celular .tr-botao { height: 44px; }

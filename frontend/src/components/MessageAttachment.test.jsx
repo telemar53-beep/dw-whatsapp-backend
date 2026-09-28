@@ -409,3 +409,30 @@ describe('antes do primeiro media token', () => {
     expect(container.querySelector('video')).toBeNull();
   });
 });
+
+// O Histórico pede mídia sob demanda; a conversa ativa continua como sempre.
+describe('mídia sob demanda (só quem pede)', () => {
+  const IMAGEM = { id: 'h1', messageType: 'image', mediaPath: 'foto.jpg' };
+  const AUDIO = { id: 'h2', messageType: 'audio', mediaPath: 'voz.ogg' };
+  const VIDEO = { id: 'h3', messageType: 'video', mediaPath: 'video.mp4' };
+
+  test('padrão: imagem sem carregamento preguiçoso, áudio e vídeo com metadados', () => {
+    const { unmount } = render(<MessageAttachment message={IMAGEM} />);
+    expect(screen.getByRole('img')).not.toHaveAttribute('loading');
+    unmount();
+    render(<><MessageAttachment message={AUDIO} /><MessageAttachment message={VIDEO} /></>);
+    expect(document.querySelector('audio')).toHaveAttribute('preload', 'metadata');
+    expect(document.querySelector('video')).toHaveAttribute('preload', 'metadata');
+  });
+
+  test('sobDemanda: imagem preguiçosa, áudio e vídeo sem pré-carregar, sem relógio falso', () => {
+    const { unmount } = render(<MessageAttachment message={IMAGEM} sobDemanda />);
+    expect(screen.getByRole('img')).toHaveAttribute('loading', 'lazy');
+    unmount();
+    render(<><MessageAttachment message={AUDIO} sobDemanda /><MessageAttachment message={VIDEO} sobDemanda /></>);
+    expect(document.querySelector('audio')).toHaveAttribute('preload', 'none');
+    expect(document.querySelector('video')).toHaveAttribute('preload', 'none');
+    // Sem metadados, a duração é desconhecida: nada de "0:00".
+    expect(screen.queryByText('0:00')).not.toBeInTheDocument();
+  });
+});

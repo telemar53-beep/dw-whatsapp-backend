@@ -2,13 +2,23 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadMyAvatar, deleteMyAvatar, changePassword } from '../services/api';
 import AgentAvatar from './AgentAvatar';
-import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError, WaSuccess } from './WaDialog';
+import { DialogoClaro, useCelular } from './ui/DialogoClaro';
+import { IconeRecolher } from './icones/conversa';
 import { descreverErro } from '../utils/errorMessages';
 import { useConfirm } from '../hooks/useConfirm';
+import './dialogo-perfil.css';
+
+// "Meu perfil", claro (Bloco 1). Chega sob demanda pela casca (AppShell): a
+// página nenhuma baixa este formulário antes de alguém abrir o perfil.
+//
+// Só o que existe: foto, nome e telefone editáveis; e-mail só de leitura;
+// troca de senha recolhida. Setor, e-mail e papel não viram edição aqui, e
+// "Sair" continua no menu da conta — não é parte do formulário.
 
 function ProfileModal({ onClose, onProfileUpdated }) {
   const { token, updateAgent } = useAuth();
   const { confirm, confirmDialog } = useConfirm();
+  const celular = useCelular();
   const [profile, setProfile] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [name, setName] = useState('');
@@ -132,7 +142,9 @@ function ProfileModal({ onClose, onProfileUpdated }) {
   const senhaPreenchida = Boolean(currentPassword || newPassword || confirmPassword);
   async function fechar() {
     if (editado || senhaPreenchida) {
-      const ok = await confirm('Descartar alterações? O que você digitou será perdido.', { danger: true, confirmLabel: 'Descartar', cancelLabel: 'Continuar editando' });
+      const ok = await confirm('O que você digitou será perdido.', {
+        title: 'Descartar alterações?', danger: true, confirmLabel: 'Descartar', cancelLabel: 'Continuar editando',
+      });
       if (!ok) return;
     }
     onClose();
@@ -140,103 +152,104 @@ function ProfileModal({ onClose, onProfileUpdated }) {
 
   if (!profile) {
     return (
-      <WaDialog variant="profile" title="Meu perfil" onClose={onClose} size="max-w-md">
-        <div className="px-6 py-4">
-          <p role={loadError ? 'alert' : 'status'} className="text-[14.5px] text-wa-muted">{loadError || 'Carregando…'}</p>
-        </div>
-        <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
-          {loadError && (
-            <button type="button" onClick={carregar} className={waGhostButtonClass}>
-              Tentar de novo
-            </button>
+      <DialogoClaro variant="profile" titulo="Meu perfil" onClose={onClose} celular={celular} className="pf-dialogo">
+        <div className="mc-corpo pf-estado">
+          {loadError ? (
+            <div role="alert" className="mc-falha">
+              <span>{loadError}</span>
+              <button type="button" className="mc-botao" onClick={carregar}>Tentar de novo</button>
+            </div>
+          ) : (
+            <p role="status" className="mc-carregando">Carregando o seu perfil…</p>
           )}
-          <button type="button" onClick={onClose} className={waGhostButtonClass}>
-            Fechar
-          </button>
         </div>
-      </WaDialog>
+      </DialogoClaro>
     );
   }
 
+  const campo = (evento, definir, limparSucesso) => { definir(evento.target.value); limparSucesso(false); };
+
   return (
     <>
-    <WaDialog variant="profile" title="Meu perfil" onClose={fechar} size="max-w-4xl">
-      <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3 sm:px-6">
-        <div className="flex flex-wrap items-center gap-4 rounded-[16px] border border-wa-border bg-wa-panel-header px-4 py-4 sm:px-5">
-          <AgentAvatar agentId={profile.id} avatarPath={profile.avatarPath} name={profile.name} size={68} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[17px] font-semibold text-wa-text">{profile.name}</p>
-            <p className="truncate text-[13.5px] text-wa-muted">E-mail · {profile.email}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className={`${waGhostButtonClass} cursor-pointer border border-wa-border bg-wa-panel text-wa-text`}>
-              {avatarAcao === 'enviando' ? 'Enviando foto…' : 'Alterar foto'}
-              <input type="file" aria-label="Alterar foto" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarChange} disabled={avatarBusy} className="sr-only" />
-            </label>
-            {profile.avatarPath && (
-              <button type="button" onClick={handleRemoveAvatar} disabled={avatarBusy} className="px-2 text-[13px] text-wa-error-text hover:underline">
-                {avatarAcao === 'removendo' ? 'Removendo…' : 'Remover foto'}
-              </button>
-            )}
-          </div>
-        </div>
-        {avatarError && <WaError className="mt-3">{avatarError}</WaError>}
+      <DialogoClaro variant="profile" titulo="Meu perfil" onClose={fechar} celular={celular} className="pf-dialogo">
+        <div className="mc-corpo pf-corpo">
+          <section className="pf-identidade">
+            <span className="pf-avatar" aria-hidden="true">
+              <AgentAvatar agentId={profile.id} avatarPath={profile.avatarPath} name={profile.name} size={celular ? 56 : 64} />
+            </span>
+            <div className="pf-quem">
+              <p className="pf-nome" title={profile.name}>{profile.name}</p>
+              <p className="pf-email" title={profile.email}>{profile.email}</p>
+              <div className="pf-foto-acoes">
+                <label className="mc-botao pf-foto" data-ocupado={avatarAcao === 'enviando' ? 'true' : undefined}>
+                  {avatarAcao === 'enviando' ? 'Enviando foto…' : 'Alterar foto'}
+                  <input type="file" aria-label="Alterar foto" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarChange} disabled={avatarBusy} className="sr-only" />
+                </label>
+                {profile.avatarPath && (
+                  <button type="button" onClick={handleRemoveAvatar} disabled={avatarBusy} className="mc-link pf-remover">
+                    {avatarAcao === 'removendo' ? 'Removendo…' : 'Remover foto'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+          {avatarError && <p role="alert" className="pf-aviso-erro">{avatarError}</p>}
 
-        <div className="mt-5 space-y-5">
-          <section aria-labelledby="profile-personal-title">
-            <h3 id="profile-personal-title" className="text-[15px] font-semibold text-wa-text">Dados pessoais</h3>
-            <p className="mt-1 text-[13px] text-wa-muted">Informações exibidas no seu perfil de atendimento.</p>
-            <form id="profile-info-form" onSubmit={handleSaveProfile} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.15fr_0.9fr_1.15fr]">
-              <div>
-                <label htmlFor="profile-name" className={waLabelClass}>Nome completo</label>
-                <input id="profile-name" type="text" value={name} onChange={(e) => { setName(e.target.value); setProfileSuccess(false); }} className={waInputClass} required />
+          <section className="pf-secao" aria-labelledby="profile-personal-title">
+            <h3 id="profile-personal-title" className="pf-secao-titulo">Dados pessoais</h3>
+            <form id="profile-info-form" onSubmit={handleSaveProfile} noValidate className="pf-campos">
+              <div className="mc-campo">
+                <label htmlFor="profile-name" className="mc-rotulo">Nome completo</label>
+                <input id="profile-name" type="text" autoComplete="name" value={name} onChange={(e) => campo(e, setName, setProfileSuccess)} className="mc-entrada" aria-invalid={profileError === 'Informe o nome.' ? 'true' : 'false'} />
               </div>
-              <div>
-                <label htmlFor="profile-phone" className={waLabelClass}>Telefone</label>
-                <input id="profile-phone" type="text" value={phone} onChange={(e) => { setPhone(e.target.value); setProfileSuccess(false); }} className={waInputClass} />
-              </div>
-              <div className="sm:col-span-2 lg:col-span-1">
-                <span className={waLabelClass}>E-mail</span>
-                <p className="rounded-[10px] border border-wa-border bg-wa-panel-header px-3.5 py-2.5 text-[14px] text-wa-text">{profile.email}</p>
+              <div className="mc-campo">
+                <label htmlFor="profile-phone" className="mc-rotulo">Telefone</label>
+                <input id="profile-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => campo(e, setPhone, setProfileSuccess)} className="mc-entrada" />
               </div>
             </form>
-            {profileError && <WaError className="mt-3">{profileError}</WaError>}
-            {profileSuccess && <WaSuccess className="mt-3">Perfil atualizado.</WaSuccess>}
           </section>
 
-          <details className="group rounded-[12px] border border-wa-border bg-wa-panel-header">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-[14px] font-medium text-wa-text [&::-webkit-details-marker]:hidden">
-              <span>Trocar senha <span className="ml-2 text-[12.5px] font-normal text-wa-muted">Atualize sua senha de acesso.</span></span>
-              <span aria-hidden="true" className="text-wa-muted transition-transform group-open:rotate-180">⌄</span>
+          <details className="pf-senha">
+            <summary>
+              <span className="pf-senha-titulo">
+                Trocar senha
+                <span className="pf-senha-dica">Atualize sua senha de acesso.</span>
+              </span>
+              <IconeRecolher tamanho={18} className="pf-senha-seta" />
             </summary>
-            <form onSubmit={handleChangePassword} className="grid gap-3 border-t border-wa-border px-4 pb-4 pt-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label htmlFor="current-password" className={waLabelClass}>Senha atual</label>
-                <input id="current-password" type="password" value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setPasswordSuccess(false); }} className={waInputClass} required />
+            <form onSubmit={handleChangePassword} className="pf-senha-campos">
+              <div className="mc-campo">
+                <label htmlFor="current-password" className="mc-rotulo">Senha atual</label>
+                <input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => campo(e, setCurrentPassword, setPasswordSuccess)} className="mc-entrada" required />
               </div>
-              <div>
-                <label htmlFor="new-password" className={waLabelClass}>Nova senha</label>
-                <input id="new-password" type="password" value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setPasswordSuccess(false); }} className={waInputClass} required />
+              <div className="mc-campo">
+                <label htmlFor="new-password" className="mc-rotulo">Nova senha</label>
+                <input id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => campo(e, setNewPassword, setPasswordSuccess)} className="mc-entrada" required />
               </div>
-              <div>
-                <label htmlFor="confirm-password" className={waLabelClass}>Confirmar nova senha</label>
-                <input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setPasswordSuccess(false); }} className={waInputClass} required />
+              <div className="mc-campo">
+                <label htmlFor="confirm-password" className="mc-rotulo">Confirmar nova senha</label>
+                <input id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => campo(e, setConfirmPassword, setPasswordSuccess)} className="mc-entrada" required />
               </div>
-              {passwordError && <WaError className="sm:col-span-2 lg:col-span-3">{passwordError}</WaError>}
-              {passwordSuccess && <WaSuccess className="sm:col-span-2 lg:col-span-3">Senha alterada com sucesso.</WaSuccess>}
-              <div className="flex justify-end pt-1 sm:col-span-2 lg:col-span-3">
-                <button type="submit" disabled={submittingPassword} className={waGhostButtonClass}>{submittingPassword ? 'Trocando…' : 'Trocar senha'}</button>
+              {passwordError && <p role="alert" className="pf-aviso-erro">{passwordError}</p>}
+              {passwordSuccess && <p role="status" className="pf-aviso-ok">Senha alterada com sucesso.</p>}
+              <div className="pf-senha-acao">
+                <button type="submit" disabled={submittingPassword} className="mc-botao">{submittingPassword ? 'Trocando…' : 'Trocar senha'}</button>
               </div>
             </form>
           </details>
         </div>
-      </div>
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-wa-border bg-wa-panel-header px-5 py-3 sm:px-6">
-        <button type="button" onClick={fechar} className={waGhostButtonClass}>Cancelar</button>
-        <button type="submit" form="profile-info-form" disabled={savingProfile} className={waPrimaryButtonClass}>{savingProfile ? 'Salvando…' : 'Salvar alterações'}</button>
-      </div>
-    </WaDialog>
-    {confirmDialog}
+
+        {/* Fora do corpo que rola: o erro do "Salvar" fica logo acima dele. */}
+        {profileError && <p role="alert" className="mc-erro">{profileError}</p>}
+        <div className="mc-rodape">
+          <p role="status" className="mc-nota pf-salvo">{profileSuccess ? 'Perfil atualizado.' : ''}</p>
+          <div className="mc-acoes">
+            <button type="button" onClick={fechar} className="mc-botao">Cancelar</button>
+            <button type="submit" form="profile-info-form" disabled={savingProfile} className="mc-botao is-principal">{savingProfile ? 'Salvando…' : 'Salvar alterações'}</button>
+          </div>
+        </div>
+      </DialogoClaro>
+      {confirmDialog}
     </>
   );
 }

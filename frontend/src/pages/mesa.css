@@ -1,0 +1,246 @@
+/* ---------- Mesa de atendimento: coluna de conversas (fatia 1) ----------
+   Fundação clara ESCOPADA: vale só dentro de `.mesa-clara`, que hoje é a
+   coluna da lista. A conversa ao lado, os diálogos (que vão por portal para o
+   body) e as outras páginas continuam com os tokens de antes.
+
+   Os tokens do tema escuro que os componentes internos leem (vazio,
+   carregando, erro, avatar sem foto, tiques, modo rail) são redefinidos aqui,
+   no ancestral mais próximo — nenhum componente ganhou prop de tema.
+
+   Custo: fundo chapado, divisores de 1px, nenhum blur, filtro, brilho,
+   gradiente ou sombra grande. Transição só de cor e opacidade. */
+.mesa-clara {
+  color-scheme: light;
+
+  --mesa-fundo: #ffffff;
+  --mesa-fundo-suave: #f3f4f7;
+  --mesa-hover: #f6f7f9;
+  --mesa-selecionado: #ecebfd;
+  --mesa-linha: #eceef2;
+  --mesa-linha-forte: #dfe2e8;
+  /* Tintas, com contraste medido sobre branco: 16,9 / 6,1 / 4,9:1. */
+  --mesa-texto: #161a26;
+  --mesa-texto-2: #5b6272;
+  --mesa-texto-3: #6b7180;
+  /* Índigo do mockup: 6,3:1 sobre branco, 5,5:1 sobre o selecionado. */
+  --mesa-destaque: #4f46e5;
+  --mesa-destaque-texto: #3f37c9;
+  --mesa-ia: #5b3fb3;
+
+  --color-focus-ring: var(--mesa-destaque);
+  --workspace-line: var(--mesa-linha-forte);
+  --chat-surface-list: var(--mesa-fundo);
+  --chat-state-hover: var(--mesa-hover);
+  --chat-state-selected: var(--mesa-selecionado);
+  --chat-accent-soft: var(--mesa-destaque);
+  --color-chat-text: var(--mesa-texto);
+  --color-chat-muted: var(--mesa-texto-2);
+  --color-chat-online: #13855f;
+  --color-ui-ink-strong: var(--mesa-texto);
+  --color-ui-ink-muted: var(--mesa-texto-2);
+  --color-wa-muted: var(--mesa-texto-2);
+  --color-wa-avatar: #e8e9f2;
+  --color-wa-avatar-text: #4a5063;
+  --color-wa-error-bg: #fdecea;
+  --color-wa-error-text: #b3261e;
+  --color-wa-warn-bg: #ffeecd;
+  --color-wa-warn-text: #8a5a12;
+
+  color: var(--mesa-texto);
+}
+
+/* Esqueleto do carregamento: o `bg-white/[0.08]` do tema escuro some no branco. */
+.mesa-clara .animate-pulse { background-color: var(--mesa-linha); }
+
+/* ---------- Cabeçalho: "Conversas" + nova conversa ----------
+   Recuos da coluna inteira: 16px à esquerda (título, busca, abas e fotos
+   começam na mesma vertical) e 14px à direita. O botão de 40px fica a 6px da
+   borda para que o ÍCONE, e não a área de toque, alinhe com a busca. */
+.mesa-lista .chat-inbox-heading { padding: 14px 6px 8px 16px; }
+.mesa-lista .mesa-titulo { font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--mesa-texto); }
+.mesa-lista .mesa-acao {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--mesa-texto-2);
+  transition: background-color .12s, color .12s;
+}
+.mesa-lista .mesa-acao:hover { background: var(--mesa-fundo-suave); color: var(--mesa-texto); }
+/* Dica no ponteiro e no foco de teclado; abre para baixo e para dentro da
+   coluna, que recorta o que passa da borda. */
+.mesa-lista .mesa-dica {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: var(--z-popover);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #1d2230;
+  color: #ffffff;
+  font-size: 12.5px;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .12s;
+}
+.mesa-lista .mesa-acao:is(:hover, :focus-visible) .mesa-dica { opacity: 1; visibility: visible; }
+
+/* ---------- Busca ---------- */
+.mesa-lista .chat-inbox-search { padding: 0 14px 10px 16px; }
+.mesa-lista .mesa-busca { position: relative; display: block; }
+.mesa-lista .mesa-busca svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--mesa-texto-3); pointer-events: none; }
+.mesa-lista .mesa-busca input {
+  display: block;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 36px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: var(--mesa-fundo-suave);
+  color: var(--mesa-texto);
+  font-size: 14px;
+  outline: none;
+  transition: background-color .12s, border-color .12s;
+}
+.mesa-lista .mesa-busca input::placeholder { color: var(--mesa-texto-3); }
+.mesa-lista .mesa-busca input:focus { border-color: var(--mesa-destaque); background: var(--mesa-fundo); }
+/* Abaixo de 16px o navegador do celular dá zoom ao focar. */
+@media (pointer: coarse) { .mesa-lista .mesa-busca input { font-size: 16px; } }
+
+/* ---------- Filas: Atendimento, Espera e Automação ----------
+   A contagem é o tamanho de cada fila (a que as abas já mostravam), não "não
+   lidas". Um controle só, em trilha neutra: a fila escolhida sobe para o
+   papel branco com filete e peso — não três cartões soltos. Nome em cima e
+   contagem embaixo: em linha, os três nomes com a contagem pedem 322 a 369px
+   em Inter e a coluna tem 303. Assim cabem quatro dígitos sem esconder nada,
+   e cada opção tem 44px de alvo. As resets desfazem o visual "segmented" do
+   componente Tabs (utilitários do Tailwind). */
+.mesa-lista .chat-inbox-tabs { padding: 0 14px 8px 16px; }
+.mesa-lista [role=tablist] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border: 0; border-radius: 10px; background: var(--mesa-fundo-suave); }
+.mesa-lista [role=tab] {
+  flex-direction: column;
+  gap: 0;
+  min-height: 44px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mesa-texto-2);
+  font-size: 12.5px;
+  line-height: 16px;
+  font-weight: 500;
+  box-shadow: none;
+  transition: background-color .12s, color .12s, border-color .12s;
+}
+.mesa-lista [role=tab]:hover { background: #eaecf1; color: var(--mesa-texto); }
+.mesa-lista [role=tab][aria-selected=true] { border-color: var(--mesa-linha-forte); background: var(--mesa-fundo); color: var(--mesa-texto); font-weight: 600; }
+/* Anel por dentro: entre as opções não há folga para ele por fora. (Dois
+   seletores de classe para empatar com a regra de foco do tema, e vencer pela
+   ordem.) */
+.mesa-lista.mesa-clara [role=tab]:focus-visible { outline-offset: -2px; }
+.mesa-lista [role=tab] > span { position: static; min-width: 0; height: auto; padding: 0; border-radius: 0; background: none; color: inherit; font-size: 12px; line-height: 16px; font-weight: 600; font-variant-numeric: tabular-nums; box-shadow: none; }
+/* O índigo só marca a fila aberta, e só no número. */
+.mesa-lista [role=tab][aria-selected=true] > span { color: var(--mesa-destaque-texto); }
+
+/* ---------- Linhas: contínuas, duas linhas, como no WhatsApp Web ---------- */
+.mesa-lista .mesa-linha-item { position: relative; list-style: none; }
+.mesa-lista .mesa-linha {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-areas: 'foto topo' 'foto base';
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  /* 60px: cerca de dez conversas numa tela de 1366×768. */
+  min-height: 60px;
+  padding: 9px 14px 9px 16px;
+  cursor: pointer;
+  transition: background-color .12s;
+}
+.mesa-lista .mesa-linha-item.tem-finalizar .mesa-linha { padding-right: 48px; }
+/* Divisor de 1px que começa depois da foto. Some na linha escolhida, que já
+   se separa pelo fundo. */
+.mesa-lista .mesa-linha::after { content: ''; position: absolute; left: 68px; right: 0; bottom: 0; height: 1px; background: var(--mesa-linha); }
+.mesa-lista .mesa-linha.is-selected::after { background: transparent; }
+/* Filete de estado na aresta: âmbar esperando, violeta com a IA. Em
+   atendimento não tem filete — é o estado de todas as linhas da aba. */
+.mesa-lista .mesa-linha::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--mesa-estado, transparent); }
+.mesa-lista .mesa-linha[data-estado='espera'] { --mesa-estado: #d97706; }
+.mesa-lista .mesa-linha[data-estado='automacao'] { --mesa-estado: #7c3aed; }
+.mesa-lista .mesa-linha:hover { background: var(--mesa-hover); }
+.mesa-lista .mesa-linha.is-selected { background: var(--mesa-selecionado); --mesa-estado: var(--mesa-destaque); }
+.mesa-lista .mesa-linha:focus-visible { outline: 2px solid var(--mesa-destaque); outline-offset: -2px; }
+
+.mesa-lista .mesa-linha-foto { grid-area: foto; display: block; line-height: 0; }
+.mesa-lista .mesa-linha-topo { grid-area: topo; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mesa-lista .mesa-linha-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 20px; font-weight: 600; letter-spacing: -0.005em; color: var(--mesa-texto); }
+.mesa-lista .mesa-linha-hora { flex: none; font-size: 12px; line-height: 16px; color: var(--mesa-texto-3); font-variant-numeric: tabular-nums; }
+/* Mensagem nova: a hora acende e a prévia escurece, como no WhatsApp — a
+   marca (ponto) continua sendo o sinal principal. */
+.mesa-lista .mesa-linha.is-unread .mesa-linha-hora { color: var(--mesa-destaque-texto); font-weight: 600; }
+.mesa-lista .mesa-linha.is-unread .mesa-linha-previa { color: var(--mesa-texto); font-weight: 500; }
+
+.mesa-lista .mesa-linha-base { grid-area: base; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--mesa-texto-2); }
+/* Localidade (Espera) e IA são texto, não fichas: a linha fica sem pílulas,
+   e cada informação se distingue pela cor e pelo peso. */
+.mesa-lista .mesa-linha-local { flex: 0 1 auto; max-width: 45%; min-width: 0; color: var(--mesa-texto); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mesa-lista .mesa-linha-previa { flex: 1 1 0; min-width: 40px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mesa-lista .mesa-linha-ia { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; max-width: 55%; min-width: 0; overflow: hidden; }
+.mesa-lista .mesa-linha-ia > span { flex: 0 1 auto; min-width: 0; color: var(--mesa-ia); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* O alerta de confiança baixa é o único que guarda fundo: é aviso. */
+.mesa-lista .mesa-linha-ia > .mesa-linha-alerta { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: var(--color-wa-warn-bg); color: var(--color-wa-warn-text); font-size: 11px; font-weight: 600; }
+.mesa-lista .mesa-linha-nao-lida { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--mesa-destaque); }
+/* Tiques de enviado/entregue: o `text-white/60` do tema escuro some no branco. */
+.mesa-lista .mesa-linha-base > :is([title='Enviado'], [title='Entregue']) { color: var(--mesa-texto-3); }
+
+.mesa-lista .mesa-linha-finalizar {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--mesa-texto-3);
+  transition: background-color .12s, color .12s;
+}
+.mesa-lista .mesa-linha-finalizar:hover { background: var(--mesa-fundo-suave); color: var(--mesa-texto); }
+
+/* ---------- Celular: o botão "Abrir menu" entra no cabeçalho ----------
+   Abaixo de 492px a lista ocupa a tela inteira (useWorkspaceLayout: 72 + 420).
+   Em vez da faixa escura da casca em cima da lista branca, o botão passa a
+   ser uma ação de ícone à esquerda de "Conversas", no mesmo papel. O
+   seletor passa pelo encaixe do trilho, que só existe na mesa: a casca e as
+   outras páginas não mudam. Mesmo botão, mesmo foco, mesmo comportamento. */
+@media (max-width: 491px) {
+  [data-encaixe='trilho'] + div > button[aria-controls='sidenav'] {
+    --color-focus-ring: #4f46e5;
+    position: absolute;
+    top: 12px;
+    left: 4px;
+    z-index: 1;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #5b6272;
+  }
+  [data-encaixe='trilho'] + div > button[aria-controls='sidenav']:hover { background: #f3f4f7; color: #161a26; }
+  .mesa-lista .chat-inbox-heading { padding-left: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesa-lista :is(.mesa-acao, .mesa-dica, .mesa-linha, .mesa-linha-finalizar, [role=tab]),
+  .mesa-lista .mesa-busca input { transition: none; }
+}

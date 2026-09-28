@@ -1,0 +1,92 @@
+/* ---------- Meu perfil (Bloco 1) ----------
+   Chega junto com o diálogo, sob demanda. Moldura, cabeçalho, campos, botões,
+   erro fixo e rodapé são da base clara (ui/dialogo-claro.css); aqui fica o
+   que é do perfil: a faixa da foto, as duas seções e a troca de senha
+   recolhida. Uma coluna: seis campos não pedem três colunas de 1100 px. */
+
+[data-dialog='profile'].dw-dialog.mc { --mc-largura: 560px; }
+[data-dialog='profile'].dw-dialog.mc .pf-corpo { display: flex; flex-direction: column; gap: 18px; padding-top: 2px; }
+[data-dialog='profile'].dw-dialog.mc .pf-estado { padding-bottom: 20px; }
+
+/* ---------- Foto e identidade ---------- */
+/* Sem caixa em volta: foto, nome e ações numa linha, separada do formulário
+   só pelo filete. Uma moldura aqui seria um cartão dentro do diálogo. */
+[data-dialog='profile'].dw-dialog.mc .pf-identidade {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--mc-linha);
+  --color-wa-avatar: #e3e5f7;
+  --color-wa-avatar-text: #3f37c9;
+}
+[data-dialog='profile'].dw-dialog.mc .pf-avatar { display: flex; flex: none; }
+[data-dialog='profile'].dw-dialog.mc .pf-quem { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+[data-dialog='profile'].dw-dialog.mc .pf-nome {
+  margin: 0;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--mc-texto);
+}
+[data-dialog='profile'].dw-dialog.mc .pf-email {
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--mc-texto-2);
+}
+[data-dialog='profile'].dw-dialog.mc .pf-foto-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+[data-dialog='profile'].dw-dialog.mc .pf-foto { height: 34px; padding: 0 12px; font-size: 13px; }
+/* O campo de arquivo mora dentro do rótulo: o foco dele desenha na caixa. */
+[data-dialog='profile'].dw-dialog.mc .pf-foto:focus-within { border-color: var(--mc-indigo); outline: 1px solid var(--mc-indigo); outline-offset: 0; }
+[data-dialog='profile'].dw-dialog.mc .pf-foto[data-ocupado] { color: var(--mc-texto-2); cursor: default; }
+[data-dialog='profile'].dw-dialog.mc .pf-remover { font-size: 13px; line-height: 18px; color: var(--mc-vermelho); }
+
+/* ---------- Seções ---------- */
+[data-dialog='profile'].dw-dialog.mc .pf-secao-titulo { margin: 0 0 10px; font-size: 14px; line-height: 20px; font-weight: 650; color: var(--mc-texto); }
+[data-dialog='profile'].dw-dialog.mc .pf-campos { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 12px 14px; }
+[data-dialog='profile'].dw-dialog.mc :is(.pf-aviso-erro, .pf-aviso-ok) { margin: 0; font-size: 13px; line-height: 18px; }
+[data-dialog='profile'].dw-dialog.mc .pf-aviso-erro { padding: 8px 12px; border-radius: 9px; background: var(--mc-erro-fundo); color: var(--mc-erro-texto); }
+[data-dialog='profile'].dw-dialog.mc .pf-aviso-ok { color: var(--mc-verde); font-weight: 500; }
+[data-dialog='profile'].dw-dialog.mc .pf-salvo { color: var(--mc-verde); font-weight: 500; }
+
+/* ---------- Troca de senha (recolhida) ---------- */
+[data-dialog='profile'].dw-dialog.mc .pf-senha { border: 1px solid var(--mc-linha); border-radius: 10px; }
+[data-dialog='profile'].dw-dialog.mc .pf-senha summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  list-style: none;
+  cursor: pointer;
+}
+[data-dialog='profile'].dw-dialog.mc .pf-senha summary::-webkit-details-marker { display: none; }
+[data-dialog='profile'].dw-dialog.mc .pf-senha summary:hover { background: var(--mc-suave); }
+[data-dialog='profile'].dw-dialog.mc .pf-senha summary:focus-visible { outline: 2px solid var(--mc-indigo); outline-offset: -2px; }
+[data-dialog='profile'].dw-dialog.mc .pf-senha-titulo { display: flex; flex-direction: column; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--mc-texto); }
+[data-dialog='profile'].dw-dialog.mc .pf-senha-dica { font-size: 12.5px; line-height: 17px; font-weight: 400; color: var(--mc-texto-2); }
+[data-dialog='profile'].dw-dialog.mc .pf-senha-seta { flex: none; color: var(--mc-texto-2); }
+[data-dialog='profile'].dw-dialog.mc .pf-senha[open] .pf-senha-seta { transform: rotate(180deg); }
+[data-dialog='profile'].dw-dialog.mc .pf-senha[open] summary { border-bottom: 1px solid var(--mc-linha); border-radius: 10px 10px 0 0; }
+[data-dialog='profile'].dw-dialog.mc .pf-senha-campos { display: grid; gap: 12px; padding: 14px; }
+[data-dialog='profile'].dw-dialog.mc .pf-senha-acao { display: flex; justify-content: flex-end; }
+
+/* ---------- Celular ---------- */
+[data-dialog='profile'].dw-dialog.mc.is-celular .pf-identidade { gap: 12px; padding: 4px 0 16px; }
+[data-dialog='profile'].dw-dialog.mc.is-celular .pf-campos { grid-template-columns: minmax(0, 1fr); }
+[data-dialog='profile'].dw-dialog.mc.is-celular .pf-foto { height: 44px; }
+[data-dialog='profile'].dw-dialog.mc.is-celular .pf-remover { min-height: 44px; }
+[data-dialog='profile'].dw-dialog.mc.is-celular .pf-senha-acao .mc-botao { width: 100%; }
+@media (pointer: coarse) {
+  [data-dialog='profile'].dw-dialog.mc .pf-foto { min-height: 44px; }
+  [data-dialog='profile'].dw-dialog.mc .pf-senha summary { min-height: 56px; }
+}

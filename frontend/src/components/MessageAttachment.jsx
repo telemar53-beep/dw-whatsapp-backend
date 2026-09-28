@@ -65,7 +65,7 @@ const DOC_COLORS = {
   RAR: '#7d6b3e',
 };
 
-function VoiceNote({ url, onFalha, seed, outbound, avatar, dark }) {
+function VoiceNote({ url, onFalha, seed, outbound, avatar, dark, preload = 'metadata' }) {
   const audioRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -135,7 +135,7 @@ function VoiceNote({ url, onFalha, seed, outbound, avatar, dark }) {
   if (dark) {
     return (
       <div className={`chat-voice-note ${outbound ? 'is-outbound' : 'is-inbound'}`}>
-        <audio ref={audioRef} src={url} preload="metadata" onError={() => { if (!onFalha || !onFalha()) setUnavailable(true); }} className="max-w-full hidden" />
+        <audio ref={audioRef} src={url} preload={preload} onError={() => { if (!onFalha || !onFalha()) setUnavailable(true); }} className="max-w-full hidden" />
         <div className="flex w-[min(19rem,72vw)] max-w-full min-w-0 items-center gap-[10px]">
           <button
             type="button"
@@ -192,7 +192,7 @@ function VoiceNote({ url, onFalha, seed, outbound, avatar, dark }) {
           </span>
         </div>
         <div className="mt-1 flex items-center gap-2 pl-[50px] text-[11px] leading-[16px] tabular-nums text-white/70">
-          <span>{formatClock(current > 0 ? current : duration)}</span>
+          {(preload !== 'none' || duration > 0 || current > 0) && <span>{formatClock(current > 0 ? current : duration)}</span>}
           {(playing || current > 0) && (
             <button
               type="button"
@@ -210,7 +210,7 @@ function VoiceNote({ url, onFalha, seed, outbound, avatar, dark }) {
 
   return (
     <div className="pt-0.5">
-      <audio ref={audioRef} src={url} preload="metadata" onError={() => { if (!onFalha || !onFalha()) setUnavailable(true); }} className="max-w-full hidden" />
+      <audio ref={audioRef} src={url} preload={preload} onError={() => { if (!onFalha || !onFalha()) setUnavailable(true); }} className="max-w-full hidden" />
       <div className="flex w-[min(17.5rem,62vw)] items-start gap-2">
         <button
           type="button"
@@ -263,7 +263,7 @@ function VoiceNote({ url, onFalha, seed, outbound, avatar, dark }) {
         </span>
       </div>
       <div className="mt-0.5 flex items-center gap-2 pl-1 text-[11px] text-wa-meta">
-        <span>{formatClock(current > 0 ? current : duration)}</span>
+        {(preload !== 'none' || duration > 0 || current > 0) && <span>{formatClock(current > 0 ? current : duration)}</span>}
         {(playing || current > 0) && (
           <button
             type="button"
@@ -304,7 +304,7 @@ function useHrefNaHoraDoClique(url, urlAgora) {
   return { href: href || url, aoAproximar: { onPointerDown: atualizar, onFocus: atualizar } };
 }
 
-function ImageBubble({ url, urlAgora, onFalha, alt, filename, hasCaption, dark }) {
+function ImageBubble({ url, urlAgora, onFalha, alt, filename, hasCaption, dark, preguicosa = false }) {
   const baixar = useHrefNaHoraDoClique(url, urlAgora);
   const [open, setOpen] = useState(false);
   const [failedUrl, setFailedUrl] = useState(null);
@@ -410,6 +410,8 @@ function ImageBubble({ url, urlAgora, onFalha, alt, filename, hasCaption, dark }
           onError={() => { setFailedUrl(url); setOpen(false); }}
           className="max-w-full rounded-[6px] object-contain transition-[filter] hover:brightness-[.97]"
           style={{ maxHeight: 340, maxWidth: 330, minWidth: 120 }}
+          loading={preguicosa ? 'lazy' : undefined}
+          decoding={preguicosa ? 'async' : undefined}
         />
       </button>}
       {open && failedUrl !== url && createPortal(
@@ -535,7 +537,7 @@ function ViewerButton({ label, onClick, disabled, children }) {
 // NAO mostra tamanho do arquivo: a tabela `messages` guarda media_path,
 // media_mime_type e media_filename — tamanho nao existe, e inventar seria pior
 // que omitir.
-function VideoCard({ url, onFalha, filename, outbound, dark }) {
+function VideoCard({ url, onFalha, filename, outbound, dark, preload = 'metadata' }) {
   const [indisponivel, setIndisponivel] = useState(false);
 
   const moldura = dark
@@ -563,7 +565,7 @@ function VideoCard({ url, onFalha, filename, outbound, dark }) {
     <div className={`overflow-hidden rounded-[12px] border ${moldura}`}>
       <video
         controls
-        preload="metadata"
+        preload={preload}
         src={url}
         onError={() => setIndisponivel(true)}
         className="block w-[min(20rem,68vw)] max-w-full bg-black"
@@ -700,7 +702,10 @@ function ReceiptAnalysis({ messageId, onAnalyze }) {
   );
 }
 
-function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) {
+// `sobDemanda` (o Histórico): imagem preguiçosa e áudio/vídeo sem pré-carregar,
+// para uma conversa antiga não baixar mídia que ninguém abriu. Desligado, é a
+// conversa ativa de sempre.
+function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt, sobDemanda = false }) {
   const outbound = message.direction === 'outbound';
 
   if (message.messageType === 'pix') {
@@ -766,6 +771,7 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
           filename={message.mediaFilename}
           hasCaption={Boolean(message.content)}
           dark={dark}
+          preguicosa={sobDemanda}
         />
         {/* Comprovante é o que o CLIENTE manda: analisar o que nós enviamos não
             faz sentido e só poluiria a conversa. */}
@@ -785,6 +791,7 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
         onError={() => tentarDeNovo()}
         className="max-w-full"
         style={{ width: 128, height: 128, objectFit: 'contain' }}
+        loading={sobDemanda ? 'lazy' : undefined}
       />
     );
   }
@@ -792,14 +799,14 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
   if (message.messageType === 'audio') {
     return (
       <div className="flex flex-col gap-1.5">
-        <VoiceNote url={url} onFalha={tentarDeNovo} seed={message.id || ''} outbound={outbound} avatar={avatar} dark={dark} />
+        <VoiceNote url={url} onFalha={tentarDeNovo} seed={message.id || ''} outbound={outbound} avatar={avatar} dark={dark} preload={sobDemanda ? 'none' : 'metadata'} />
         <TranscriptionBlock message={message} dark={dark} />
       </div>
     );
   }
 
   if (message.messageType === 'video') {
-    return <VideoCard url={url} onFalha={tentarDeNovo} filename={message.mediaFilename} outbound={outbound} dark={dark} />;
+    return <VideoCard url={url} onFalha={tentarDeNovo} filename={message.mediaFilename} outbound={outbound} dark={dark} preload={sobDemanda ? 'none' : 'metadata'} />;
   }
 
   if (message.messageType === 'document') {

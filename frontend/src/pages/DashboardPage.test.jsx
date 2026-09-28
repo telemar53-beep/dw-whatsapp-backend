@@ -1,5 +1,5 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, test, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, within, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { renderInShell } from '../test-utils/renderInShell';
@@ -12,13 +12,19 @@ import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
-import { closeConversation } from '../services/api';
+import { closeConversation, getQueue, getMyConversations, updateContact, listCities } from '../services/api';
 import { useCompanyName } from '../hooks/useCompanyName';
 import { useTransferNotice } from '../hooks/useTransferNotice';
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal()),
   closeConversation: vi.fn(),
+  // Só usados quando um teste roda os hooks de lista de verdade (edição do
+  // contato); os outros simulam os hooks e nunca chegam aqui.
+  getQueue: vi.fn(),
+  getMyConversations: vi.fn(),
+  updateContact: vi.fn(),
+  listCities: vi.fn(() => new Promise(() => {})),
 }));
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueue');
@@ -84,7 +90,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    // O painel da lista sempre tem o título "Atendimento"; o que não pode aparecer é o da tela vazia.
+    // A aba "Atendimento" existe sempre na lista; o que não pode aparecer é o título da tela vazia.
     const emptyState = within(screen.getByRole('main'));
     expect(emptyState.queryByText('Atendimento')).not.toBeInTheDocument();
     expect(emptyState.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
@@ -262,6 +268,27 @@ describe('DashboardPage', () => {
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
   });
 
+  // A4-4: a confirmação espera a resposta. Antes ela fechava antes do
+  // resultado e a falha sumia calada (`.catch(() => {})`).
+  test('"Finalizar sem motivo" que falha mostra o erro na própria confirmação, que continua aberta', async () => {
+    useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    closeConversation.mockRejectedValueOnce({ body: { error: 'Conversation is closed' } });
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    const confirmacao = await screen.findByRole('alertdialog', { name: 'Finalizar sem motivo?' });
+    expect(confirmacao).toHaveTextContent('O atendimento de Carlos será finalizado sem informar o motivo.');
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Finalizar' }));
+
+    expect(await within(confirmacao).findByRole('alert')).toHaveTextContent('Este atendimento já foi encerrado.');
+    expect(screen.getByRole('alertdialog')).toBe(confirmacao);
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(closeConversation).toHaveBeenCalledTimes(1);
+  });
+
   test('does not show a quick-close button in the Atendimento tab', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c3', contactDisplayName: 'Minha' }], status: 'ready' });
@@ -334,7 +361,7 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     await userEvent.click(screen.getByRole('button', { name: /nova conversa/i }));
-    await userEvent.click(screen.getByText('Mock Start Conversation'));
+    await userEvent.click(await screen.findByText('Mock Start Conversation'));
 
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
   });
@@ -358,7 +385,7 @@ describe('DashboardPage', () => {
     const { rerender } = render(shellTree());
 
     await userEvent.click(screen.getByRole('button', { name: /nova conversa/i }));
-    await userEvent.click(screen.getByText('Mock Start Conversation'));
+    await userEvent.click(await screen.findByText('Mock Start Conversation'));
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 
     useMyConversations.mockReturnValue({ conversations: [
@@ -504,14 +531,13 @@ describe('DashboardPage', () => {
     expect(container.firstChild.className).toContain('h-dvh');
   });
 
-  test('renders the team panel, closed by default, and opens it on click', async () => {
+  // "Equipe" saiu do rodapé da lista e foi para o trilho da mesa:
+  // SideNav.mesa.test.jsx > 'Equipe abre o popup "Nossa equipe"…'.
+  test('a lista não tem mais a barra "Equipe" no rodapé', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    expect(screen.getByText('Equipe')).toBeInTheDocument();
-    expect(screen.queryByText(/nenhum atendente cadastrado/i)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /^equipe/i }));
-    expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
+    expect(within(screen.getByRole('complementary', { name: 'Atendimentos' })).queryByRole('button', { name: /^equipe/i })).not.toBeInTheDocument();
   });
 
   test('em carregamento não mostra "Nenhum atendimento em andamento"', () => {
@@ -583,8 +609,129 @@ describe('DashboardPage', () => {
 
 // Maria transfere para João: ele precisa perceber. O aviso aparece na tela de
 // Atendimento e leva direto para a conversa recebida.
+// Painel da lista na mesa (fatia 1 do novo atendimento): cabeçalho
+// "Conversas" com a ação de nova conversa em ícone, busca integrada e os
+// ícones da família DW nos elementos novos. As três abas continuam.
+describe('painel de conversas da mesa', () => {
+  const NA_ESPERA = { id: 'c-esp', contactDisplayName: 'Joana', contactPhoneNumber: '5598911112222', status: 'waiting', createdAt: '2026-09-24T13:05:00.000Z' };
+
+  function lista() {
+    return screen.getByRole('complementary', { name: 'Atendimentos' });
+  }
+  // Moldura da família DW (components/icones/Icone.jsx).
+  function eDaFamiliaDw(svg) {
+    return svg.getAttribute('viewBox') === '0 0 24 24' && svg.getAttribute('stroke-width') === '1.75' && svg.getAttribute('fill') === 'none';
+  }
+
+  beforeEach(() => {
+    useQueue.mockReturnValue({ queue: [NA_ESPERA], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [{ id: 'c-minha', contactDisplayName: 'Maria', status: 'assigned', assignedAgentId: 'agent-1' }], status: 'ready' });
+  });
+
+  test('o título do painel é "Conversas"', () => {
+    renderDashboard();
+    expect(within(lista()).getByRole('heading', { level: 1, name: 'Conversas' })).toBeInTheDocument();
+  });
+
+  test('"Nova conversa" é um botão de ícone DW; o rótulo só na dica', () => {
+    renderDashboard();
+    const nova = within(lista()).getByRole('button', { name: 'Nova conversa' });
+    // O único texto dentro do botão é a dica, fora da árvore de acessibilidade
+    // (o nome vem do aria-label) e escondida até o ponteiro ou o foco.
+    expect(within(nova).getByText('Nova conversa')).toHaveAttribute('aria-hidden', 'true');
+    expect([...nova.children].filter((filho) => filho.getAttribute('aria-hidden') !== 'true')).toHaveLength(0);
+    expect(eDaFamiliaDw(nova.querySelector('svg'))).toBe(true);
+  });
+
+  test('a busca fica no painel, com a lupa da família DW', () => {
+    renderDashboard();
+    const busca = within(lista()).getByRole('searchbox', { name: 'Buscar conversa' });
+    expect(eDaFamiliaDw(busca.closest('label').querySelector('svg'))).toBe(true);
+  });
+
+  test('as três abas continuam: Atendimento, Espera e Automação, sem "Todas"', () => {
+    renderDashboard();
+    const abas = within(lista()).getAllByRole('tab').map((aba) => aba.textContent.replace(/\d+/g, '').trim());
+    expect(abas).toEqual(['Atendimento', 'Espera', 'Automação']);
+  });
+
+  test('"Finalizar sem motivo" na Espera usa o ícone DW de encerrar', async () => {
+    renderDashboard();
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    const finalizar = within(lista()).getByRole('button', { name: 'Finalizar sem motivo' });
+    expect(eDaFamiliaDw(finalizar.querySelector('svg'))).toBe(true);
+  });
+
+  // A casca reserva os encaixes; é a mesa que desenha o trilho e o ícone do
+  // botão "Abrir menu" neles (AppShell.jsx).
+  test('desenha o trilho e o ícone do menu nos encaixes que a casca oferece', () => {
+    const encaixeDoTrilho = document.body.appendChild(document.createElement('div'));
+    const encaixeDoIcone = document.body.appendChild(document.createElement('span'));
+    try {
+      renderInShell(<DashboardPage />, { context: { encaixeDoTrilho, encaixeDoIcone, mobileNavOpen: false } });
+      const trilho = within(encaixeDoTrilho).getByRole('navigation', { name: 'Navegação principal' });
+      expect(trilho).toHaveAttribute('data-variante', 'mesa');
+      expect(within(trilho).getByRole('link', { name: 'Atendimento' })).toHaveAttribute('aria-current', 'page');
+      expect(eDaFamiliaDw(encaixeDoIcone.querySelector('svg'))).toBe(true);
+    } finally {
+      encaixeDoTrilho.remove();
+      encaixeDoIcone.remove();
+    }
+  });
+
+  test('sem encaixe (fora da casca), a mesa não desenha trilho', () => {
+    renderDashboard();
+    expect(screen.queryByRole('navigation', { name: 'Navegação principal' })).not.toBeInTheDocument();
+  });
+
+  // Contagem é o tamanho de cada fila (não "não lidas"). Três dígitos têm de
+  // aparecer inteiros; o que o jsdom não mede (caber em 332 px) é conferido no
+  // navegador, com as capturas desta etapa.
+  test.each([
+    [9, 99, 999],
+    [999, 9, 99],
+    [99, 999, 9],
+  ])('as abas mostram as contagens inteiras: Atendimento %i, Espera %i, Automação %i', (minhas, espera, automacao) => {
+    const conversa = (id, extra = {}) => ({ id, contactDisplayName: `Cliente ${id}`, status: 'waiting', ...extra });
+    useMyConversations.mockReturnValue({ conversations: Array.from({ length: minhas }, (_, i) => conversa(`m${i}`, { status: 'assigned', assignedAgentId: 'agent-1' })), status: 'ready' });
+    useQueue.mockReturnValue({
+      queue: [
+        ...Array.from({ length: espera }, (_, i) => conversa(`e${i}`)),
+        ...Array.from({ length: automacao }, (_, i) => conversa(`a${i}`, { triageState: 'pending' })),
+      ],
+      status: 'ready',
+    });
+    renderDashboard();
+    const [atendimento, naEspera, naAutomacao] = within(lista()).getAllByRole('tab');
+    expect(atendimento).toHaveTextContent(`Atendimento${minhas}`);
+    expect(naEspera).toHaveTextContent(`Espera${espera}`);
+    expect(naAutomacao).toHaveTextContent(`Automação${automacao}`);
+  });
+
+  test('no modo lista estreita, expandir e "Voltar à conversa" usam o ícone DW', async () => {
+    larguraDaJanela(600);
+    renderDashboard();
+    await userEvent.click(within(lista()).getAllByRole('button', { name: 'Maria' })[0]);
+    const expandir = screen.getByRole('button', { name: /ver lista de atendimentos/i });
+    expect(eDaFamiliaDw(expandir.querySelector('svg'))).toBe(true);
+    await userEvent.click(expandir);
+    expect(eDaFamiliaDw(screen.getByRole('button', { name: /voltar à conversa/i }).querySelector('svg'))).toBe(true);
+  });
+
+  test('buscar filtra a lista e escolher abre a conversa', async () => {
+    renderDashboard();
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar conversa' }), 'maria');
+    expect(within(lista()).queryByRole('button', { name: /^Joana/ })).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Buscar conversa' }));
+    await userEvent.click(within(lista()).getByRole('button', { name: /^Joana/ }));
+    expect(within(lista()).getByRole('button', { name: /^Joana/ })).toHaveAttribute('aria-current', 'true');
+    expect(within(screen.getByRole('main')).getAllByText('Joana').length).toBeGreaterThan(0);
+  });
+});
+
 describe('aviso de transferência recebida', () => {
-  const TRANSFERIDA = { id: 'conv-t', contactPhoneNumber: '5511999998888', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };
+  const TRANSFERIDA ={ id: 'conv-t', contactPhoneNumber: '5511999998888', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };
 
   test('não mostra nada quando ninguém transferiu', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
@@ -627,5 +774,169 @@ describe('aviso de transferência recebida', () => {
     // A tela vazia deu lugar à conversa transferida.
     expect(screen.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
     expect(screen.getByTitle('5511999998888')).toHaveTextContent('Carlos');
+  });
+});
+
+// A conversa aberta só redesenha com o que é dela (BUG-004, achado A2). Na
+// mesa, só a ConversationView chama useQuickReplies, uma vez por render: as
+// chamadas do mock contam os renders da conversa.
+describe('fronteira da conversa aberta', () => {
+  const ctx = { openProfile: vi.fn(), closeMobileNav: vi.fn(), profileVersion: 0, setConversationOpen: vi.fn() };
+  const mesa = () => (
+    <MemoryRouter>
+      <Routes>
+        <Route element={<Outlet context={ctx} />}>
+          <Route path="/" element={<DashboardPage />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>
+  );
+  const rendersDaConversa = () => useQuickReplies.mock.calls.length;
+
+  async function abrirNaEspera(nome) {
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    await userEvent.click(screen.getByText(nome));
+  }
+
+  test('mudança em outra conversa atualiza a lista sem redesenhar a conversa aberta', async () => {
+    const aberta = { id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null };
+    const outra = { id: 'c2', contactDisplayName: 'Bruna', status: 'waiting', assignedAgentId: null, lastMessageContent: 'primeira mensagem' };
+    useQueue.mockReturnValue({ queue: [aberta, outra], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    const { rerender } = render(mesa());
+    await abrirNaEspera('Carlos');
+    expect(screen.getByRole('button', { name: 'Editar cliente: Carlos' })).toBeInTheDocument();
+    expect(screen.getByText('primeira mensagem')).toBeInTheDocument();
+    const antes = rendersDaConversa();
+
+    // Como o useQueue responde a um evento de outra conversa: array novo, só o
+    // item dela trocado, a conversa aberta com a mesma referência.
+    useQueue.mockReturnValue({ queue: [aberta, { ...outra, lastMessageContent: 'segunda mensagem' }], status: 'ready' });
+    rerender(mesa());
+
+    expect(screen.getByText('segunda mensagem')).toBeInTheDocument();
+    expect(rendersDaConversa()).toBe(antes);
+  });
+
+  test('objeto novo da conversa aberta redesenha a conversa e mostra o dado novo', async () => {
+    const aberta = { id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null };
+    useQueue.mockReturnValue({ queue: [aberta], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    const { rerender } = render(mesa());
+    await abrirNaEspera('Carlos');
+    expect(screen.getByRole('button', { name: 'Editar cliente: Carlos' })).toBeInTheDocument();
+    const antes = rendersDaConversa();
+
+    useQueue.mockReturnValue({ queue: [{ ...aberta, contactDisplayName: 'Carlos Pereira' }], status: 'ready' });
+    rerender(mesa());
+
+    expect(rendersDaConversa()).toBeGreaterThan(antes);
+    expect(screen.getByRole('button', { name: 'Editar cliente: Carlos Pereira' })).toBeInTheDocument();
+  });
+});
+
+// "Editar cliente" na mesa, com os hooks de lista DE VERDADE (só a API é
+// simulada). A rota de edição não emite evento: sem a página levar o que foi
+// salvo até as listas, voltar à lista e reabrir a conversa trazia de volta a
+// nota antiga — e salvar de novo a devolvia ao servidor.
+describe('edição do contato na mesa: a lista guarda o que foi salvo', () => {
+  let filaReal;
+  let meusReais;
+  beforeAll(async () => {
+    filaReal = await vi.importActual('../hooks/useQueue');
+    meusReais = await vi.importActual('../hooks/useMyConversations');
+  });
+
+  const A = { id: 'conv-A', contactId: 'contato-A', contactDisplayName: 'Contato A', contactInternalNote: 'Nota antiga', status: 'assigned', assignedAgentId: 'agent-1' };
+  const B = { id: 'conv-B', contactId: 'contato-B', contactDisplayName: 'Contato B', contactInternalNote: 'Nota de B', status: 'assigned', assignedAgentId: 'agent-1' };
+
+  beforeEach(() => {
+    useQueue.mockImplementation(filaReal.useQueue);
+    useMyConversations.mockImplementation(meusReais.useMyConversations);
+    getQueue.mockResolvedValue([]);
+    getMyConversations.mockResolvedValue([A, B]);
+    listCities.mockResolvedValue([]);
+    // clearAllMocks não esvazia a fila de mockReturnValueOnce.
+    updateContact.mockReset();
+  });
+
+  const lista = () => screen.getByRole('complementary', { name: 'Atendimentos' });
+  const linha = (nome) => within(lista()).getByRole('button', { name: new RegExp(`^${nome}`) });
+  const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
+  const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
+  const rendersDaConversa = () => useQuickReplies.mock.calls.length;
+
+  // Abre a conversa e o painel "Dados do cliente" (que só existe aberto).
+  async function abrir(nome) {
+    await userEvent.click(await within(lista()).findByRole('button', { name: new RegExp(`^${nome}`) }));
+    await screen.findByRole('button', { name: new RegExp(`^Editar cliente: ${nome}`) });
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+  }
+  async function editar(nome, campos) {
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(`^Editar cliente: ${nome}`) }));
+    // O modal de edição chega sob demanda.
+    await screen.findByRole('dialog', { name: 'Editar cliente' });
+    for (const [rotulo, texto] of campos) {
+      const campo = within(edicao()).getByLabelText(rotulo);
+      await userEvent.clear(campo);
+      await userEvent.type(campo, texto);
+    }
+    await userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar alterações' }));
+  }
+  const edicaoFechou = () => waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+
+  test('salvar, voltar à lista e reabrir: a conversa volta com a nota nova', async () => {
+    updateContact.mockResolvedValue({ id: 'contato-A', displayName: 'Contato A', cityId: null, localityId: null, internalNote: 'Nota nova' });
+    renderDashboard();
+    await abrir('Contato A');
+    await editar('Contato A', [['Nota interna', 'Nota nova']]);
+    await edicaoFechou();
+
+    // Voltar à lista desmonta a conversa: o que ela guardava some junto.
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar para a lista' }));
+    expect(screen.queryByRole('button', { name: /^Editar cliente:/ })).not.toBeInTheDocument();
+
+    await abrir('Contato A');
+    expect(within(painel()).getByText('Nota nova')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Editar cliente: Contato A/ }));
+    expect(within(await screen.findByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+  });
+
+  test('salvar na mesa troca o nome na linha da lista', async () => {
+    updateContact.mockResolvedValue({ id: 'contato-A', displayName: 'Contato A editado', cityId: null, localityId: null, internalNote: 'Nota antiga' });
+    renderDashboard();
+    await abrir('Contato A');
+    await editar('Contato A', [['Nome', 'Contato A editado']]);
+    await edicaoFechou();
+
+    expect(linha('Contato A editado')).toBeInTheDocument();
+    expect(linha('Contato B')).toBeInTheDocument();
+  });
+
+  test('resposta atrasada de A com B aberta: a linha de A muda, e B não muda nem redesenha', async () => {
+    let responderA;
+    updateContact.mockReturnValueOnce(new Promise((resolve) => { responderA = resolve; }));
+    renderDashboard();
+    await abrir('Contato A');
+    await editar('Contato A', [['Nome', 'Contato A editado']]);
+    // Salvando, o Esc não abandona a edição pela metade.
+    await userEvent.keyboard('{Escape}');
+    expect(edicao()).toBeInTheDocument();
+    // A conversa troca por baixo do modal com o "Salvar" no caminho. No
+    // navegador o fundo cobre a lista e isso só vem de causa externa; aqui o
+    // clique na linha faz a vez dela.
+    await abrir('Contato B');
+    await edicaoFechou();
+    const antes = rendersDaConversa();
+
+    await act(async () => {
+      responderA({ id: 'contato-A', displayName: 'Contato A editado', cityId: null, localityId: null, internalNote: 'Nota de A editada' });
+    });
+
+    expect(linha('Contato A editado')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato B' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota de B')).toBeInTheDocument();
+    expect(within(painel()).queryByText('Nota de A editada')).not.toBeInTheDocument();
+    expect(rendersDaConversa()).toBe(antes);
   });
 });

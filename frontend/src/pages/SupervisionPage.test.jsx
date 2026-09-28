@@ -1,5 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { screen, waitFor, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderInShell } from '../test-utils/renderInShell';
 import SupervisionPage from './SupervisionPage';
@@ -12,12 +12,12 @@ import {
   getDashboardClosedToday,
   getDashboardConversationByProtocol,
   getDashboardConversationsByPhone,
-  closeConversation,
   getPublicCompany,
 } from '../services/api';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useAiSuggestion } from '../hooks/useAiSuggestion';
+import * as api from '../services/api';
 
 vi.mock('../hooks/useAttendanceDashboard');
 vi.mock('../hooks/useChannels');
@@ -35,756 +35,859 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-function renderPage() {
-  return renderInShell(<SupervisionPage />, { path: '/supervisao' });
+// Só dados fictícios.
+const AGORA = Date.now();
+const haMin = (m) => new Date(AGORA - m * 60000).toISOString();
+
+const CARLOS = {
+  id: 'c1', contactId: 'ct1', contactDisplayName: 'Carlos', contactPhoneNumber: '5500000000011', protocolNumber: '20260924-0011',
+  channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: 'sector-1', sectorName: 'Financeiro', status: 'assigned',
+  createdAt: haMin(40), lastMessageAt: haMin(24),
+};
+const MARIA = {
+  id: 'c2', contactId: 'ct2', contactDisplayName: 'Maria', contactPhoneNumber: '5500000000012', protocolNumber: '20260924-0012',
+  channelId: 'chan-1', assignedAgentId: null, sectorId: null, status: 'waiting', createdAt: haMin(11), lastMessageAt: haMin(10),
+};
+const TEREZA = {
+  id: 'c4', contactId: 'ct4', contactDisplayName: 'Tereza', contactPhoneNumber: '5500000000014', protocolNumber: '20260924-0014',
+  channelId: 'chan-2', assignedAgentId: null, sectorId: 'sector-1', sectorName: 'Financeiro', aiTriageReasonName: 'Segunda via',
+  // Chegou antes da Maria, mas falou por último: a ordem da Espera é pela
+  // chegada, e esta massa distingue as duas chaves.
+  status: 'waiting', createdAt: haMin(18), lastMessageAt: haMin(2),
+};
+const JOAO = {
+  id: 'c3', contactId: 'ct3', contactDisplayName: 'Joao', contactPhoneNumber: '5500000000013', protocolNumber: '20260924-0013',
+  channelId: 'chan-1', assignedAgentId: null, sectorId: null, status: 'waiting', triageState: 'pending', createdAt: haMin(3), lastMessageAt: haMin(3),
+};
+
+function painel(extra = {}) {
+  return {
+    inProgress: [CARLOS], waiting: [MARIA, TEREZA], inAutomation: [JOAO], closedTodayCount: 7,
+    status: 'ready', loading: false, refresh: vi.fn(), aplicarContatoSalvo: vi.fn(), ...extra,
+  };
+}
+
+function renderPage(entradas) {
+  return renderInShell(<SupervisionPage />, { path: '/supervisao', initialEntries: entradas || ['/supervisao'] });
+}
+
+const lista = () => screen.getByRole('region', { name: /^Conversas/ });
+const linha = (nome) => within(lista()).getByRole('button', { name: new RegExp(nome) });
+const indicadores = () => screen.getByRole('group', { name: 'Resumo da operação' });
+const equipe = () => screen.getByRole('complementary', { name: 'Equipe' });
+const busca = () => screen.getByRole('searchbox', { name: 'Buscar cliente, telefone ou protocolo' });
+
+async function abrirFiltros(user) {
+  await user.click(screen.getByRole('button', { name: /^Filtros/ }));
+  return screen.getByRole('dialog', { name: 'Filtros' });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'agent' } });
-  useChannels.mockReturnValue({ channels: [{ id: 'chan-1', name: 'WhatsApp Vendas' }], loading: false, refresh: vi.fn() });
-  useAgents.mockReturnValue({ agents: [{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com' }], status: 'ready' });
+  useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-9', role: 'admin' } });
+  useChannels.mockReturnValue({
+    channels: [{ id: 'chan-1', name: 'WhatsApp Vendas' }, { id: 'chan-2', name: 'WhatsApp Suporte' }],
+    loading: false, refresh: vi.fn(),
+  });
+  useAgents.mockReturnValue({ agents: [{ id: 'agent-1', name: 'Ana', email: 'ana@exemplo.test', online: true }], status: 'ready' });
   useSectors.mockReturnValue({ sectors: [{ id: 'sector-1', name: 'Financeiro' }], loading: false, refresh: vi.fn() });
-  getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false });
-  // O aviso do topo do chat (aberto no popup) cita a empresa cadastrada.
+  getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false, total: 0 });
   getPublicCompany.mockResolvedValue({ name: '' });
-  closeConversation.mockResolvedValue({ id: 'c2', status: 'closed' });
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useAiSuggestion.mockReturnValue({ suggestion: null, send: vi.fn(), edit: vi.fn(), discard: vi.fn() });
-  useAttendanceDashboard.mockReturnValue({
-    inProgress: [{ id: 'c1', contactDisplayName: 'Carlos', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: 'sector-1' }],
-    waiting: [{ id: 'c2', contactDisplayName: 'Maria', channelId: 'chan-1', assignedAgentId: null, sectorId: null }],
-    inAutomation: [{ id: 'c3', contactDisplayName: 'Joao', channelId: 'chan-1', assignedAgentId: null, sectorId: null }],
-    closedTodayCount: 0,
-    loading: false,
-    refresh: vi.fn(),
+  useAttendanceDashboard.mockReturnValue(painel());
+});
+
+describe('Supervisão: estrutura', () => {
+  test('título, busca única, Filtros e as abas Ao vivo e Últimas 24 h', () => {
+    renderPage();
+    expect(screen.getByRole('heading', { level: 1, name: 'Supervisão' })).toBeInTheDocument();
+    expect(screen.getByText('Operação em tempo real')).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Buscar cliente, telefone ou protocolo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Filtros/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('tab', { name: 'Ao vivo' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Últimas 24 h' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.queryByRole('tab', { name: /encerrados hoje/i })).not.toBeInTheDocument();
+  });
+
+  test('abas pelo teclado: setas alternam, Home e End vão às pontas, e o foco acompanha', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    screen.getByRole('tab', { name: 'Ao vivo' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Últimas 24 h' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Últimas 24 h' })).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: 'Ao vivo' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Ao vivo' })).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: 'Últimas 24 h' })).toHaveFocus();
+  });
+
+  test('os grupos vêm na ordem Espera, Em atendimento, Automação', () => {
+    renderPage();
+    const grupos = within(lista()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(grupos).toEqual(['Espera', 'Em atendimento', 'Automação']);
+  });
+
+  test('a Espera ordena pelo maior tempo aguardando', () => {
+    renderPage();
+    const espera = within(lista()).getByRole('heading', { level: 3, name: 'Espera' }).closest('section');
+    const nomes = within(espera).getAllByRole('button').map((b) => b.textContent);
+    expect(nomes[0]).toMatch(/Tereza/);
+    expect(nomes[1]).toMatch(/Maria/);
+    expect(nomes[0]).toMatch(/18 min/);
+  });
+
+  test('cada linha diz o responsável, o setor e o tempo, com "Sem responsável" quando não há', () => {
+    renderPage();
+    expect(linha('Carlos')).toHaveTextContent('Ana');
+    expect(linha('Carlos')).toHaveTextContent('Financeiro');
+    expect(linha('Carlos')).toHaveTextContent('24 min');
+    expect(linha('Maria')).toHaveTextContent('Sem responsável');
+    expect(linha('Tereza')).toHaveTextContent('Segunda via');
+    expect(linha('Joao')).toHaveTextContent('IA');
+  });
+
+  test('a foto do cliente fica fora do nome acessível da linha (o nome não sai em dobro)', () => {
+    renderPage();
+    expect(linha('Carlos').querySelector('.sv-linha-foto')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  test('a linha tem uma única ação — abrir — e nenhuma ação destrutiva', () => {
+    renderPage();
+    const itens = within(lista()).getAllByRole('listitem');
+    itens.forEach((item) => expect(within(item).getAllByRole('button')).toHaveLength(1));
+    expect(within(lista()).queryByRole('button', { name: /finalizar|encerrar|excluir/i })).not.toBeInTheDocument();
+  });
+
+  test('o rótulo do estado é "Em atendimento", nunca "Em andamento"', () => {
+    renderPage();
+    expect(screen.queryByText(/em andamento/i)).not.toBeInTheDocument();
+    expect(within(indicadores()).getByRole('button', { name: /Em atendimento/ })).toBeInTheDocument();
+  });
+
+  test('indicadores com a contagem de cada estado e a equipe online', () => {
+    renderPage();
+    expect(within(indicadores()).getByRole('button', { name: /Espera\s*2/ })).toBeInTheDocument();
+    expect(within(indicadores()).getByRole('button', { name: /Em atendimento\s*1/ })).toBeInTheDocument();
+    expect(within(indicadores()).getByRole('button', { name: /Automação\s*1/ })).toBeInTheDocument();
+    expect(within(indicadores()).getByRole('button', { name: /Equipe online\s*1/ })).toBeInTheDocument();
+  });
+
+  test('um indicador de estado mostra só aquele grupo, e clicar de novo volta tudo', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const espera = within(indicadores()).getByRole('button', { name: /Espera/ });
+    await user.click(espera);
+    expect(espera).toHaveAttribute('aria-pressed', 'true');
+    expect(within(lista()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Espera']);
+    await user.click(espera);
+    expect(within(lista()).getAllByRole('heading', { level: 3 })).toHaveLength(3);
+  });
+
+  test('campanhas silenciosas não aparecem', () => {
+    useAttendanceDashboard.mockReturnValue(painel({ waiting: [MARIA, { ...TEREZA, id: 'c8', contactDisplayName: 'Silvia', status: 'silent' }] }));
+    renderPage();
+    expect(within(lista()).queryByRole('button', { name: /Silvia/ })).not.toBeInTheDocument();
+  });
+
+  test('nome longo fica na linha inteiro para o leitor e contido pelo CSS', () => {
+    const longo = 'Rosimeire Aparecida dos Santos Figueiredo de Albuquerque Neta';
+    useAttendanceDashboard.mockReturnValue(painel({ waiting: [{ ...MARIA, contactDisplayName: longo }] }));
+    renderPage();
+    const nome = within(linha('Rosimeire')).getByText(longo);
+    expect(nome).toHaveClass('sv-linha-nome');
+    expect(nome).toHaveAttribute('title', longo);
   });
 });
 
-describe('SupervisionPage', () => {
-  test('shows the "Todos atendimentos" tab active by default, with the three operation groups', async () => {
-    renderPage();
-    expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByRole('heading', { name: 'Em andamento', exact: true })).toBeInTheDocument();
-    expect(await screen.findByText('Carlos')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Em espera', exact: true })).toBeInTheDocument();
-    expect(screen.getByText('Maria')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Em automação', exact: true })).toBeInTheDocument();
-    expect(screen.getByText('Joao')).toBeInTheDocument();
+// O que a linha antiga (ConversationListItem compacto) dizia e continua
+// dizendo na linha nova: o estado da IA e o lugar do cliente, uma vez só.
+describe('Supervisão: o que a linha informa', () => {
+  const LUGAR = { contactCityName: 'Cândido Mendes', contactLocalityName: 'Barão de Tromaí' };
+  beforeEach(() => {
+    useAttendanceDashboard.mockReturnValue(painel({
+      inProgress: [{ ...CARLOS, ...LUGAR, lastMessageContent: 'Minha internet caiu de novo', aiTriageCompletedAt: haMin(30), aiTriageReasonName: 'Sem conexão', aiTriageLowConfidence: true }],
+      waiting: [{ ...MARIA, aiTriageCompletedAt: haMin(9), aiTriageReasonName: 'Segunda via', aiTriageResolvedByAi: true }],
+      inAutomation: [JOAO],
+    }));
   });
 
-  test('the "Todos atendimentos" tab badge sums the 3 live columns', async () => {
+  test('prévia da última mensagem, motivo da IA com o alerta de confiança baixa e o lugar uma vez', () => {
     renderPage();
-    expect(await screen.findByText('Carlos')).toBeInTheDocument();
-    expect(within(screen.getByRole('tab', { name: /todos/i })).getByText('3')).toBeInTheDocument();
+    const carlos = linha('Carlos');
+    expect(within(carlos).getByText('Minha internet caiu de novo')).toBeInTheDocument();
+    expect(carlos).toHaveTextContent('IA · Sem conexão');
+    expect(within(carlos).getByLabelText('Triagem com confiança baixa')).toHaveTextContent('⚠');
+    expect(within(carlos).getAllByText(/Barão de Tromaí · Cândido Mendes/)).toHaveLength(1);
   });
 
-  test('quick-closes a conversation from the "Em espera" column without asking for a reason', async () => {
+  test('"Resolvido pela IA" e "IA em triagem" continuam aparecendo', () => {
     renderPage();
-    expect(await screen.findByText('Maria')).toBeInTheDocument();
-
-    const waitingColumn = screen.getByRole('heading', { name: 'Em espera', exact: true }).closest('div').parentElement;
-    await userEvent.click(within(waitingColumn).getByRole('button', { name: /finalizar/i }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
-
-    expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
+    expect(linha('Maria')).toHaveTextContent('Resolvido pela IA');
+    expect(linha('Joao')).toHaveTextContent('IA em triagem');
   });
 
-  test('quick-closes a conversation from the "Em automação" column without asking for a reason', async () => {
+  test('mensagem enviada mostra os tiques de entrega na prévia', () => {
+    useAttendanceDashboard.mockReturnValue(painel({ inProgress: [{ ...CARLOS, lastMessageContent: 'Pode testar agora?', lastMessageDirection: 'outbound', lastMessageStatus: 'delivered' }] }));
     renderPage();
-    expect(await screen.findByText('Joao')).toBeInTheDocument();
+    expect(within(linha('Carlos')).getByTitle('Entregue')).toBeInTheDocument();
+  });
+});
 
-    const automationColumn = screen.getByRole('heading', { name: 'Em automação', exact: true }).closest('div').parentElement;
-    await userEvent.click(within(automationColumn).getByRole('button', { name: /finalizar/i }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
-
-    expect(closeConversation).toHaveBeenCalledWith('c3', null, 'tok-123');
+describe('Supervisão: busca única', () => {
+  test('por nome, filtra a lista enquanto digita', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(busca(), 'mar');
+    expect(linha('Maria')).toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Carlos/ })).not.toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Tereza/ })).not.toBeInTheDocument();
   });
 
-  test('does not show a quick-close button in the "Em andamento" column', async () => {
-    renderPage();
-    expect(await screen.findByText('Carlos')).toBeInTheDocument();
-
-    const inProgressColumn = screen.getByRole('heading', { name: 'Em andamento', exact: true }).closest('div').parentElement;
-    expect(within(inProgressColumn).queryByRole('button', { name: /finalizar/i })).not.toBeInTheDocument();
-  });
-
-  test('clicking the "Encerrados hoje" tab hides the 3 live columns and shows the closed list instead', async () => {
-    getDashboardClosedToday.mockResolvedValue({
-      items: [{ id: 'c9', contactDisplayName: 'Rita', channelId: 'chan-1' }],
-      hasMore: false,
-    });
-    renderPage();
-    expect(await screen.findByText('Carlos')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
-
-    expect(screen.queryByText('Em andamento')).not.toBeInTheDocument();
-    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
-    expect(await screen.findByText('Rita')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'true');
-  });
-
-  test('shows the assigned agent name in the operation row', async () => {
-    renderPage();
-    expect(await screen.findByText('Carlos')).toBeInTheDocument();
-    expect(within(screen.getByRole('main', { name: 'Operação' })).getByText('Ana')).toBeInTheDocument();
-  });
-
-  test('clicking a card opens the conversation in a popup, without navigating away', async () => {
-    renderPage();
-    await userEvent.click(await screen.findByText('Carlos'));
-
-    expect(mockNavigate).not.toHaveBeenCalled();
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getAllByText('Carlos').length).toBeGreaterThan(0);
-    expect(within(dialog).getByText('Ana')).toBeInTheDocument();
-  });
-
-  test('closing the conversation popup returns to the dashboard view', async () => {
-    renderPage();
-    await userEvent.click(await screen.findByText('Carlos'));
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  test('clicking transfer inside the conversation popup opens the transfer modal', async () => {
-    renderPage();
-    await userEvent.click(await screen.findByText('Carlos'));
-
-    await userEvent.click(screen.getByRole('button', { name: /transferir atendimento/i }));
-
-    expect(screen.getByRole('heading', { name: 'Transferir atendimento' })).toBeInTheDocument();
-  });
-
-  test('opening a closed conversation from the Encerrados hoje tab also uses the popup, not navigation', async () => {
-    getDashboardClosedToday.mockResolvedValue({
-      items: [{ id: 'c9', contactDisplayName: 'Rita', channelId: 'chan-1', status: 'closed', assignedAgentId: 'agent-1' }],
-      hasMore: false,
-    });
-    renderPage();
-    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
-    await userEvent.click(await screen.findByText('Rita'));
-
-    expect(mockNavigate).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-
-  test('filtering by channel hides conversations from other channels', async () => {
-    useChannels.mockReturnValue({
-      channels: [
-        { id: 'chan-1', name: 'WhatsApp Vendas' },
-        { id: 'chan-2', name: 'WhatsApp Suporte' },
+  test('por telefone: filtra enquanto digita e, com Enter, busca todos os atendimentos do cliente', async () => {
+    getDashboardConversationsByPhone.mockResolvedValue({
+      contact: { id: 'ct9', phoneNumber: '5500000000099', displayName: 'Cliente Antiga' },
+      conversations: [
+        { id: 'h1', status: 'closed', contactDisplayName: 'Cliente Antiga', channelId: 'chan-1' },
+        { id: 'h2', status: 'waiting', contactDisplayName: 'Cliente Antiga', channelId: 'chan-1' },
       ],
-      loading: false,
-      refresh: vi.fn(),
     });
+    const user = userEvent.setup();
     renderPage();
-    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    await user.type(busca(), '5500000000012');
+    expect(linha('Maria')).toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Carlos/ })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    await userEvent.click(screen.getByLabelText('WhatsApp Suporte'));
-
-    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
+    await user.clear(busca());
+    await user.type(busca(), '+55 00 00000-0099{Enter}');
+    expect(getDashboardConversationsByPhone).toHaveBeenCalledWith('+55 00 00000-0099', 'tok-123');
+    const resultado = await screen.findByRole('region', { name: /Atendimentos de Cliente Antiga/ });
+    expect(within(resultado).getAllByRole('button', { name: /Cliente Antiga/ })).toHaveLength(2);
   });
 
-  test('o filtro de Atendentes tem a opção IA, que mostra o que a IA encerrou ou está triando', async () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [{ id: 'c1', contactDisplayName: 'Carlos', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: 'sector-1' }],
-      waiting: [{ id: 'c2', contactDisplayName: 'Maria', channelId: 'chan-1', assignedAgentId: null, sectorId: null, aiTriageCompletedAt: '2026-09-13T15:00:00Z' }],
-      inAutomation: [{ id: 'c3', contactDisplayName: 'Joao', channelId: 'chan-1', assignedAgentId: null, sectorId: null, triageState: 'pending' }],
-      closedTodayCount: 2,
-    });
-    getDashboardClosedToday.mockResolvedValue({
-      items: [
-        { id: 'c4', contactDisplayName: 'Pedro', channelId: 'chan-1', assignedAgentId: null, sectorId: null, status: 'closed', aiTriageResolvedByAi: true, aiTriageCompletedAt: '2026-09-13T15:10:00Z' },
-        { id: 'c5', contactDisplayName: 'Lucia', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: null, status: 'closed', aiTriageResolvedByAi: true },
-      ],
-      hasMore: false,
-    });
-    renderPage();
-    expect(await screen.findByText('Carlos')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /atendentes/i }));
-    await userEvent.click(screen.getByLabelText('IA'));
-
-    // Ativas: Carlos é da Ana (some); Maria (concluída pela IA para a fila) e
-    // Joao (em triagem) ficam.
-    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
-    expect(screen.getByText('Maria')).toBeInTheDocument();
-    expect(screen.getByText('Joao')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('tab', { name: /encerrad/i }));
-    // Encerrados: Pedro foi encerrado pela IA (fica); Lucia foi encerrada pela
-    // Ana depois de a IA entregar o boleto (some).
-    expect(await screen.findByText('Pedro')).toBeInTheDocument();
-    expect(screen.queryByText('Lucia')).not.toBeInTheDocument();
-  });
-
-  test('opening a filter dropdown closes any other one that was already open', async () => {
-    renderPage();
-    expect(screen.getByText('Carlos')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    expect(screen.getByLabelText('WhatsApp Vendas')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /atendentes/i }));
-    expect(screen.queryByLabelText('WhatsApp Vendas')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Ana')).toBeInTheDocument();
-  });
-
-  test('clicking outside an open filter dropdown closes it', async () => {
-    renderPage();
-    expect(screen.getByText('Carlos')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    expect(screen.getByLabelText('WhatsApp Vendas')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByText('Carlos'));
-    expect(screen.queryByLabelText('WhatsApp Vendas')).not.toBeInTheDocument();
-  });
-
-  test('shows a "Carregar mais" button on the Encerrados hoje tab when there are more pages, and loads the next page on click', async () => {
-    getDashboardClosedToday
-      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', channelId: 'chan-1' }], hasMore: true })
-      .mockResolvedValueOnce({ items: [{ id: 'c11', contactDisplayName: 'Rita', channelId: 'chan-1' }], hasMore: false });
-
-    renderPage();
-    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
-    expect(await screen.findByText('Pedro')).toBeInTheDocument();
-    const loadMore = screen.getByRole('button', { name: /carregar mais/i });
-
-    await userEvent.click(loadMore);
-
-    expect(await screen.findByText('Rita')).toBeInTheDocument();
-    expect(getDashboardClosedToday).toHaveBeenCalledWith({ offset: 1, limit: 20 }, 'tok-123');
-    expect(screen.queryByRole('button', { name: /carregar mais/i })).not.toBeInTheDocument();
-  });
-
-  test('shows the true live closedTodayCount on the tab badge when no filter is active, even if fewer items are loaded', async () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [],
-      waiting: [],
-      inAutomation: [],
-      closedTodayCount: 57,
-      loading: false,
-      refresh: vi.fn(),
-    });
-    getDashboardClosedToday.mockResolvedValue({
-      items: [{ id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' }],
-      hasMore: true,
-    });
-
-    renderPage();
-
-    await waitFor(() => {
-      expect(within(screen.getByRole('tab', { name: /encerrados hoje/i })).getByText('57')).toBeInTheDocument();
-    });
-  });
-
-  test('shows the filtered visible count on the tab badge when a filter is active', async () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [],
-      waiting: [],
-      inAutomation: [],
-      closedTodayCount: 57,
-      loading: false,
-      refresh: vi.fn(),
-    });
-    getDashboardClosedToday.mockResolvedValue({
-      items: [
-        { id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' },
-        { id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' },
-      ],
-      hasMore: false,
-    });
-    useChannels.mockReturnValue({
-      channels: [
-        { id: 'chan-1', name: 'WhatsApp Vendas' },
-        { id: 'chan-2', name: 'WhatsApp Suporte' },
-      ],
-      loading: false,
-      refresh: vi.fn(),
-    });
-
-    renderPage();
-    await waitFor(() => expect(getDashboardClosedToday).toHaveBeenCalled());
-
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    await userEvent.click(screen.getByLabelText('WhatsApp Vendas'));
-
-    await waitFor(() => {
-      expect(within(screen.getByRole('tab', { name: /encerrados hoje/i })).getByText('1')).toBeInTheDocument();
-    });
-  });
-
-  test('lê os filtros da URL e escreve de volta ao mudar', async () => {
-    useChannels.mockReturnValue({ channels: [{ id: 'ch1', name: 'Berg' }, { id: 'ch2', name: 'Suporte' }], loading: false });
-    useSectors.mockReturnValue({ sectors: [{ id: 's1', name: 'Financeiro' }], loading: false });
-    renderInShell(<SupervisionPage />, { path: '/supervisao', initialEntries: ['/supervisao?canal=ch1&aba=encerrados'] });
-    expect(await screen.findByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'true');
-    await userEvent.click(screen.getByRole('button', { name: /^canais/i }));
-    expect(screen.getByRole('checkbox', { name: 'Berg' })).toBeChecked();
-    await userEvent.click(screen.getByRole('button', { name: /^setores/i }));
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Financeiro' }));
-    expect(screen.getByTestId('location-search')).toHaveTextContent('canal=ch1');
-    expect(screen.getByTestId('location-search')).toHaveTextContent('setor=s1');
-  });
-
-  test('searching by protocol number opens the matching conversation', async () => {
+  test('por protocolo: Enter abre o atendimento no popup, sem navegar', async () => {
     getDashboardConversationByProtocol.mockResolvedValue({
-      id: 'conv-found',
-      status: 'closed',
-      protocolNumber: 1042,
-      contactDisplayName: 'Cliente Antigo',
-      assignedAgentId: 'agent-1',
+      id: 'conv-found', status: 'closed', protocolNumber: '20260911-0001', contactDisplayName: 'Cliente Novo', assignedAgentId: 'agent-1',
     });
+    const user = userEvent.setup();
     renderPage();
-
-    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '1042{Enter}');
-
-    expect(getDashboardConversationByProtocol).toHaveBeenCalledWith('1042', 'tok-123');
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-  });
-
-  test('searching by the new AAAAMMDD-XXXX protocol format opens the matching conversation', async () => {
-    getDashboardConversationByProtocol.mockResolvedValue({
-      id: 'conv-found-2',
-      status: 'closed',
-      protocolNumber: '20260911-0001',
-      contactDisplayName: 'Cliente Novo',
-      assignedAgentId: 'agent-1',
-    });
-    renderPage();
-
-    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '20260911-0001{Enter}');
-
+    await user.type(busca(), '20260911-0001{Enter}');
     expect(getDashboardConversationByProtocol).toHaveBeenCalledWith('20260911-0001', 'tok-123');
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('shows an error when the protocol number is not found', async () => {
-    getDashboardConversationByProtocol.mockRejectedValue({ body: { error: 'No conversation found with that protocol number' } });
+  test('protocolo antigo, só com números curtos, também vai para a busca de protocolo', async () => {
+    getDashboardConversationByProtocol.mockResolvedValue({ id: 'conv-antiga', status: 'closed', protocolNumber: 1042, contactDisplayName: 'Cliente Antigo' });
+    const user = userEvent.setup();
     renderPage();
+    await user.type(busca(), '1042{Enter}');
+    expect(getDashboardConversationByProtocol).toHaveBeenCalledWith('1042', 'tok-123');
+    expect(getDashboardConversationsByPhone).not.toHaveBeenCalled();
+  });
 
-    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '999999');
-    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '{Enter}');
+  test('a busca local também acha pelo protocolo', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(busca(), '0014');
+    expect(linha('Tereza')).toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Maria/ })).not.toBeInTheDocument();
+  });
 
+  test('protocolo inexistente: mensagem em português', async () => {
+    getDashboardConversationByProtocol.mockRejectedValue({ body: { error: 'No conversation found with that protocol number' } });
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(busca(), '999999{Enter}');
     expect(await screen.findByText('Nenhum atendimento encontrado com esse protocolo.')).toBeInTheDocument();
   });
 
-  test('searching by phone number shows the matching contact\'s conversations', async () => {
-    getDashboardConversationsByPhone.mockResolvedValue({
-      contact: { id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria Cliente' },
-      conversations: [
-        { id: 'conv-old-1', status: 'closed', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' },
-        { id: 'conv-old-2', status: 'waiting', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' },
-      ],
-    });
-    renderPage();
-
-    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511999990000{Enter}');
-
-    expect(getDashboardConversationsByPhone).toHaveBeenCalledWith('+5511999990000', 'tok-123');
-    expect(await screen.findByText(/2 atendimento/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Maria Cliente')).toHaveLength(2);
-  });
-
-  test('clicking a phone-search result opens it in the conversation modal', async () => {
-    getDashboardConversationsByPhone.mockResolvedValue({
-      contact: { id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria Cliente' },
-      conversations: [{ id: 'conv-old-1', status: 'closed', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' }],
-    });
-    renderPage();
-
-    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511999990000{Enter}');
-    await userEvent.click(await screen.findByText('Maria Cliente'));
-
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-
-  test('shows an error when the phone number matches no contact', async () => {
+  test('telefone sem cliente: mensagem em português', async () => {
     getDashboardConversationsByPhone.mockRejectedValue({ body: { error: 'No contact found with that phone number' } });
+    const user = userEvent.setup();
     renderPage();
-
-    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511900000000{Enter}');
-
+    await user.type(busca(), '5500000000077{Enter}');
     expect(await screen.findByText('Nenhum cliente encontrado com esse telefone.')).toBeInTheDocument();
   });
 
-  test('clearing the phone search returns to the normal tabs', async () => {
+  test('campanha silenciosa não aparece nos atendimentos do cliente, nem na contagem', async () => {
     getDashboardConversationsByPhone.mockResolvedValue({
-      contact: { id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria Cliente' },
-      conversations: [{ id: 'conv-old-1', status: 'closed', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' }],
-    });
-    renderPage();
-
-    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511999990000{Enter}');
-    await screen.findByText(/1 atendimento/i);
-
-    await userEvent.click(screen.getByRole('button', { name: /limpar busca/i }));
-
-    expect(screen.queryByText(/atendimento\(s\) de/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Em andamento', exact: true })).toBeInTheDocument();
-  });
-});
-
-
-test('team selection reuses the agent filter and operation navigation keeps the same conversations', async () => {
-  renderPage();
-  await screen.findByText('Carlos');
-  const team = screen.getByRole('complementary', { name: 'Equipe e carga' });
-  expect(within(team).getByText('1')).toBeInTheDocument();
-  const agent = within(team).getByRole('button', { name: /Ana/ });
-  await userEvent.click(agent);
-  expect(agent).toHaveAttribute('aria-pressed', 'true');
-  expect(screen.getByText('Carlos')).toBeInTheDocument();
-  expect(screen.queryByText('Maria')).not.toBeInTheDocument();
-  await userEvent.click(agent);
-  const states = screen.getByRole('navigation', { name: 'Estados dos atendimentos' });
-  await userEvent.click(within(states).getByRole('button', { name: /Espera/ }));
-  expect(screen.getByText('Maria')).toBeInTheDocument();
-  expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
-});
-
-describe('estados de carregamento da central de operação', () => {
-  test('carregando não é apresentado como operação vazia', () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'loading', loading: true, refresh: vi.fn(),
-    });
-    renderPage();
-
-    expect(screen.getByRole('status')).toHaveTextContent(/carregando atendimentos/i);
-    expect(screen.queryByText('Nenhum atendimento em andamento.')).not.toBeInTheDocument();
-  });
-
-  test('falha na carga mostra erro com tentar de novo, e não "nenhum atendimento"', async () => {
-    const refresh = vi.fn();
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'error', loading: false, refresh,
-    });
-    renderPage();
-
-    expect(screen.getByRole('alert')).toHaveTextContent(/não foi possível carregar os atendimentos/i);
-    expect(screen.queryByText('Nenhum atendimento em espera.')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
-    expect(refresh).toHaveBeenCalledTimes(1);
-  });
-
-  test('operação realmente vazia continua dizendo que não há atendimentos', () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'ready', loading: false, refresh: vi.fn(),
-    });
-    renderPage();
-
-    expect(screen.getByText('Nenhum atendimento em andamento.')).toBeInTheDocument();
-    expect(screen.queryByText(/não foi possível carregar os atendimentos/i)).not.toBeInTheDocument();
-  });
-});
-
-describe('contadores confiáveis', () => {
-  test('em erro, os contadores mostram — em vez de 0', () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'error', loading: false, refresh: vi.fn(),
-    });
-    renderPage();
-
-    // Nenhum zero pode aparecer como se fosse confirmado.
-    const estados = screen.getByRole('navigation', { name: /estados dos atendimentos/i });
-    // "Visão geral" não carrega mais contador: ele repetia, encostado, o mesmo
-    // número da aba "Todos atendimentos", que continua respondendo por ele.
-    ['Andamento', 'Espera', 'Automação'].forEach((rotulo) => {
-      const botao = within(estados).getByRole('button', { name: new RegExp(rotulo, 'i') });
-      expect(botao).toHaveTextContent('—');
-      expect(botao).not.toHaveTextContent('0');
-    });
-    expect(within(estados).getByRole('button', { name: /visão geral/i })).toHaveTextContent(/^Visão geral$/);
-
-    expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveTextContent('—');
-    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveTextContent('—');
-
-    // A carga da equipe vem da mesma requisição que falhou.
-    const equipe = screen.getByRole('complementary', { name: /equipe e carga/i });
-    expect(within(equipe).getAllByText('—').length).toBeGreaterThan(0);
-    expect(within(equipe).queryByText(/sem atendimentos/i)).not.toBeInTheDocument();
-  });
-
-  test('em carregamento, os contadores também mostram —', () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'loading', loading: true, refresh: vi.fn(),
-    });
-    renderPage();
-
-    expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveTextContent('—');
-  });
-
-  test('zero confirmado continua sendo 0', () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'ready', loading: false, refresh: vi.fn(),
-    });
-    renderPage();
-
-    const estados = screen.getByRole('navigation', { name: /estados dos atendimentos/i });
-    const andamento = within(estados).getByRole('button', { name: /andamento/i });
-    expect(andamento).toHaveTextContent('0');
-    expect(andamento).not.toHaveTextContent('—');
-    // A presença é "Online" + a atividade num <em> separado (o "·" é
-    // decoração de CSS), então a asserção olha o bloco inteiro.
-    expect(screen.getByText('Livre').closest('.supervision-presence')).toHaveTextContent(/online/i);
-  });
-});
-
-// Etapa 6.1 — o painel de Encerrados nao pode apresentar falha como fila vazia,
-// e a contagem filtrada nao pode se passar por total quando so ha uma pagina
-// carregada. Nao existe endpoint que devolva o total filtrado.
-describe('encerrados: falha visivel e contagem honesta', () => {
-  function doisCanais() {
-    useChannels.mockReturnValue({
-      channels: [
-        { id: 'chan-1', name: 'WhatsApp Vendas' },
-        { id: 'chan-2', name: 'WhatsApp Suporte' },
+      contact: { id: 'ct9', phoneNumber: '5500000000099', displayName: 'Cliente Antiga' },
+      conversations: [
+        { id: 'h1', status: 'closed', contactDisplayName: 'Cliente Antiga', channelId: 'chan-1' },
+        { id: 'h3', status: 'silent', contactDisplayName: 'Cliente Antiga', channelId: 'chan-1' },
       ],
-      loading: false,
-      refresh: vi.fn(),
     });
-  }
-
-  async function abrirEncerrados() {
+    const user = userEvent.setup();
     renderPage();
-    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
-  }
-
-  async function filtrarPorVendas() {
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    await userEvent.click(screen.getByLabelText('WhatsApp Vendas'));
-  }
-
-  test('falha na carga inicial vira alerta, e nao "nenhum atendimento encerrado hoje"', async () => {
-    getDashboardClosedToday.mockRejectedValue(new Error('offline'));
-    await abrirEncerrados();
-
-    const alerta = await screen.findByRole('alert');
-    expect(alerta).toHaveTextContent(/não foi possível carregar os atendimentos encerrados hoje/i);
-    expect(within(alerta).getByRole('button', { name: /tentar de novo/i })).toBeInTheDocument();
-    expect(screen.queryByText(/nenhum atendimento encerrado hoje/i)).not.toBeInTheDocument();
+    await user.type(busca(), '5500000000099{Enter}');
+    const resultado = await screen.findByRole('region', { name: 'Atendimentos de Cliente Antiga (1)' });
+    expect(within(resultado).getAllByRole('button', { name: /Cliente Antiga/ })).toHaveLength(1);
   });
 
-  test('"tentar de novo" depois da falha inicial busca a primeira pagina outra vez', async () => {
+  test('um resultado da busca por telefone abre no popup, e "Limpar busca" volta à operação', async () => {
+    getDashboardConversationsByPhone.mockResolvedValue({
+      contact: { id: 'ct9', phoneNumber: '5500000000099', displayName: 'Cliente Antiga' },
+      conversations: [{ id: 'h1', status: 'closed', contactDisplayName: 'Cliente Antiga', channelId: 'chan-1' }],
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(busca(), '5500000000099{Enter}');
+    const resultado = await screen.findByRole('region', { name: /Atendimentos de Cliente Antiga/ });
+    await user.click(within(resultado).getByRole('button', { name: /Cliente Antiga/ }));
+    expect(await screen.findByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
+
+    await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
+    expect(screen.queryByRole('region', { name: /Atendimentos de/ })).not.toBeInTheDocument();
+    expect(busca()).toHaveValue('');
+    expect(busca()).toHaveFocus();
+    expect(linha('Carlos')).toBeInTheDocument();
+  });
+});
+
+describe('Supervisão: filtros', () => {
+  test('o popover abre pelo botão, com Canal, Atendente (com IA) e Setor', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const pop = await abrirFiltros(user);
+    expect(screen.getByRole('button', { name: /^Filtros/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(pop).getByRole('group', { name: 'Canal' })).toBeInTheDocument();
+    const atendente = within(pop).getByRole('group', { name: 'Atendente' });
+    expect(within(atendente).getByRole('checkbox', { name: 'IA' })).toBeInTheDocument();
+    expect(within(atendente).getByRole('checkbox', { name: 'Ana' })).toBeInTheDocument();
+    expect(within(pop).getByRole('group', { name: 'Setor' })).toBeInTheDocument();
+  });
+
+  test('canal esconde as conversas de outros canais', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const pop = await abrirFiltros(user);
+    await user.click(within(pop).getByRole('checkbox', { name: 'WhatsApp Suporte' }));
+    expect(linha('Tereza')).toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Carlos/ })).not.toBeInTheDocument();
+  });
+
+  test('atendente IA mostra o que a IA triou ou está triando', async () => {
+    useAttendanceDashboard.mockReturnValue(painel({ waiting: [{ ...MARIA, aiTriageCompletedAt: haMin(9) }, TEREZA] }));
+    const user = userEvent.setup();
+    renderPage();
+    const pop = await abrirFiltros(user);
+    await user.click(within(pop).getByRole('checkbox', { name: 'IA' }));
+    expect(linha('Maria')).toBeInTheDocument();
+    expect(linha('Joao')).toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Carlos/ })).not.toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Tereza/ })).not.toBeInTheDocument();
+  });
+
+  test('setor filtra pela conversa, e os filtros vão para a URL', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const pop = await abrirFiltros(user);
+    await user.click(within(pop).getByRole('checkbox', { name: 'Financeiro' }));
+    expect(linha('Carlos')).toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Maria/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId('location-search')).toHaveTextContent('setor=sector-1');
+  });
+
+  test('lê os filtros e a aba da URL', async () => {
+    renderPage(['/supervisao?canal=chan-2&aba=encerrados']);
+    expect(screen.getByRole('tab', { name: 'Últimas 24 h' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('list', { name: 'Filtros ativos' })).toHaveTextContent('Canal: WhatsApp Suporte');
+  });
+
+  test('chips: remover um filtro tira só aquele, e "Limpar filtros" tira todos preservando a aba', async () => {
+    const user = userEvent.setup();
+    renderPage(['/supervisao?canal=chan-2&setor=sector-1']);
+    const chips = screen.getByRole('list', { name: 'Filtros ativos' });
+    expect(within(chips).getAllByRole('listitem')).toHaveLength(2);
+
+    await user.click(within(chips).getByRole('button', { name: 'Remover filtro Canal: WhatsApp Suporte' }));
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('canal=');
+    expect(screen.getByTestId('location-search')).toHaveTextContent('setor=sector-1');
+
+    await user.click(screen.getByRole('tab', { name: 'Últimas 24 h' }));
+    await user.click(screen.getByRole('button', { name: 'Limpar filtros' }));
+    expect(screen.queryByRole('list', { name: 'Filtros ativos' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Últimas 24 h' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('o × do chip e "Limpar filtros" somem no clique: o foco vai para o botão Filtros', async () => {
+    const user = userEvent.setup();
+    renderPage(['/supervisao?canal=chan-2&setor=sector-1']);
+    await user.click(screen.getByRole('button', { name: 'Remover filtro Canal: WhatsApp Suporte' }));
+    expect(screen.getByRole('button', { name: /^Filtros/ })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Limpar filtros' }));
+    expect(screen.getByRole('button', { name: /^Filtros/ })).toHaveFocus();
+  });
+
+  test('o botão Filtros mostra quantos filtros estão ativos', () => {
+    renderPage(['/supervisao?canal=chan-2&setor=sector-1&atendente=ai']);
+    expect(screen.getByRole('button', { name: /^Filtros/ })).toHaveTextContent('3');
+  });
+
+  test('filtro que esconde tudo diz que a causa são os filtros', async () => {
+    renderPage(['/supervisao?canal=chan-9']);
+    expect(screen.getByText('Nenhuma conversa em espera com os filtros atuais.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhuma conversa em atendimento com os filtros atuais.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhuma conversa em automação com os filtros atuais.')).toBeInTheDocument();
+  });
+
+  test('teclado: foco no primeiro filtro, Esc fecha e devolve o foco ao botão', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const botao = screen.getByRole('button', { name: /^Filtros/ });
+    botao.focus();
+    await user.keyboard('{Enter}');
+    const pop = screen.getByRole('dialog', { name: 'Filtros' });
+    expect(within(pop).getAllByRole('checkbox')[0]).toHaveFocus();
+    await user.keyboard(' ');
+    expect(within(pop).getAllByRole('checkbox')[0]).toBeChecked();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Filtros' })).not.toBeInTheDocument();
+    expect(botao).toHaveFocus();
+    expect(botao).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  // No celular, um toque "fora" caía na linha de baixo e abria a conversa. O
+  // fundo transparente do popover (só no celular, CSS) recebe esse toque.
+  test('tocar no fundo do popover fecha os filtros sem abrir a conversa de baixo', async () => {
+    const user = userEvent.setup();
+    const { container } = renderPage();
+    await abrirFiltros(user);
+    const fundo = container.querySelector('.sv-filtros-fundo');
+    expect(fundo).not.toBeNull();
+    // Fechar já no mousedown tiraria o fundo da tela antes do clique, que
+    // cairia no que estiver embaixo: quem fecha é o clique do próprio fundo.
+    fireEvent.mouseDown(fundo);
+    expect(screen.getByRole('dialog', { name: 'Filtros' })).toBeInTheDocument();
+    await user.click(fundo);
+    expect(screen.queryByRole('dialog', { name: 'Filtros' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /^Conversa com/ })).not.toBeInTheDocument();
+  });
+
+  test('clique fora fecha o popover', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await abrirFiltros(user);
+    await user.click(screen.getByRole('heading', { level: 1, name: 'Supervisão' }));
+    expect(screen.queryByRole('dialog', { name: 'Filtros' })).not.toBeInTheDocument();
+  });
+
+  test('o Tab que sai do popover o fecha', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const pop = await abrirFiltros(user);
+    const ultimo = within(pop).getAllByRole('checkbox').at(-1);
+    ultimo.focus();
+    await user.tab();
+    expect(screen.queryByRole('dialog', { name: 'Filtros' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Supervisão: equipe', () => {
+  test('mostra online e carga; clicar no atendente filtra a lista', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(within(equipe()).getByText('1 online')).toBeInTheDocument();
+    const ana = within(equipe()).getByRole('button', { name: /Ana/ });
+    expect(ana).toHaveTextContent('Online');
+    expect(ana).toHaveTextContent('1');
+    await user.click(ana);
+    expect(ana).toHaveAttribute('aria-pressed', 'true');
+    expect(linha('Carlos')).toBeInTheDocument();
+    expect(within(lista()).queryByRole('button', { name: /Maria/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Filtros ativos' })).toHaveTextContent('Atendente: Ana');
+  });
+
+  test('a carga da equipe vem do painel inteiro: filtrar a tela não zera o atendente', () => {
+    renderPage(['/supervisao?canal=chan-2']);
+    expect(within(lista()).queryByRole('button', { name: /Carlos/ })).not.toBeInTheDocument();
+    expect(within(equipe()).getByRole('button', { name: /Ana/ })).toHaveTextContent('1');
+  });
+
+  test('busca de atendente filtra o painel', async () => {
+    useAgents.mockReturnValue({
+      agents: [{ id: 'agent-1', name: 'Ana', online: true }, { id: 'agent-2', name: 'Bruno', online: false }],
+      status: 'ready',
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(within(equipe()).getByRole('searchbox', { name: 'Buscar atendente' }), 'bru');
+    expect(within(equipe()).getByRole('button', { name: /Bruno/ })).toBeInTheDocument();
+    expect(within(equipe()).queryByRole('button', { name: /Ana/ })).not.toBeInTheDocument();
+  });
+
+  // No celular a lista vem primeiro: o painel lateral fica DEPOIS dela no
+  // documento (e o CSS o tira abaixo de 1200 px; ver SupervisionPage.estilo).
+  test('o painel da equipe vem depois da lista no documento', () => {
+    renderPage();
+    expect(lista().compareDocumentPosition(equipe()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('no celular, a equipe fica atrás do botão e abre numa folha com o mesmo painel', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.queryByRole('dialog', { name: 'Equipe' })).not.toBeInTheDocument();
+    const botao = screen.getByRole('button', { name: /^Equipe, 1 online/ });
+    await user.click(botao);
+    const folha = await screen.findByRole('dialog', { name: 'Equipe' });
+    expect(within(folha).getByRole('button', { name: /Ana/ })).toBeInTheDocument();
+    await user.click(within(folha).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Equipe' })).not.toBeInTheDocument());
+    expect(botao).toHaveFocus();
+  });
+});
+
+describe('Supervisão: Últimas 24 h', () => {
+  test('não busca os encerrados antes de a aba ser aberta', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(getDashboardClosedToday).not.toHaveBeenCalled();
+    getDashboardClosedToday.mockResolvedValue({ items: [{ id: 'c9', contactDisplayName: 'Rita', channelId: 'chan-1', status: 'closed' }], hasMore: false, total: 1 });
+    await user.click(screen.getByRole('tab', { name: 'Últimas 24 h' }));
+    expect(getDashboardClosedToday).toHaveBeenCalledWith({ offset: 0, limit: 20 }, 'tok-123');
+    const painelEncerrados = await screen.findByRole('region', { name: /Encerrados nas últimas 24 h/ });
+    expect(within(painelEncerrados).getByRole('button', { name: /Rita/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /^Conversas/ })).not.toBeInTheDocument();
+  });
+
+  test('sem filtro, o total vem do painel ao vivo', async () => {
+    useAttendanceDashboard.mockReturnValue(painel({ closedTodayCount: 57 }));
+    getDashboardClosedToday.mockResolvedValue({ items: [{ id: 'c9', contactDisplayName: 'Rita', status: 'closed' }], hasMore: true, total: 57 });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('tab', { name: 'Últimas 24 h' }));
+    expect(await screen.findByRole('region', { name: /Encerrados nas últimas 24 h \(57\)/ })).toBeInTheDocument();
+  });
+
+  test('com filtro de canal, setor ou atendente, a busca vai filtrada ao servidor e usa o total dele', async () => {
+    getDashboardClosedToday.mockResolvedValue({ items: [{ id: 'c9', contactDisplayName: 'Rita', channelId: 'chan-2', status: 'closed' }], hasMore: true, total: 12 });
+    renderPage(['/supervisao?aba=encerrados&canal=chan-2&setor=sector-1&atendente=agent-1']);
+    expect(await screen.findByRole('region', { name: /Encerrados nas últimas 24 h \(12\)/ })).toBeInTheDocument();
+    expect(getDashboardClosedToday).toHaveBeenCalledWith(
+      { offset: 0, limit: 20, channelIds: ['chan-2'], agentIds: ['agent-1'], sectorIds: ['sector-1'] },
+      'tok-123'
+    );
+  });
+
+  test('com o filtro IA, que o servidor não conhece, filtra o que carregou e avisa que a contagem é parcial', async () => {
+    getDashboardClosedToday.mockResolvedValue({
+      items: [
+        { id: 'c4', contactDisplayName: 'Pedro', status: 'closed', assignedAgentId: null, aiTriageResolvedByAi: true, aiTriageCompletedAt: haMin(50) },
+        { id: 'c5', contactDisplayName: 'Lucia', status: 'closed', assignedAgentId: 'agent-1', aiTriageResolvedByAi: true },
+      ],
+      hasMore: true,
+      total: 40,
+    });
+    renderPage(['/supervisao?aba=encerrados&atendente=ai']);
+    const regiao = await screen.findByRole('region', { name: /Encerrados nas últimas 24 h/ });
+    expect(getDashboardClosedToday).toHaveBeenCalledWith({ offset: 0, limit: 20 }, 'tok-123');
+    expect(within(regiao).getByRole('button', { name: /Pedro/ })).toBeInTheDocument();
+    expect(within(regiao).queryByRole('button', { name: /Lucia/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/1 correspondência entre 2 encerrados carregados/)).toBeInTheDocument();
+  });
+
+  test('no filtro IA, com tudo carregado e nenhum encerrado, a contagem é 0 confirmado', async () => {
+    getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false, total: 0 });
+    renderPage(['/supervisao?aba=encerrados&atendente=ai']);
+    expect(await screen.findByRole('region', { name: 'Encerrados nas últimas 24 h (0)' })).toBeInTheDocument();
+  });
+
+  test('com a busca, a contagem do servidor sai e o aviso diz que é sobre o que carregou', async () => {
+    getDashboardClosedToday.mockResolvedValue({
+      items: [{ id: 'c10', contactDisplayName: 'Pedro', status: 'closed' }, { id: 'c11', contactDisplayName: 'Rita', status: 'closed' }],
+      hasMore: true, total: 30,
+    });
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    await screen.findByRole('button', { name: /Pedro/ });
+    await user.type(busca(), 'rita');
+    expect(screen.getByRole('region', { name: 'Encerrados nas últimas 24 h' })).toBeInTheDocument();
+    expect(screen.getByText('Busca nos 2 encerrados carregados: 1 resultado.')).toBeInTheDocument();
+  });
+
+  test('resposta atrasada da 1ª página, de um filtro que já mudou, é descartada', async () => {
+    let responderAntiga;
     getDashboardClosedToday
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValue({ items: [{ id: 'c9', contactDisplayName: 'Selma', channelId: 'chan-1' }], hasMore: false });
-    await abrirEncerrados();
+      .mockImplementationOnce(() => new Promise((r) => { responderAntiga = r; }))
+      .mockResolvedValueOnce({ items: [{ id: 'c20', contactDisplayName: 'Nova', status: 'closed', channelId: 'chan-2' }], hasMore: false, total: 1 });
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    const pop = await abrirFiltros(user);
+    await user.click(within(pop).getByRole('checkbox', { name: 'WhatsApp Suporte' }));
+    expect(await screen.findByRole('button', { name: /Nova/ })).toBeInTheDocument();
+    await act(async () => { responderAntiga({ items: [{ id: 'c21', contactDisplayName: 'Antiga', status: 'closed' }], hasMore: false, total: 1 }); });
+    expect(screen.queryByRole('button', { name: /Antiga/ })).not.toBeInTheDocument();
+  });
 
-    await userEvent.click(await screen.findByRole('button', { name: /tentar de novo/i }));
+  test('"Carregar mais" que volta depois de o filtro mudar não se mistura à lista nova', async () => {
+    let responderMais;
+    getDashboardClosedToday
+      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', status: 'closed' }], hasMore: true, total: 2 })
+      .mockImplementationOnce(() => new Promise((r) => { responderMais = r; }))
+      .mockResolvedValueOnce({ items: [{ id: 'c20', contactDisplayName: 'Nova', status: 'closed', channelId: 'chan-2' }], hasMore: false, total: 1 });
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    await screen.findByRole('button', { name: /Pedro/ });
+    await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
+    const pop = await abrirFiltros(user);
+    await user.click(within(pop).getByRole('checkbox', { name: 'WhatsApp Suporte' }));
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('button', { name: /Nova/ })).toBeInTheDocument();
+    await act(async () => { responderMais({ items: [{ id: 'c11', contactDisplayName: 'Rita', status: 'closed' }], hasMore: true, total: 2 }); });
+    expect(screen.queryByRole('button', { name: /Rita/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Carregar/ })).not.toBeInTheDocument();
+  });
 
-    expect(await screen.findByText('Selma')).toBeInTheDocument();
+  test('"Carregar mais" traz a próxima página', async () => {
+    getDashboardClosedToday
+      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', status: 'closed' }], hasMore: true, total: 2 })
+      .mockResolvedValueOnce({ items: [{ id: 'c11', contactDisplayName: 'Rita', status: 'closed' }], hasMore: false, total: 2 });
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    await screen.findByRole('button', { name: /Pedro/ });
+    await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
+    expect(await screen.findByRole('button', { name: /Rita/ })).toBeInTheDocument();
+    expect(getDashboardClosedToday).toHaveBeenLastCalledWith({ offset: 1, limit: 20 }, 'tok-123');
+    expect(screen.queryByRole('button', { name: 'Carregar mais' })).not.toBeInTheDocument();
+  });
+
+  test('falha inicial vira alerta com "Tentar de novo", e não lista vazia', async () => {
+    getDashboardClosedToday.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ items: [{ id: 'c9', contactDisplayName: 'Selma', status: 'closed' }], hasMore: false, total: 1 });
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent('Não foi possível carregar os encerrados das últimas 24 h.');
+    expect(screen.queryByText(/nenhuma conversa encerrada/i)).not.toBeInTheDocument();
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByRole('button', { name: /Selma/ })).toBeInTheDocument();
     expect(getDashboardClosedToday).toHaveBeenLastCalledWith({ offset: 0, limit: 20 }, 'tok-123');
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  test('falha no "carregar mais" preserva a lista ja carregada', async () => {
+  test('falha no "Carregar mais" preserva a lista e repete a mesma página', async () => {
     getDashboardClosedToday
-      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', channelId: 'chan-1' }], hasMore: true })
-      .mockRejectedValueOnce(new Error('offline'));
-    await abrirEncerrados();
-    expect(await screen.findByText('Pedro')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /carregar mais/i }));
-
-    const alerta = await screen.findByRole('alert');
-    expect(alerta).toHaveTextContent(/não foi possível carregar mais atendimentos encerrados/i);
-    // O que ja estava na tela continua la: uma pagina adicional que falha nao
-    // invalida os encerrados que o supervisor ja esta lendo.
-    expect(screen.getByText('Pedro')).toBeInTheDocument();
-  });
-
-  test('"tentar de novo" depois de falhar o "carregar mais" repete a mesma pagina, sem recomecar', async () => {
-    getDashboardClosedToday
-      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', channelId: 'chan-1' }], hasMore: true })
+      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', status: 'closed' }], hasMore: true, total: 2 })
       .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValue({ items: [{ id: 'c11', contactDisplayName: 'Rita', channelId: 'chan-1' }], hasMore: false });
-    await abrirEncerrados();
-    await screen.findByText('Pedro');
-    await userEvent.click(screen.getByRole('button', { name: /carregar mais/i }));
-    await screen.findByRole('alert');
-
-    await userEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
-
-    expect(await screen.findByText('Rita')).toBeInTheDocument();
-    expect(screen.getByText('Pedro')).toBeInTheDocument();
+      .mockResolvedValue({ items: [{ id: 'c11', contactDisplayName: 'Rita', status: 'closed' }], hasMore: false, total: 2 });
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    await screen.findByRole('button', { name: /Pedro/ });
+    await user.click(screen.getByRole('button', { name: 'Carregar mais' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar mais encerrados.');
+    expect(screen.getByRole('button', { name: /Pedro/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByRole('button', { name: /Rita/ })).toBeInTheDocument();
     expect(getDashboardClosedToday).toHaveBeenLastCalledWith({ offset: 1, limit: 20 }, 'tok-123');
   });
 
-  test('com filtro e mais paginas, o contador diz que o numero e so do que foi carregado', async () => {
-    doisCanais();
-    getDashboardClosedToday.mockResolvedValue({
-      items: [
-        { id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' },
-        { id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' },
-      ],
-      hasMore: true,
-    });
-    await abrirEncerrados();
-    await filtrarPorVendas();
-
-    const aba = screen.getByRole('tab', { name: /encerrados hoje/i });
-    await waitFor(() => expect(aba).toHaveTextContent(/1 carregados/i));
-    // O numero cru sozinho afirmaria um total que ninguem mediu.
-    expect(within(aba).queryByText('1', { selector: 'span' })).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/1 correspondência entre 2 encerrados carregados\. Há mais resultados disponíveis/i)
-    ).toBeInTheDocument();
+  test('vazio de verdade e vazio por filtro dizem coisas diferentes', async () => {
+    const { unmount } = renderPage(['/supervisao?aba=encerrados']);
+    expect(await screen.findByText('Nenhuma conversa encerrada nas últimas 24 h.')).toBeInTheDocument();
+    unmount();
+    renderPage(['/supervisao?aba=encerrados&canal=chan-2']);
+    expect(await screen.findByText('Nenhuma conversa encerrada nas últimas 24 h com os filtros atuais.')).toBeInTheDocument();
   });
 
-  test('com filtro e sem mais paginas, o numero filtrado e o total e aparece normalmente', async () => {
-    doisCanais();
-    getDashboardClosedToday.mockResolvedValue({
-      items: [
-        { id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' },
-        { id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' },
-      ],
-      hasMore: false,
-    });
-    await abrirEncerrados();
-    await filtrarPorVendas();
-
-    const aba = screen.getByRole('tab', { name: /encerrados hoje/i });
-    await waitFor(() => expect(within(aba).getByText('1')).toBeInTheDocument());
-    expect(aba).not.toHaveTextContent(/carregados/i);
-    expect(screen.getByText(/1 de 2 encerrados de hoje correspondem aos filtros/i)).toBeInTheDocument();
-  });
-
-  test('vazio por filtro se distingue de nao haver encerrado nenhum', async () => {
-    doisCanais();
-    getDashboardClosedToday.mockResolvedValue({
-      items: [{ id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' }],
-      hasMore: false,
-    });
-    await abrirEncerrados();
-    await filtrarPorVendas();
-
-    expect(await screen.findByText(/nenhum atendimento encerrado hoje com os filtros atuais/i)).toBeInTheDocument();
+  test('um encerrado abre no popup, sem navegar', async () => {
+    getDashboardClosedToday.mockResolvedValue({ items: [{ id: 'c9', contactDisplayName: 'Rita', status: 'closed', assignedAgentId: 'agent-1' }], hasMore: false, total: 1 });
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    await user.click(await screen.findByRole('button', { name: /Rita/ }));
+    expect(await screen.findByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 
-// Etapa 6.2 — filtro que esconde tudo nao pode parecer operacao vazia, e
-// rotulo de coluna nao pode pairar sobre tela que nao tem coluna nenhuma.
-describe('filtros e rotulos de coluna', () => {
-  function doisCanais() {
-    useChannels.mockReturnValue({
-      channels: [
-        { id: 'chan-1', name: 'WhatsApp Vendas' },
-        { id: 'chan-2', name: 'WhatsApp Suporte' },
-      ],
-      loading: false,
-      refresh: vi.fn(),
+describe('Supervisão: carregando, vazio, erro e contadores', () => {
+  test('carregando não se apresenta como operação vazia, e os contadores mostram —', () => {
+    useAttendanceDashboard.mockReturnValue(painel({ inProgress: [], waiting: [], inAutomation: [], status: 'loading', loading: true }));
+    renderPage();
+    expect(screen.getByRole('status')).toHaveTextContent('Carregando conversas…');
+    expect(screen.queryByText(/nenhuma conversa em/i)).not.toBeInTheDocument();
+    within(indicadores()).getAllByRole('button').forEach((b) => expect(b).toHaveTextContent('—'));
+  });
+
+  test('erro mostra alerta com "Tentar de novo", e nenhum zero se passa por confirmado', async () => {
+    const refresh = vi.fn();
+    useAttendanceDashboard.mockReturnValue(painel({ inProgress: [], waiting: [], inAutomation: [], status: 'error', refresh }));
+    const user = userEvent.setup();
+    renderPage();
+    const alerta = screen.getByRole('alert');
+    expect(alerta).toHaveTextContent('Não foi possível carregar as conversas.');
+    ['Espera', 'Em atendimento', 'Automação'].forEach((rotulo) => {
+      const b = within(indicadores()).getByRole('button', { name: new RegExp(rotulo) });
+      expect(b).toHaveTextContent('—');
+      expect(b).not.toHaveTextContent('0');
     });
-  }
-
-  test('sem filtro, as colunas vazias continuam dizendo que nao ha atendimento', () => {
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'ready', loading: false, refresh: vi.fn(),
-    });
-    renderPage();
-
-    expect(screen.getByText('Nenhum atendimento em andamento.')).toBeInTheDocument();
-    expect(screen.queryByText(/com os filtros atuais/i)).not.toBeInTheDocument();
+    expect(within(equipe()).getAllByText('—').length).toBeGreaterThan(0);
+    // "Não se sabe" não usa a cor de "confirmado": sem verde nem índigo.
+    expect(within(equipe()).getByText(/online/).closest('.sv-equipe-online')).toHaveAttribute('data-desconhecido', 'true');
+    within(indicadores()).getAllByRole('button').forEach((b) => expect(b.querySelector('.sv-indicador-valor')).toHaveAttribute('data-desconhecido', 'true'));
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  test('com filtro que esconde tudo, o vazio diz que a causa sao os filtros', async () => {
-    doisCanais();
+  test('sem acesso: mensagem própria', () => {
+    useAttendanceDashboard.mockReturnValue(painel({ inProgress: [], waiting: [], inAutomation: [], status: 'forbidden' }));
     renderPage();
-
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    await userEvent.click(screen.getByLabelText('WhatsApp Suporte'));
-
-    expect(await screen.findByText('Nenhum atendimento em andamento com os filtros atuais.')).toBeInTheDocument();
-    expect(screen.getByText('Nenhum atendimento em espera com os filtros atuais.')).toBeInTheDocument();
-    expect(screen.getByText('Nenhum atendimento em automação com os filtros atuais.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Você não tem acesso ao painel de atendimentos.');
   });
 
-  test('"limpar filtros" so aparece com filtro e apaga canal, atendente e setor', async () => {
-    doisCanais();
+  test('vazio de verdade diz que não há conversas, com 0 confirmado', () => {
+    useAttendanceDashboard.mockReturnValue(painel({ inProgress: [], waiting: [], inAutomation: [] }));
     renderPage();
-    expect(screen.queryByRole('button', { name: /limpar filtros/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Nenhuma conversa em espera.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhuma conversa em atendimento.')).toBeInTheDocument();
+    expect(within(indicadores()).getByRole('button', { name: /Espera/ })).toHaveTextContent('0');
+    expect(within(indicadores()).getByRole('button', { name: /Espera/ }).querySelector('.sv-indicador-valor')).not.toHaveAttribute('data-desconhecido');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
 
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    await userEvent.click(screen.getByLabelText('WhatsApp Suporte'));
-    await userEvent.click(screen.getByRole('button', { name: /setores/i }));
-    await userEvent.click(screen.getByLabelText('Financeiro'));
-
-    await userEvent.click(await screen.findByRole('button', { name: /limpar filtros/i }));
-
-    // Os tres atendimentos do painel voltam, e o botao some junto com o filtro.
-    expect(await screen.findByText('Carlos')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /limpar filtros/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/com os filtros atuais/i)).not.toBeInTheDocument();
+describe('Supervisão: o popup da conversa', () => {
+  test('clicar na linha abre a conversa no popup, sem navegar; fechar volta à lista', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(linha('Carlos'));
+    const dialogo = await screen.findByRole('dialog', { name: 'Conversa com Carlos' });
+    expect(within(dialogo).getAllByText('Carlos').length).toBeGreaterThan(0);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    await user.click(within(dialogo).getByRole('button', { name: 'Fechar conversa' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"limpar filtros" preserva a aba ativa na URL', async () => {
-    doisCanais();
+  test('fechar (pelo botão ou pelo Escape) devolve o foco à linha que abriu', async () => {
+    const user = userEvent.setup();
     renderPage();
-    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
-    await userEvent.click(screen.getByLabelText('WhatsApp Suporte'));
-    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
+    await user.click(linha('Carlos'));
+    await screen.findByRole('dialog', { name: 'Conversa com Carlos' });
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(linha('Carlos')).toHaveFocus();
 
-    await userEvent.click(screen.getByRole('button', { name: /limpar filtros/i }));
-
-    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'true');
+    await user.click(linha('Maria'));
+    await screen.findByRole('dialog', { name: 'Conversa com Maria' });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(linha('Maria')).toHaveFocus();
   });
 
-  test('os rotulos de coluna somem quando nao ha linha para rotular', async () => {
-    const rotulo = /cliente \/ última mensagem/i;
+  // A transferência de sempre, com a carga ATUAL dos atendentes: ela pede a
+  // lista conferida (useAgents com carga), e não a que a página já tinha.
+  test('transferir dentro do popup abre a transferência, com a carga atual', async () => {
+    const user = userEvent.setup();
     renderPage();
-    expect(screen.getByText(rotulo)).toBeInTheDocument();
+    await user.click(linha('Carlos'));
+    await screen.findByRole('dialog', { name: 'Conversa com Carlos' });
+    expect(useAgents).not.toHaveBeenCalledWith({ carga: true });
+    await user.click(screen.getByRole('button', { name: /transferir atendimento/i }));
+    expect(await screen.findByRole('heading', { name: 'Transferir atendimento' })).toBeInTheDocument();
+    expect(useAgents).toHaveBeenCalledWith({ carga: true });
+  });
+});
 
-    // Encerrados tem outra composicao; o rotulo das colunas ao vivo nao vai junto.
-    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
-    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
+// O popup sai das listas da própria página. Com o hook do painel DE VERDADE:
+// o que o "Editar cliente" salvou tem de estar lá quando o popup for reaberto.
+describe('edição do contato na Supervisão: reabrir traz o que foi salvo', () => {
+  let painelReal;
+  beforeAll(async () => {
+    painelReal = await vi.importActual('../hooks/useAttendanceDashboard');
   });
 
-  test('os rotulos de coluna nao pairam sobre carregando nem sobre erro', () => {
-    const rotulo = /cliente \/ última mensagem/i;
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'loading', loading: true, refresh: vi.fn(),
-    });
-    const { unmount } = renderPage();
-    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
-    unmount();
+  const CARLOS_REAL = { ...CARLOS, contactId: 'contato-1', contactInternalNote: 'Nota antiga' };
 
-    useAttendanceDashboard.mockReturnValue({
-      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
-      status: 'error', loading: false, refresh: vi.fn(),
-    });
-    renderPage();
-    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
+  beforeEach(() => {
+    useAttendanceDashboard.mockImplementation(painelReal.useAttendanceDashboard);
+    api.getDashboardConversations.mockResolvedValue({ inProgress: [CARLOS_REAL], waiting: [], inAutomation: [], closedTodayCount: 0 });
+    api.listCities.mockResolvedValue([]);
+    api.updateContact.mockReset();
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Carlos', cityId: null, localityId: null, internalNote: 'Nota nova' });
   });
 
-  test('os rotulos de coluna somem na busca por telefone', async () => {
-    const rotulo = /cliente \/ última mensagem/i;
-    getDashboardConversationsByPhone.mockResolvedValue({
-      contact: { displayName: 'Ana', phoneNumber: '5511999999999' },
-      conversations: [{ id: 'h1', contactDisplayName: 'Ana', status: 'closed' }],
-    });
+  test('Supervisão reaberta usa os dados novos', async () => {
+    const user = userEvent.setup();
     renderPage();
+    await user.click(await screen.findByRole('button', { name: /Carlos/ }));
+    const conversa1 = await screen.findByRole('dialog', { name: /^Conversa com/ });
+    await user.click(within(within(conversa1).getByRole('complementary', { name: 'Dados do cliente' })).getByRole('button', { name: 'Editar cliente' }));
+    const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
+    const nota = within(edicao).getByLabelText('Nota interna');
+    await user.clear(nota);
+    await user.type(nota, 'Nota nova');
+    await user.click(within(edicao).getByRole('button', { name: 'Salvar alterações' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
 
-    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '5511999999999{Enter}');
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    expect(await screen.findByText(/1 atendimento\(s\) de Ana/i)).toBeInTheDocument();
-    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Carlos/ }));
+    const conversa = await screen.findByRole('dialog', { name: /^Conversa com/ });
+    expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
+  });
+});
+
+describe('edição do contato a partir das Últimas 24 h', () => {
+  let painelReal;
+  beforeAll(async () => {
+    painelReal = await vi.importActual('../hooks/useAttendanceDashboard');
+  });
+
+  const RITA_ENC = {
+    id: 'c9', contactId: 'contato-2', contactDisplayName: 'Rita', contactPhoneNumber: '5500000000019', status: 'closed',
+    channelId: 'chan-1', contactInternalNote: 'Nota antiga', createdAt: haMin(90), lastMessageAt: haMin(40), closedAt: haMin(30),
+  };
+
+  beforeEach(() => {
+    useAttendanceDashboard.mockImplementation(painelReal.useAttendanceDashboard);
+    api.getDashboardConversations.mockResolvedValue({ inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 1 });
+    getDashboardClosedToday.mockResolvedValue({ items: [RITA_ENC], hasMore: false, total: 1 });
+    api.listCities.mockResolvedValue([]);
+    api.updateContact.mockReset();
+    api.updateContact.mockResolvedValue({ id: 'contato-2', displayName: 'Rita', cityId: null, localityId: null, internalNote: 'Nota nova' });
+  });
+
+  test('encerrado reaberto usa os dados novos', async () => {
+    const user = userEvent.setup();
+    renderPage(['/supervisao?aba=encerrados']);
+    await user.click(await screen.findByRole('button', { name: /Rita/ }));
+    const conversa1 = await screen.findByRole('dialog', { name: /^Conversa com/ });
+    await user.click(within(within(conversa1).getByRole('complementary', { name: 'Dados do cliente' })).getByRole('button', { name: 'Editar cliente' }));
+    const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
+    const nota = within(edicao).getByLabelText('Nota interna');
+    await user.clear(nota);
+    await user.type(nota, 'Nota nova');
+    await user.click(within(edicao).getByRole('button', { name: 'Salvar alterações' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /Rita/ }));
+    const conversa = await screen.findByRole('dialog', { name: /^Conversa com/ });
+    expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
+  });
+});
+
+describe('Supervisão: tempo decorrido', () => {
+  test('a Espera mostra o tempo desde a chegada; o atendimento, desde a última mensagem', () => {
+    renderPage();
+    expect(linha('Tereza')).toHaveTextContent('18 min');
+    expect(linha('Carlos')).toHaveTextContent('24 min');
+  });
+
+  test('o tempo anda sozinho a cada minuto', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'Date'] });
+    try {
+      vi.setSystemTime(AGORA);
+      renderPage();
+      expect(linha('Tereza')).toHaveTextContent('18 min');
+      await act(async () => { vi.advanceTimersByTime(60_000); });
+      expect(linha('Tereza')).toHaveTextContent('19 min');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

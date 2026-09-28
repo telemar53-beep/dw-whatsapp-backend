@@ -1,0 +1,59 @@
+/* ---------- Nova conversa (Bloco 1) ----------
+   Chega junto com o diálogo, sob demanda. Moldura, campos, botões, erro fixo
+   e rodapé são da base clara (ui/dialogo-claro.css). Aqui: a ordem de leitura
+   numa coluna só (canal, país e telefone, conteúdo) — antes eram duas colunas
+   por viewport, com a metade direita vazia — e a seção do template. */
+
+[data-dialog='start-conversation'].dw-dialog.mc { --mc-largura: 600px; }
+[data-dialog='start-conversation'].dw-dialog.mc .nc-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+[data-dialog='start-conversation'].dw-dialog.mc .nc-corpo { display: flex; flex-direction: column; gap: 14px; padding-top: 2px; }
+[data-dialog='start-conversation'].dw-dialog.mc .nc-estado { padding: 8px 0; }
+
+/* País e Telefone lado a lado; no celular também, com o país mais estreito. */
+[data-dialog='start-conversation'].dw-dialog.mc .nc-fone {
+  display: grid;
+  grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+  gap: 12px;
+}
+[data-dialog='start-conversation'].dw-dialog.mc .nc-fone-ajuda {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  margin-top: -6px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--mc-texto-2);
+}
+[data-dialog='start-conversation'].dw-dialog.mc .nc-fone-completo { flex: none; font-variant-numeric: tabular-nums; color: var(--mc-texto); }
+[data-dialog='start-conversation'].dw-dialog.mc .nc-fone-ajuda + .mc-campo-erro { margin-top: -8px; }
+
+/* ---------- Conteúdo: mensagem ou template ---------- */
+[data-dialog='start-conversation'].dw-dialog.mc .nc-secao {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--mc-linha);
+}
+[data-dialog='start-conversation'].dw-dialog.mc .nc-secao-titulo { margin: 0; font-size: 14px; line-height: 20px; font-weight: 650; color: var(--mc-texto); }
+[data-dialog='start-conversation'].dw-dialog.mc .nc-secao-titulo + .mc-ajuda { margin-top: -6px; }
+[data-dialog='start-conversation'].dw-dialog.mc .nc-depois { display: flex; flex-direction: column; gap: 6px; }
+[data-dialog='start-conversation'].dw-dialog.mc .nc-botoes { display: flex; flex-wrap: wrap; gap: 6px; }
+/* A prévia de um botão do template: o que o cliente vai tocar. Não é
+   clicável aqui — por isso sem cursor nem realce. */
+[data-dialog='start-conversation'].dw-dialog.mc .nc-botao-previa {
+  padding: 5px 10px;
+  border: 1px solid var(--mc-linha);
+  border-radius: 8px;
+  background: var(--mc-suave);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--mc-indigo-texto);
+}
+[data-dialog='start-conversation'].dw-dialog.mc .nc-variaveis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+
+/* ---------- Celular ---------- */
+[data-dialog='start-conversation'].dw-dialog.mc.is-celular .nc-fone { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr); gap: 8px; }
+[data-dialog='start-conversation'].dw-dialog.mc.is-celular .nc-variaveis { grid-template-columns: minmax(0, 1fr); }

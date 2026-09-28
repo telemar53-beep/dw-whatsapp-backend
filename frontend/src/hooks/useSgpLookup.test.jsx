@@ -201,3 +201,46 @@ describe('useSgpLookup — só a busca mais recente vale', () => {
     expect(result.current.duplicateState).toEqual({});
   });
 });
+
+// Dois cliques antes da resposta viravam duas chamadas ao SGP — e a 2ª via
+// pode gerar Pix lá. O mesmo pedido em andamento não sai de novo; terminado,
+// pode ser feito outra vez (sem cache: a informação vem sempre do SGP).
+describe('useSgpLookup — pedido igual em andamento não sai de novo', () => {
+  test('a mesma busca, repetida antes da resposta, chama o SGP uma vez só', async () => {
+    const consulta = adiado();
+    api.lookupSgpClient.mockReturnValue(consulta.promise);
+    const { result } = renderHook(() => useSgpLookup());
+
+    act(() => {
+      result.current.search('00011122233');
+      result.current.search('00011122233');
+    });
+    expect(api.lookupSgpClient).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      consulta.resolve(RESPOSTA_A);
+    });
+    api.lookupSgpClient.mockResolvedValue(RESPOSTA_A);
+    await act(() => result.current.search('00011122233'));
+    expect(api.lookupSgpClient).toHaveBeenCalledTimes(2);
+  });
+
+  test('a mesma 2ª via, pedida de novo antes da resposta, chama o SGP uma vez só', async () => {
+    const segundaVia = adiado();
+    api.generateSgpDuplicateInvoice.mockReturnValue(segundaVia.promise);
+    const { result } = renderHook(() => useSgpLookup());
+
+    act(() => {
+      result.current.fetchDuplicate(17402);
+      result.current.fetchDuplicate(17402);
+    });
+    expect(api.generateSgpDuplicateInvoice).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      segundaVia.resolve({ hasOpenInvoice: false, duplicates: [] });
+    });
+    api.generateSgpDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
+    await act(() => result.current.fetchDuplicate(17402));
+    expect(api.generateSgpDuplicateInvoice).toHaveBeenCalledTimes(2);
+  });
+});

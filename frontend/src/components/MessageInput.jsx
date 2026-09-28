@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { IconEmoji, IconAttach, IconQuickReply, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
+import { IconEmoji, IconAttach, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
+import { IconeRespostasRapidas } from './icones/IconeRespostasRapidas';
 import { AsyncState } from './ui';
 import RecordingPreview from './RecordingPreview';
 import { descreverErro } from '../utils/errorMessages';
@@ -48,6 +49,17 @@ const EMOJIS = [
   '🕐', '📅', '🚀', '🛠️', '🔧', '📡', '🌐', '🏠',
 ];
 
+// Respostas rápidas é o desenho DW aprovado em qualquer tela, com ou sem o
+// mapa da mesa. Só este ícone vem da família (módulo próprio, não o índice):
+// o trecho da conversa, que a Supervisão também baixa, leva só ele.
+function IconeRespostasPadrao({ size }) {
+  return <IconeRespostasRapidas tamanho={size} />;
+}
+
+// Os ícones de sempre. A mesa passa os dela (`icones`, da VARIANTE_DA_MESA),
+// no mesmo formato: um componente que recebe `size`.
+const ICONES_PADRAO = { Anexar: IconAttach, Respostas: IconeRespostasPadrao, Emoji: IconEmoji, Microfone: IconMic, Enviar: IconSend };
+
 function pickSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return undefined;
   return AUDIO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
@@ -81,7 +93,8 @@ function ComposerButton({ label, onClick, disabled, active, children, haspopup, 
   );
 }
 
-function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesStatus = 'ready', replyingTo = null, onCancelReply, draftContent, draftKey }) {
+function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesStatus = 'ready', replyingTo = null, onCancelReply, draftContent, draftKey, icones }) {
+  const I = icones || ICONES_PADRAO;
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
   // A microphone recording is a voice note; a file picked from disk is an attachment.
@@ -424,7 +437,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               />
             ) : (
               <span className="shrink-0 text-chat-copper">
-                <IconAttach size={17} />
+                <I.Anexar size={17} />
               </span>
             )}
             Anexo: {file.name === 'gravacao.webm' ? `gravação de áudio (${recordingSeconds}s)` : file.name}{' '}
@@ -481,7 +494,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                   <label>: assim o controle é focável e responde a Enter e
                   Espaço como qualquer botão do compositor. */}
               <ComposerButton label="Anexar arquivo" onClick={() => fileInputRef.current?.click()}>
-                <IconAttach size={24} />
+                <I.Anexar size={24} />
               </ComposerButton>
               <ComposerButton
                 label="Respostas rápidas"
@@ -494,22 +507,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                   setShowingEmojis(false);
                 }}
               >
-                <IconQuickReply size={24} />
+                <I.Respostas size={24} />
               </ComposerButton>
-              <ComposerButton
-                label="Emojis"
-                active={showingEmojis}
-                haspopup="dialog"
-                controls="composer-emojis"
-                botaoRef={gatilhoEmojiRef}
-                onClick={() => {
-                  setShowingEmojis((prev) => !prev);
-                  setShowingQuickReplies(false);
-                }}
-              >
-                <IconEmoji size={24} />
-              </ComposerButton>
-
               <textarea
                 ref={textInputRef}
                 value={content}
@@ -522,6 +521,22 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 className="min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
               />
 
+              {/* Ordem do compositor: anexo e respostas rápidas antes do campo,
+                  emoji depois dele, e o microfone/enviar por último. */}
+              <ComposerButton
+                label="Emojis"
+                active={showingEmojis}
+                haspopup="dialog"
+                controls="composer-emojis"
+                botaoRef={gatilhoEmojiRef}
+                onClick={() => {
+                  setShowingEmojis((prev) => !prev);
+                  setShowingQuickReplies(false);
+                }}
+              >
+                <I.Emoji size={24} />
+              </ComposerButton>
+
               {/* Popover, NAO modal: nome acessivel, foco inicial no primeiro
                   emoji, setas navegando a grade, ESC devolvendo o foco ao
                   gatilho — e Tab saindo normalmente. Sem trap. */}
@@ -531,7 +546,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                   role="dialog"
                   aria-label="Emojis"
                   onKeyDown={navegarNaGrade}
-                  className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-ui-surface-overlay/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                  className="dialog-emoji-picker animate-wa-pop absolute bottom-full right-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-ui-surface-overlay/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl"
                 >
                   <p className="dialog-popover-heading" aria-hidden="true">Emojis</p>
                   <div className="grid grid-cols-8 gap-1">
@@ -601,7 +616,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 title="Enviar"
                 className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring disabled:opacity-50"
               >
-                <IconSend size={24} />
+                <I.Enviar size={24} />
               </button>
             ) : (
               <button
@@ -611,7 +626,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 title="Gravar áudio"
                 className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.08] text-chat-icon transition-colors hover:bg-white/[0.13] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
               >
-                <IconMic size={24} />
+                <I.Microfone size={24} />
               </button>
             )}
           </>

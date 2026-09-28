@@ -154,4 +154,53 @@ describe('useAttendanceDashboard', () => {
     const { result } = renderHook(() => useAttendanceDashboard());
     await waitFor(() => expect(result.current.status).toBe('forbidden'));
   });
+
+  // A Supervisão só redesenha a linha que mudou: para isso, um evento de uma
+  // conversa não pode trocar a referência das listas em que ela não está, nem
+  // a das outras conversas da lista em que está.
+  describe('referências estáveis por evento', () => {
+    const A = { id: 'a', status: 'assigned', assignedAgentId: 'ag1' };
+    const B = { id: 'b', status: 'waiting', triageState: null };
+    const C = { id: 'c', status: 'waiting', triageState: null };
+    const D = { id: 'd', status: 'waiting', triageState: 'pending' };
+
+    async function montar() {
+      getDashboardConversations.mockResolvedValue({ inProgress: [A], waiting: [B, C], inAutomation: [D], closedTodayCount: 0 });
+      const hook = renderHook(() => useAttendanceDashboard());
+      await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+      return hook;
+    }
+
+    test('evento de uma conversa da Espera não troca as listas em que ela não está', async () => {
+      const { result } = await montar();
+      const antes = result.current;
+      act(() => socket.emit('dashboard:conversation', { conversation: { ...B, lastMessageContent: 'nova' } }));
+      expect(result.current.inProgress).toBe(antes.inProgress);
+      expect(result.current.inAutomation).toBe(antes.inAutomation);
+      expect(result.current.waiting).not.toBe(antes.waiting);
+      expect(result.current.waiting[0].lastMessageContent).toBe('nova');
+      // A vizinha continua a mesma: é o que deixa a linha dela sem redesenhar.
+      expect(result.current.waiting[1]).toBe(C);
+    });
+
+    test('conversa que passa da Espera ao atendimento troca só as duas listas envolvidas', async () => {
+      const { result } = await montar();
+      const antes = result.current;
+      act(() => socket.emit('dashboard:conversation', { conversation: { ...B, status: 'assigned', assignedAgentId: 'ag1' } }));
+      expect(result.current.inAutomation).toBe(antes.inAutomation);
+      expect(result.current.waiting).toEqual([C]);
+      expect(result.current.waiting[0]).toBe(C);
+      expect(result.current.inProgress[0]).toBe(A);
+      expect(result.current.inProgress.map((c) => c.id)).toEqual(['a', 'b']);
+    });
+
+    test('o mesmo objeto recebido de novo não troca lista nenhuma', async () => {
+      const { result } = await montar();
+      const antes = result.current;
+      act(() => socket.emit('dashboard:conversation', { conversation: C }));
+      expect(result.current.waiting).toBe(antes.waiting);
+      expect(result.current.inProgress).toBe(antes.inProgress);
+      expect(result.current.inAutomation).toBe(antes.inAutomation);
+    });
+  });
 });

@@ -1,134 +1,245 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyName } from '../hooks/useCompanyName';
-import { descreverErro } from '../utils/errorMessages';
+import { descreverErro, detalheTecnicoDoErro } from '../utils/errorMessages';
+import './login.css';
 
-function SignalMark() {
+// Os dois únicos desenhos da tela. Traço em currentColor: a cor vem do círculo.
+function IconeConta() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      className="h-6 w-6 text-accent-soft"
-      aria-hidden="true"
-    >
-      <circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none" />
-      <path d="M6 14a4 4 0 0 1 4 4" />
-      <path d="M6 10a8 8 0 0 1 8 8" />
-      <path d="M6 6a12 12 0 0 1 12 12" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="8.25" r="3.75" />
+      <path d="M4.75 19.5c.9-3.3 3.8-5.25 7.25-5.25s6.35 1.95 7.25 5.25" />
     </svg>
   );
 }
 
-const FIELD_CLASS =
-  'h-12 w-full rounded-xl border border-white/[0.13] bg-ui-surface-sunken px-4 text-[15px] text-white outline-none transition-colors placeholder:text-[#aeb8c0] hover:border-white/25 focus:border-accent-line focus:ring-2 focus:ring-focus-ring/40';
+function IconeCadeado() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <rect x="5" y="10.25" width="14" height="10" rx="2.5" />
+      <path d="M8.25 10.25V7.5a3.75 3.75 0 0 1 7.5 0v2.75" />
+      <path d="M12 14.5v1.75" />
+    </svg>
+  );
+}
+
+// A mesma regra do <input type="email"> do navegador: quem entrava antes com
+// um e-mail aceito continua entrando.
+const EMAIL_VALIDO =
+  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+function validar(email, senha) {
+  const erros = {};
+  if (!email) erros.email = 'Informe o e-mail.';
+  else if (!EMAIL_VALIDO.test(email)) erros.email = 'Informe um e-mail válido.';
+  if (!senha) erros.senha = 'Informe a senha.';
+  return erros;
+}
+
+const SEM_CONEXAO = 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+const ERRO_DO_SERVIDOR = 'O servidor encontrou um erro. Tente de novo em instantes.';
+
+// Nenhuma frase em inglês chega à tela: só usa a tradução que existe; sem
+// tradução, decide pelo tipo de falha.
+function mensagemDoLogin(erro) {
+  // O fetch rejeita com TypeError quando não há resposta nenhuma (rede).
+  if (erro instanceof TypeError) return SEM_CONEXAO;
+  if (detalheTecnicoDoErro(erro)) return descreverErro(erro);
+  const status = erro && typeof erro.status === 'number' ? erro.status : null;
+  if (status === 401) return 'E-mail ou senha incorretos.';
+  if (status === 429) return 'Muitas tentativas seguidas. Espere um pouco e tente de novo.';
+  // Sem status = a resposta nem pôde ser lida (uma página de erro do proxy).
+  if (status === null || status >= 500) return ERRO_DO_SERVIDOR;
+  return 'Não foi possível entrar. Tente de novo.';
+}
 
 function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { name: nomeDaEmpresa, status: statusDoNome } = useCompanyName();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  // O nome da empresa vem da rota pública: aqui ainda não existe token. Sem
-  // nome cadastrado (ou com a rota fora do ar) a tela continua de pé.
-  const { name: companyName, status: companyNameStatus } = useCompanyName();
+  const [senha, setSenha] = useState('');
+  const [senhaVisivel, setSenhaVisivel] = useState(false);
+  const [erros, setErros] = useState({});
+  const [erro, setErro] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  // O estado só muda no próximo render; a ref fecha a porta no mesmo instante
+  // (clique duplo, Enter durante o pedido).
+  const enviandoRef = useRef(false);
+  const emailRef = useRef(null);
+  const senhaRef = useRef(null);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError(null);
-    setSubmitting(true);
+  // Foco no e-mail só com mouse: no celular abriria o teclado sozinho. Uma
+  // consulta na montagem, sem ouvinte.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) emailRef.current?.focus();
+  }, []);
+
+  function aoDigitarEmail(evento) {
+    setEmail(evento.target.value);
+    if (erros.email) setErros((atual) => ({ ...atual, email: null }));
+  }
+
+  function aoDigitarSenha(evento) {
+    setSenha(evento.target.value);
+    if (erros.senha) setErros((atual) => ({ ...atual, senha: null }));
+  }
+
+  function alternarSenha() {
+    if (enviandoRef.current) return;
+    setSenhaVisivel((visivel) => !visivel);
+  }
+
+  async function aoEnviar(evento) {
+    evento.preventDefault();
+    if (enviandoRef.current) return;
+
+    const emailLimpo = email.trim();
+    const novosErros = validar(emailLimpo, senha);
+    setErros(novosErros);
+    setErro(null);
+    if (novosErros.email) {
+      emailRef.current?.focus();
+      return;
+    }
+    if (novosErros.senha) {
+      senhaRef.current?.focus();
+      return;
+    }
+
+    enviandoRef.current = true;
+    setEnviando(true);
+    // Senha oculta no envio: o gerenciador de senhas só oferece salvar campo
+    // do tipo password.
+    setSenhaVisivel(false);
     try {
-      await login(email, password);
+      await login(emailLimpo, senha);
       navigate('/');
-    } catch (err) {
-      setError(descreverErro(err, 'Falha ao entrar'));
+    } catch (falha) {
+      setErro(mensagemDoLogin(falha));
+      emailRef.current?.focus();
     } finally {
-      setSubmitting(false);
+      enviandoRef.current = false;
+      setEnviando(false);
     }
   }
 
+  const carregandoNome = statusDoNome === 'loading';
+  const titulo = nomeDaEmpresa || 'Atendimento';
+  // Sem nome, o título já diz "Atendimento": o rótulo repetiria a palavra.
+  const mostrarRotulo = carregandoNome || Boolean(nomeDaEmpresa);
+
   return (
-    <div className="chat-theme relative isolate flex min-h-dvh overflow-hidden bg-[var(--color-chat-canvas)] px-4 py-6 font-sans text-chat-text sm:px-8 lg:px-12">
-      <div aria-hidden="true" className="pointer-events-none absolute -left-40 -top-48 h-[32rem] w-[32rem] rounded-full bg-accent/[0.08] blur-[110px]" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 right-[-12rem] h-[35rem] w-[35rem] rounded-full bg-[#8296a4]/[0.08] blur-[120px]" />
+    <div className="login">
+      <main className="login-modulo" aria-labelledby="login-titulo">
+        <header className="login-marca">
+          <h1 className="login-empresa">
+            {carregandoNome ? (
+              <>
+                <span className="login-esqueleto" aria-hidden="true" />
+                <span className="sr-only">Carregando o nome da empresa…</span>
+              </>
+            ) : (
+              titulo
+            )}
+          </h1>
+          {mostrarRotulo && <p className="login-rotulo">Atendimento</p>}
+        </header>
 
-      <div className="relative mx-auto grid w-full max-w-[1360px] items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(400px,480px)] lg:gap-16">
-        <section className="hidden max-w-[620px] flex-col items-start lg:flex" aria-label="Apresentação do atendimento">
-          <div className="mb-16 flex items-center gap-3 text-[12px] font-semibold uppercase tracking-[0.18em] text-[#d7dfe4]">
-            <span className="flex h-11 w-11 items-center justify-center rounded-[13px] border border-accent-line/70 bg-accent-surface">
-              <SignalMark />
-            </span>
-            Plataforma de atendimento
-          </div>
-          <span className="mb-6 h-1 w-14 rounded-full bg-accent" aria-hidden="true" />
-          <p className="max-w-[13ch] font-display text-[clamp(2.6rem,4vw,4.25rem)] font-semibold leading-[1.12] tracking-[-0.045em] text-[#f4f6f7]">
-            Um lugar claro para cada conversa.
-          </p>
-          <p className="mt-7 max-w-[43ch] text-[17px] leading-7 text-[#b9c3ca]">
-            Entre no painel e continue seus atendimentos com o contexto de que precisa para trabalhar bem.
-          </p>
-          <div className="mt-14 flex items-center gap-3 text-[13px] font-medium text-[#b9c3ca]">
-            <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-4 py-2">Conversas</span>
-            <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-4 py-2">Contexto</span>
-            <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-4 py-2">Equipe</span>
-          </div>
-        </section>
+        <h2 id="login-titulo" className="login-titulo">
+          Entrar
+        </h2>
 
-        <main className="w-full animate-login-rise">
-          <div className="rounded-[22px] border border-white/[0.12] bg-ui-surface-card/95 px-6 py-8 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.65)] backdrop-blur-md sm:px-10 sm:py-10">
-            <div className="mb-8">
-              <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-[13px] border border-accent-line/60 bg-accent-surface lg:hidden">
-                <SignalMark />
+        <form className="login-form" onSubmit={aoEnviar} noValidate aria-labelledby="login-titulo" aria-busy={enviando}>
+          <div className="login-grupo">
+            <label htmlFor="email" className="login-label">
+              E-mail
+            </label>
+            <div className="login-campo" data-invalido={erros.email ? 'true' : undefined}>
+              <span className="login-circulo">
+                <IconeConta />
               </span>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-soft">Acesso à plataforma</p>
-              {/* O titulo ficava VAZIO enquanto o nome carregava e o cartao
-                  pulava quando a resposta chegava. Agora a linha existe desde o
-                  primeiro quadro: durante a carga ela e uma barra neutra da
-                  mesma altura, e o texto entra no lugar dela. */}
-              <h1 className="font-display text-[clamp(1.55rem,3vw,2rem)] font-semibold leading-tight tracking-[-0.025em] text-[#f5f7f8]">
-                {companyNameStatus === 'loading' ? (
-                  <span className="inline-block h-[1em] w-[11ch] animate-pulse rounded-[6px] bg-white/[0.09] align-middle" aria-hidden="true" />
-                ) : (
-                  companyName || 'Atendimento'
-                )}
-                {companyNameStatus === 'loading' && <span className="sr-only">Carregando o nome da empresa…</span>}
-              </h1>
-              <p className="mt-3 text-[14px] leading-6 text-[#bdc6cd]">Entre com seu e-mail e senha para continuar.</p>
+              <input
+                ref={emailRef}
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="nome@empresa.com.br"
+                required
+                readOnly={enviando}
+                value={email}
+                onChange={aoDigitarEmail}
+                aria-invalid={erros.email ? 'true' : undefined}
+                aria-describedby={erros.email ? 'email-erro' : undefined}
+              />
             </div>
-
-            <form onSubmit={handleSubmit} className="space-y-5" aria-busy={submitting}>
-              <div>
-                <label htmlFor="email" className="mb-2 block text-[13px] font-medium text-[#e5eaed]">E-mail</label>
-                <input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className={FIELD_CLASS} required />
-              </div>
-              <div>
-                <label htmlFor="password" className="mb-2 block text-[13px] font-medium text-[#e5eaed]">Senha</label>
-                <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={FIELD_CLASS} required />
-              </div>
-
-              {error && <p role="alert" className="rounded-xl border border-wa-error-text/25 bg-wa-error-bg px-3 py-2.5 text-[13.5px] leading-5 text-wa-error-text">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-[15px] font-semibold text-on-accent shadow-[0_8px_20px_-12px_rgba(242,140,69,0.8)] transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {submitting ? 'Entrando…' : 'Entrar'}
-              </button>
-            </form>
+            {erros.email && (
+              <p id="email-erro" className="login-erro-campo">
+                {erros.email}
+              </p>
+            )}
           </div>
 
-          <p className="mt-5 px-2 text-center text-[12px] leading-5 text-[#aeb9c1]">
-            {companyName
-              ? `Acesso restrito à equipe de atendimento da ${companyName}.`
-              : 'Acesso restrito à equipe de atendimento.'}
-          </p>
-        </main>
-      </div>
+          <div className="login-grupo">
+            <label htmlFor="password" className="login-label">
+              Senha
+            </label>
+            <div className="login-campo" data-invalido={erros.senha ? 'true' : undefined}>
+              <span className="login-circulo">
+                <IconeCadeado />
+              </span>
+              <input
+                ref={senhaRef}
+                id="password"
+                name="password"
+                type={senhaVisivel ? 'text' : 'password'}
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                required
+                readOnly={enviando}
+                value={senha}
+                onChange={aoDigitarSenha}
+                aria-invalid={erros.senha ? 'true' : undefined}
+                aria-describedby={erros.senha ? 'senha-erro' : undefined}
+              />
+              <button
+                type="button"
+                className="login-mostrar"
+                onClick={alternarSenha}
+                aria-controls="password"
+                aria-disabled={enviando ? 'true' : undefined}
+              >
+                {senhaVisivel ? 'Ocultar' : 'Mostrar'}
+                <span className="sr-only"> senha</span>
+              </button>
+            </div>
+            {erros.senha && (
+              <p id="senha-erro" className="login-erro-campo">
+                {erros.senha}
+              </p>
+            )}
+          </div>
+
+          {erro && (
+            <p role="alert" className="login-erro">
+              {erro}
+            </p>
+          )}
+
+          <button type="submit" className="login-botao" aria-disabled={enviando ? 'true' : undefined}>
+            {enviando ? 'Entrando…' : 'Entrar'}
+          </button>
+        </form>
+      </main>
     </div>
   );
 }

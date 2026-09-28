@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
@@ -13,13 +14,38 @@ import { closeConversation } from '../services/api';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
-import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
-import StartConversationModal from '../components/StartConversationModal';
-import TeamPanel from '../components/TeamPanel';
+import TrilhoDaMesa, { IconeDoMenu, iniciais } from '../components/TrilhoDaMesa';
+import { VARIANTE_DA_MESA } from '../components/ConversaDaMesa';
+import { marcaDaInstalacao } from '../branding';
+import { aplicarContatoSalvo } from '../utils/contatoSalvo';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+import { useAlert } from '../hooks/useAlert';
 import { Tabs } from '../components/ui/Tabs';
-import { IconNewChat, IconSearch, IconLock, IconEmptyChat, IconChats, IconArrowLeft } from '../components/icons/WaIcons';
+import { IconLock } from '../components/icons/WaIcons';
+import { IconeNovaConversa, IconeBuscar, IconeRecolher } from '../components/icones';
 import './dashboard.css';
+import './mesa.css';
+
+// A conversa aberta só redesenha com o que é dela. Evento de outra conversa,
+// busca, troca de aba ou aviso redesenham a página, mas a conversa aberta
+// continua com as mesmas props — `conversation` mantém a referência (os hooks
+// da lista trocam só o item afetado), os setters são estáveis e o `onBack` vem
+// de useCallback. Comparação rasa, de propósito: um comparador por campo
+// congelaria o cabeçalho no primeiro campo esquecido (BUG-004, achado A2).
+const ConversaAbertaDaMesa = memo(ConversationView);
+
+// A transferência chega quando é aberta: a mesa não baixa nem avalia o diálogo
+// (nem a folha dele) antes de alguém pedir (guardas/dialogosSobDemanda.test.jsx).
+const TRANSFERENCIA = sobDemanda(() => import('../components/TransferModal'));
+// A "Nova conversa" também: o formulário e a folha dele chegam no clique
+// (guardas/bloco1SobDemanda.test.jsx), e nada dele roda com o diálogo fechado.
+const NOVA_CONVERSA = sobDemanda(() => import('../components/StartConversationModal'));
+
+// O chevron de recolher/expandir da família DW, girado: para a direita abre a
+// lista estreita, para a esquerda volta à conversa.
+const PARA_A_DIREITA = { transform: 'rotate(-90deg)' };
+const PARA_A_ESQUERDA = { transform: 'rotate(90deg)' };
 
 const TABS = [
   { value: 'inProgress', label: 'Atendimento' },
@@ -44,9 +70,9 @@ function DashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { profileVersion, setConversationOpen } = useOutletContext();
-  const { queue, status: queueStatus } = useQueue();
-  const { conversations: myConversations, status: myConversationsStatus } = useMyConversations();
+  const { setConversationOpen, openProfile, closeMobileNav, profileVersion, mobileNavOpen, encaixeDoTrilho, encaixeDoIcone } = useOutletContext();
+  const { queue, status: queueStatus, aplicarContatoSalvo: aplicarNaFila } = useQueue();
+  const { conversations: myConversations, status: myConversationsStatus, aplicarContatoSalvo: aplicarNosMeus } = useMyConversations();
   const { name: companyName, status: companyNameStatus } = useCompanyName();
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
@@ -79,6 +105,10 @@ function DashboardPage() {
     setListaAberta(false);
   }, [clearUnread]);
 
+  // Estável pelo mesmo motivo: recriada a cada render, derrubaria o memo da
+  // conversa aberta.
+  const voltarParaLista = useCallback(() => setSelectedId(null), []);
+
   // A conversa transferida cai em "Meus atendimentos", então abrir pelo aviso
   // também troca de aba — senão o atendente clica e não vê nada acontecer.
   function openTransferred(conversationId) {
@@ -87,13 +117,38 @@ function DashboardPage() {
     dismissTransferNotice();
   }
 
-  const quickCloseConversation = useCallback((conversationId) => {
-    closeConversation(conversationId, null, token).catch(() => {});
-  }, [token]);
+  // Devolve a promessa: quem espera o resultado (e mostra o erro) é a
+  // confirmação da linha (A4-4). Antes a falha era engolida aqui.
+  const quickCloseConversation = useCallback(
+    (conversationId) => closeConversation(conversationId, null, token),
+    [token]
+  );
 
   const [transferringId, setTransferringId] = useState(null);
+  const { avisar, alertDialog } = useAlert();
+  const fecharTransferencia = useCallback(() => setTransferringId(null), []);
+  const transferenciaNaoBaixou = useCallback(() => {
+    setTransferringId(null);
+    avisar('Não foi possível abrir a transferência. Verifique a conexão e tente de novo.', { tom: 'erro' });
+  }, [avisar]);
+  const Transferencia = useSobDemanda(TRANSFERENCIA, Boolean(transferringId), transferenciaNaoBaixou);
   const [startingConversation, setStartingConversation] = useState(false);
+  const novaConversaNaoBaixou = useCallback(() => {
+    setStartingConversation(false);
+    avisar('Não foi possível abrir a nova conversa. Verifique a conexão e tente de novo.', { tom: 'erro' });
+  }, [avisar]);
+  const NovaConversa = useSobDemanda(NOVA_CONVERSA, startingConversation, novaConversaNaoBaixou);
   const [pendingConversation, setPendingConversation] = useState(null);
+
+  // "Editar cliente" salvou, e a rota não emite evento. Sem isto, voltar à
+  // lista e reabrir a conversa trazia o contato antigo — e a nota antiga ia de
+  // novo para a edição. Só as conversas daquele contato mudam; as outras
+  // mantêm a referência. Estável: a conversa aberta é memo.
+  const aoSalvarContato = useCallback((salvo) => {
+    aplicarNaFila(salvo);
+    aplicarNosMeus(salvo);
+    setPendingConversation((anterior) => (anterior ? aplicarContatoSalvo([anterior], salvo)[0] : anterior));
+  }, [aplicarNaFila, aplicarNosMeus]);
 
   // Sem o useMemo, os dois filtros devolvem arrays NOVOS a cada render do
   // Dashboard — e uma lista nova é prop nova, o que derrubaria o memo dos itens
@@ -148,16 +203,18 @@ function DashboardPage() {
 
   return (
     <div className="chat-workspace flex min-h-0 flex-1 flex-col">
-      <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden lg:block' : ''}`}>
+      <div data-testid="channel-banner-wrapper" className={`mesa-aviso-canal relative ${selectedConversation ? 'hidden lg:block' : ''}`}>
         <ChannelStatusBanner />
       </div>
 
       <div ref={colunasRef} data-lista={layout.lista} data-painel={layout.painel} className="chat-workspace-columns flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden">
+        {/* `mesa-clara`: a fundação clara vale só para esta coluna (mesa.css).
+            A conversa ao lado continua com os tokens de antes, por enquanto. */}
         <aside
           aria-label="Atendimentos"
           className={`${
             listaOcupaTudo && selectedConversation && !listaAberta ? 'hidden' : 'flex'
-          } chat-workspace-list ${emRail ? 'is-rail' : ''} ${listaOcupaTudo ? 'is-aberta' : ''} w-full min-w-0 shrink-0 flex-col overflow-clip`}
+          } chat-workspace-list mesa-lista mesa-clara ${emRail ? 'is-rail' : ''} ${listaOcupaTudo ? 'is-aberta' : ''} w-full min-w-0 shrink-0 flex-col overflow-clip`}
         >
           {emRail && (
             <button
@@ -167,41 +224,35 @@ function DashboardPage() {
               aria-label="Ver lista de atendimentos"
               className="chat-rail-expandir"
             >
-              <IconChats size={18} />
+              <IconeRecolher tamanho={18} style={PARA_A_DIREITA} />
               <DicaFlutuante caixa={caixaDoExpandir}>Ver lista de atendimentos</DicaFlutuante>
             </button>
           )}
           {listaAberta && (
             <button type="button" onClick={() => setListaAberta(false)} className="chat-lista-voltar">
-              <IconArrowLeft size={16} />
+              <IconeRecolher tamanho={16} style={PARA_A_ESQUERDA} />
               Voltar à conversa
             </button>
           )}
-          <div className="chat-inbox-heading flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
-            <h1 className="font-display text-[20px] font-semibold leading-7 text-chat-text">Atendimento</h1>
-            <button
-              onClick={() => setStartingConversation(true)}
-              aria-label="Nova conversa"
-              title="Nova conversa"
-              className="chat-new-conversation flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-on-accent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            >
-              <IconNewChat size={18} />
-              Nova
+          <div className="chat-inbox-heading flex shrink-0 items-center justify-between gap-3">
+            <h1 className="mesa-titulo">Conversas</h1>
+            <button type="button" onClick={() => setStartingConversation(true)} aria-label="Nova conversa" className="mesa-acao">
+              <IconeNovaConversa />
+              <span className="mesa-dica" aria-hidden="true">Nova conversa</span>
             </button>
           </div>
 
-          <div className="chat-inbox-search shrink-0 px-4 pb-3">
-            <label className="flex h-[42px] min-w-0 items-center gap-2.5 rounded-[12px] border border-white/[0.09] bg-white/[0.06] px-3.5 transition focus-within:border-white/20 focus-within:bg-white/[0.10]">
-              <span className="shrink-0 text-chat-faint">
-                <IconSearch size={18} />
-              </span>
+          <div className="chat-inbox-search shrink-0">
+            {/* O campo É a pílula: o anel de foco do tema desenha em volta
+                dela inteira, e a lupa fica por cima, sem roubar o clique. */}
+            <label className="mesa-busca">
+              <IconeBuscar tamanho={18} />
               <input
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar conversa"
                 aria-label="Buscar conversa"
-                className="min-w-0 flex-1 bg-transparent text-[14.5px] text-chat-text outline-none placeholder:text-chat-faint"
               />
             </label>
           </div>
@@ -244,6 +295,7 @@ function DashboardPage() {
                 selectedId={selectedId}
                 compact
                 rail={emRail}
+                variante="mesa"
               />
             )}
             {activeTab === 'waiting' && (
@@ -257,6 +309,7 @@ function DashboardPage() {
                 emptyMessage="Nenhum atendimento em espera."
                 compact
                 rail={emRail}
+                variante="mesa"
                 soLocalidade
               />
             )}
@@ -271,39 +324,44 @@ function DashboardPage() {
                 emptyMessage="Nenhum atendimento em automação."
                 compact
                 rail={emRail}
+                variante="mesa"
               />
             )}
           </div>
-
-          <TeamPanel key={profileVersion} />
         </aside>
 
         <main
-          className={`chat-workspace-main ${
+          className={`chat-workspace-main mesa-conversa ${
             listaOcupaTudo && !selectedConversation ? 'hidden' : listaOcupaTudo && listaAberta ? 'hidden' : 'block'
           } min-w-0 flex-1 overflow-clip`}
         >
           {selectedConversation ? (
-            <ConversationView
+            <ConversaAbertaDaMesa
               conversation={selectedConversation}
               painelModo={layout.painel}
               onPainelAbertoChange={setPainelAberto}
               onTransferClick={setTransferringId}
-              onBack={() => setSelectedId(null)}
+              onBack={voltarParaLista}
+              onContatoSalvo={aoSalvarContato}
               workspace
+              variante={VARIANTE_DA_MESA}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <span className="text-white/10">
-                <IconEmptyChat width={320} height={190} />
-              </span>
-              <p className="mt-6 font-display text-[32px] font-light leading-tight text-chat-text/90">
+            // Sem conversa: a marca desta instalação (a mesma do trilho, já em
+            // cache), uma orientação e o registro. Sem ilustração. A marca vai
+            // sobre o índigo do trilho: ela é desenhada para fundo escuro, e
+            // logotipo não se recolore.
+            <div className="mesa-vazia">
+              {marcaDaInstalacao.compacta
+                ? <span className="mesa-vazia-selo" aria-hidden="true" style={{ backgroundImage: `url("${marcaDaInstalacao.compacta}")` }} />
+                : <span className="mesa-vazia-monograma" aria-hidden="true">{companyNameStatus === 'loading' ? '' : iniciais(companyName)}</span>}
+              <p className="mesa-vazia-titulo">
                 {companyNameStatus === 'loading' ? '' : companyName ? `${companyName} · Atendimento` : 'Atendimento'}
               </p>
-              <p className="mt-3 max-w-[38ch] text-[14px] leading-[20px] text-chat-muted">
+              <p className="mesa-vazia-texto">
                 Selecione uma conversa na lista ao lado para ler o histórico e responder ao cliente.
               </p>
-              <p className="mt-10 flex items-center gap-1.5 text-[13px] text-chat-faint">
+              <p className="mesa-vazia-registro">
                 <IconLock size={13} />
                 Todo atendimento fica registrado no sistema.
               </p>
@@ -312,9 +370,12 @@ function DashboardPage() {
         </main>
       </div>
 
-      {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
-      {startingConversation && (
-        <StartConversationModal
+      {transferringId && (Transferencia
+        ? <Transferencia conversationId={transferringId} onClose={fecharTransferencia} />
+        : <p role="status" className="sr-only">Abrindo a transferência…</p>)}
+      {alertDialog}
+      {startingConversation && (NovaConversa ? (
+        <NovaConversa
           onClose={() => setStartingConversation(false)}
           onCreated={(conversation) => {
             setPendingConversation(conversation);
@@ -322,8 +383,16 @@ function DashboardPage() {
             setStartingConversation(false);
           }}
         />
-      )}
+      ) : <p role="status" className="sr-only">Abrindo a nova conversa…</p>)}
       <TransferNotice notice={transferNotice} onOpen={openTransferred} onDismiss={dismissTransferNotice} />
+      {/* Trilho e ícone do botão "Abrir menu" vão para os encaixes que a casca
+          reserva na mesa (AppShell.jsx): chegam com esta página, e a casca não
+          importa nada da mesa. Fora da casca (testes), não há encaixe. */}
+      {encaixeDoTrilho && createPortal(
+        <TrilhoDaMesa onProfileClick={openProfile} mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} profileVersion={profileVersion} />,
+        encaixeDoTrilho
+      )}
+      {encaixeDoIcone && createPortal(<IconeDoMenu />, encaixeDoIcone)}
     </div>
   );
 }

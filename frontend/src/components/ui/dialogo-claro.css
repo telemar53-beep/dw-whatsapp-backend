@@ -1,0 +1,381 @@
+/* ---------- Diálogo claro (Bloco 1) ----------
+   A moldura e as peças comuns dos diálogos do dia a dia: Confirmação, Aviso,
+   Nossa equipe, Meu perfil, Nova conversa, Enviar template e Atendimentos
+   encerrados. O desenho é o do Transferir e do Encerrar aprovados:
+
+   - branco e cinza muito claro; índigo só na escolha, no foco e na ação
+     principal; verde para sucesso e presença; âmbar só em alerta de verdade;
+     vermelho só no erro e na ação destrutiva;
+   - sem desfoque, gradiente, brilho, animação ou sombra pesada;
+   - no celular, os diálogos grandes vão para a tela cheia com um único voltar.
+
+   A base (overlays.css) não está em @layer e tem regras largas: campo (0,4,1),
+   `.dw-dialog button` (0,1,1). O anel global de campo (index.css) é (0,7,1).
+   Por isso as regras daqui levam o prefixo `[data-dialog].dw-dialog.mc` e,
+   onde disputam com esses, a classe repetida — vencem sem !important. */
+
+/* ---------- Fundo ---------- */
+.chat-theme.mc-fundo {
+  padding: 24px;
+  background: rgba(22, 26, 38, 0.44);
+}
+.chat-theme.mc-fundo:has(> .mc.is-celular) {
+  align-items: stretch;
+  padding: 0;
+}
+
+/* ---------- Moldura ---------- */
+[data-dialog].dw-dialog.mc {
+  --mc-papel: #ffffff;
+  --mc-suave: #f6f7f9;
+  --mc-linha: #e3e6ec;
+  --mc-borda: #d4d8e0;
+  --mc-texto: #161a26;
+  --mc-texto-2: #5b6272;
+  --mc-texto-3: #6b7180;
+  --mc-indigo: #4f46e5;
+  --mc-indigo-forte: #4338ca;
+  --mc-indigo-texto: #3f37c9;
+  --mc-indigo-claro: #eef0ff;
+  --mc-indigo-linha: #c9c5fa;
+  --mc-verde: #11704f;
+  --mc-verde-ponto: #1f9d63;
+  --mc-verde-fundo: #e7f5ee;
+  --mc-cinza-ponto: #9aa1ad;
+  --mc-ambar-texto: #7a4a00;
+  --mc-ambar-fundo: #fff6e5;
+  --mc-vermelho: #b3261e;
+  --mc-vermelho-forte: #9c1f18;
+  --mc-erro-fundo: #fdecea;
+  --mc-erro-texto: #8c1d18;
+  /* Tokens do tema escuro que os componentes de dentro leem: aqui, claros. */
+  --color-wa-avatar: #e9ebf0;
+  --color-wa-avatar-text: #3d4452;
+  --color-focus-ring: #4f46e5;
+  color-scheme: light;
+  width: 100%;
+  max-width: var(--mc-largura, 560px);
+  height: auto;
+  min-height: 0;
+  max-height: calc(100dvh - 48px);
+  border: 1px solid #d9dde5;
+  border-radius: 12px;
+  background: var(--mc-papel);
+  color: var(--mc-texto);
+  box-shadow: 0 18px 40px -18px rgba(20, 23, 40, 0.24);
+  font-size: 14px;
+  line-height: 20px;
+  animation: none;
+  backdrop-filter: none;
+}
+/* O diálogo recebe o foco só como ponto de partida; o contorno útil é o do
+   controle, não o da moldura inteira. */
+[data-dialog].dw-dialog.mc:focus { outline: none; }
+
+/* ---------- Cabeçalho ---------- */
+[data-dialog].dw-dialog.mc .mc-cab {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  padding: 16px 16px 12px 20px;
+}
+[data-dialog].dw-dialog.mc .mc-cab-texto { flex: 1; min-width: 0; }
+[data-dialog].dw-dialog.mc .mc-cab-texto h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--mc-texto);
+}
+[data-dialog].dw-dialog.mc .mc-cab-texto p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--mc-texto-2);
+}
+[data-dialog].dw-dialog.mc .mc-fechar {
+  flex: none;
+  align-self: flex-start;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--mc-texto-2);
+  cursor: pointer;
+}
+[data-dialog].dw-dialog.mc .mc-fechar:hover:not(:disabled) { background: var(--mc-suave); color: var(--mc-texto); }
+[data-dialog].dw-dialog.mc .mc-voltar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--mc-texto-2);
+  cursor: pointer;
+}
+[data-dialog].dw-dialog.mc .mc-voltar:hover:not(:disabled) { background: var(--mc-suave); color: var(--mc-texto); }
+
+/* ---------- Corpo: o único eixo de rolagem ---------- */
+[data-dialog].dw-dialog.mc .mc-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 20px 16px;
+}
+
+/* ---------- Erro: fixo entre o corpo e o rodapé ----------
+   Não rola junto com o corpo (A1-7, A5-5): quem clicou no botão do rodapé vê
+   o erro logo acima dele, sem procurar no fim da lista. */
+[data-dialog].dw-dialog.mc .mc-erro {
+  flex: none;
+  margin: 0 20px 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--mc-erro-fundo);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--mc-erro-texto);
+}
+
+/* ---------- Rodapé ---------- */
+[data-dialog].dw-dialog.mc .mc-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex: none;
+  padding: 12px 20px;
+  border-top: 1px solid var(--mc-linha);
+  background: var(--mc-papel);
+}
+[data-dialog].dw-dialog.mc .mc-nota {
+  min-width: 0;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--mc-texto-2);
+}
+[data-dialog].dw-dialog.mc .mc-acoes { display: flex; flex: none; gap: 10px; margin-left: auto; }
+[data-dialog].dw-dialog.mc .mc-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--mc-borda);
+  border-radius: 9px;
+  background: var(--mc-papel);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--mc-texto);
+  cursor: pointer;
+}
+[data-dialog].dw-dialog.mc .mc-botao:hover:not(:disabled):not([aria-disabled='true']) { background: var(--mc-suave); }
+[data-dialog].dw-dialog.mc .mc-botao.is-principal { border-color: var(--mc-indigo); background: var(--mc-indigo); color: #ffffff; }
+[data-dialog].dw-dialog.mc .mc-botao.is-principal:hover:not(:disabled):not([aria-disabled='true']) { background: var(--mc-indigo-forte); }
+[data-dialog].dw-dialog.mc .mc-botao.is-perigo { border-color: var(--mc-vermelho); background: var(--mc-vermelho); color: #ffffff; }
+[data-dialog].dw-dialog.mc .mc-botao.is-perigo:hover:not(:disabled):not([aria-disabled='true']) { background: var(--mc-vermelho-forte); }
+[data-dialog].dw-dialog.mc .mc-botao:is(:disabled, [aria-disabled='true']) { opacity: 0.55; cursor: default; }
+/* Botão de texto (Tentar de novo, Limpar busca): índigo, sem moldura. */
+[data-dialog].dw-dialog.mc .mc-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 600;
+  color: var(--mc-indigo-texto);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ---------- Campos ---------- */
+[data-dialog].dw-dialog.mc .mc-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+[data-dialog].dw-dialog.mc .mc-rotulo {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--mc-texto);
+}
+[data-dialog].dw-dialog.mc .mc-ajuda { margin: 0; font-size: 12.5px; line-height: 17px; color: var(--mc-texto-2); }
+[data-dialog].dw-dialog.mc .mc-campo-erro { margin: 0; font-size: 12.5px; line-height: 17px; font-weight: 500; color: var(--mc-vermelho); }
+[data-dialog].dw-dialog.mc.mc :is(input, select, textarea).mc-entrada {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--mc-borda);
+  border-radius: 9px;
+  background: var(--mc-papel);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mc-texto);
+}
+[data-dialog].dw-dialog.mc.mc textarea.mc-entrada { height: auto; min-height: 96px; padding: 10px 12px; resize: vertical; }
+[data-dialog].dw-dialog.mc.mc select.mc-entrada { padding-right: 8px; cursor: pointer; }
+[data-dialog].dw-dialog.mc.mc :is(input, textarea).mc-entrada::placeholder { color: var(--mc-texto-3); }
+[data-dialog].dw-dialog.mc.mc :is(input, select, textarea).mc-entrada[aria-invalid='true'] { border-color: var(--mc-vermelho); }
+[data-dialog].dw-dialog.mc.mc :is(input, select, textarea).mc-entrada:disabled { background: var(--mc-suave); color: var(--mc-texto-2); }
+/* Um indicador de foco só: a borda índigo com um fio junto. O anel global do
+   campo (0,7,1) desenharia um segundo traço, difuso, em volta. */
+[data-dialog].dw-dialog.mc.mc.mc :is(input, select, textarea).mc-entrada.mc-entrada:focus-visible {
+  border-color: var(--mc-indigo);
+  outline: 1px solid var(--mc-indigo);
+  outline-offset: 0;
+  box-shadow: none;
+}
+/* Busca: a caixa inteira é o campo, a lupa fica dentro dela. */
+[data-dialog].dw-dialog.mc .mc-busca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--mc-borda);
+  border-radius: 9px;
+  background: var(--mc-papel);
+  color: var(--mc-texto-3);
+}
+[data-dialog].dw-dialog.mc .mc-busca svg { flex: none; }
+[data-dialog].dw-dialog.mc.mc .mc-busca input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mc-texto);
+  outline: none;
+}
+[data-dialog].dw-dialog.mc.mc .mc-busca input::placeholder { color: var(--mc-texto-3); }
+[data-dialog].dw-dialog.mc .mc-busca:focus-within { border-color: var(--mc-indigo); outline: 1px solid var(--mc-indigo); outline-offset: 0; }
+[data-dialog].dw-dialog.mc.mc.mc .mc-busca.mc-busca input:focus-visible { outline: none; box-shadow: none; }
+
+/* ---------- Estados de lista ---------- */
+[data-dialog].dw-dialog.mc :is(.mc-vazio, .mc-carregando) {
+  margin: 0;
+  padding: 18px 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mc-texto-2);
+}
+[data-dialog].dw-dialog.mc .mc-falha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--mc-erro-fundo);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--mc-erro-texto);
+}
+[data-dialog].dw-dialog.mc .mc-falha .mc-botao { height: 34px; padding: 0 12px; font-size: 13px; }
+
+/* ---------- Confirmação e aviso (pequenos) ---------- */
+[data-dialog].dw-dialog.mc.mc-pequeno { --mc-largura: 440px; }
+[data-dialog].dw-dialog.mc .mc-aviso { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 20px 4px; }
+[data-dialog].dw-dialog.mc .mc-aviso-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--mc-texto);
+}
+/* O tom do aviso: um ponto na cor dele ao lado do título. A frase diz o que
+   houve; o ponto só ajuda a bater o olho. O destrutivo não tem ponto — o
+   botão vermelho, com o verbo escrito, já diz tudo. */
+[data-dialog].dw-dialog.mc .mc-aviso:is([data-tom='erro'], [data-tom='sucesso']) .mc-aviso-titulo::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mc-vermelho);
+}
+[data-dialog].dw-dialog.mc .mc-aviso[data-tom='sucesso'] .mc-aviso-titulo::before { background: var(--mc-verde-ponto); }
+[data-dialog].dw-dialog.mc .mc-aviso-texto { margin: 0; font-size: 14px; line-height: 21px; color: var(--mc-texto); }
+[data-dialog].dw-dialog.mc .mc-aviso-titulo + .mc-aviso-texto { color: var(--mc-texto-2); }
+[data-dialog].dw-dialog.mc .mc-rodape.is-aviso { border-top: 0; padding: 16px 20px 20px; }
+/* Dentro da mensagem, o erro alinha com o texto (o recuo do corpo já está no
+   bloco da mensagem). */
+[data-dialog].dw-dialog.mc .mc-aviso .mc-erro { margin: 12px 0 0; }
+
+/* ---------- Tablet: o desenho do desktop, com margem menor ---------- */
+@media (max-width: 1023px) {
+  .chat-theme.mc-fundo { padding: 16px; }
+  [data-dialog].dw-dialog.mc { max-height: calc(100dvh - 32px); }
+}
+
+/* ---------- Celular: tela cheia, uma coluna, rodapé fixo ----------
+   A classe vem do componente (useCelular), junto com a troca de "Fechar" pela
+   seta de voltar. Os diálogos pequenos continuam no meio da tela. */
+[data-dialog].dw-dialog.mc.is-celular {
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-dialog].dw-dialog.mc.is-celular .mc-cab { gap: 8px; padding: 8px 12px 10px 4px; }
+[data-dialog].dw-dialog.mc.is-celular .mc-cab-texto h2 { font-size: 16.5px; line-height: 22px; }
+[data-dialog].dw-dialog.mc.is-celular .mc-cab-texto p { font-size: 12.5px; line-height: 17px; }
+[data-dialog].dw-dialog.mc.is-celular .mc-corpo { padding: 4px 12px 12px; }
+[data-dialog].dw-dialog.mc.is-celular .mc-erro { margin: 0 12px 8px; }
+[data-dialog].dw-dialog.mc.is-celular .mc-rodape {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+[data-dialog].dw-dialog.mc.is-celular .mc-nota { font-size: 12px; line-height: 16px; }
+[data-dialog].dw-dialog.mc.is-celular .mc-nota:empty { display: none; }
+[data-dialog].dw-dialog.mc.is-celular .mc-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 0; }
+[data-dialog].dw-dialog.mc.is-celular .mc-acoes > :only-child { grid-column: 1 / -1; }
+[data-dialog].dw-dialog.mc.is-celular .mc-botao { height: 44px; }
+/* Abaixo de 16 px o Safari do celular dá zoom ao focar o campo. */
+[data-dialog].dw-dialog.mc.mc.is-celular :is(input, select, textarea).mc-entrada { height: 44px; font-size: 16px; }
+[data-dialog].dw-dialog.mc.mc.is-celular textarea.mc-entrada { height: auto; }
+[data-dialog].dw-dialog.mc.mc.is-celular .mc-busca { height: 44px; }
+[data-dialog].dw-dialog.mc.mc.is-celular .mc-busca input { font-size: 16px; }
+
+/* Toque (celular ou tablet): alvos de 44 px e campos de 16 px também nos
+   diálogos pequenos e no desenho de tablet. */
+@media (pointer: coarse) {
+  [data-dialog].dw-dialog.mc .mc-botao { min-height: 44px; }
+  [data-dialog].dw-dialog.mc .mc-fechar { min-height: 44px; }
+  [data-dialog].dw-dialog.mc.mc :is(input, select, textarea).mc-entrada { min-height: 44px; font-size: 16px; }
+  [data-dialog].dw-dialog.mc.mc .mc-busca input { font-size: 16px; }
+}
+@media (max-width: 767px) {
+  [data-dialog].dw-dialog.mc.mc-pequeno .mc-botao { height: 44px; }
+}

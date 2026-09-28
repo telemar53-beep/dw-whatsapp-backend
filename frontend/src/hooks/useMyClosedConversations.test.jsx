@@ -85,4 +85,26 @@ describe('useMyClosedConversations', () => {
     expect(result.current.erroAoCarregarMais).toBe(false);
     expect(result.current.items).toEqual([{ id: 'c1' }, { id: 'c2' }]);
   });
+
+  // A página de um "Carregar mais" que chega depois de a lista recomeçar
+  // (Tentar de novo) é de uma lista que não existe mais: não entra.
+  test('página atrasada do "Carregar mais" não entra depois de a lista recomeçar', async () => {
+    api.getMyClosedConversations.mockResolvedValue({ items: [{ id: 'c1' }], hasMore: true });
+    const { result } = renderHook(() => useMyClosedConversations());
+    await waitFor(() => expect(result.current.items).toEqual([{ id: 'c1' }]));
+
+    let paginaAtrasada;
+    api.getMyClosedConversations.mockReturnValueOnce(new Promise((r) => { paginaAtrasada = r; }));
+    let carregandoMais;
+    act(() => { carregandoMais = result.current.loadMore(); });
+
+    api.getMyClosedConversations.mockResolvedValueOnce({ items: [{ id: 'n1' }], hasMore: false });
+    await act(() => result.current.refresh());
+    expect(result.current.items).toEqual([{ id: 'n1' }]);
+
+    await act(async () => { paginaAtrasada({ items: [{ id: 'velho' }], hasMore: true }); await carregandoMais; });
+    expect(result.current.items).toEqual([{ id: 'n1' }]);
+    expect(result.current.hasMore).toBe(false);
+    expect(result.current.loading).toBe(false);
+  });
 });

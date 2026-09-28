@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { applyContactAvatarUpdate } from '../utils/contactAvatar';
+import { aplicarContatoSalvo } from '../utils/contatoSalvo';
 import { getQueue } from '../services/api';
 
 export function useQueue() {
@@ -71,5 +72,12 @@ export function useQueue() {
     };
   }, [socket]);
 
-  return { queue, status, loading: status === 'loading' };
+  // "Editar cliente" salvou, e a rota não emite evento: a fila guarda o que
+  // voltou do servidor, só nas conversas daquele contato. Estável, porque a
+  // página a repassa à conversa aberta, que é memo.
+  const aplicarContatoSalvoNaFila = useCallback((salvo) => {
+    setQueue((prev) => aplicarContatoSalvo(prev, salvo));
+  }, []);
+
+  return { queue, status, loading: status === 'loading', aplicarContatoSalvo: aplicarContatoSalvoNaFila };
 }

@@ -103,7 +103,8 @@ describe('trilho da mesa', () => {
     const equipe = screen.getByRole('button', { name: /^equipe/i });
     expect(equipe).toHaveAccessibleName('Equipe: 1 online');
     await userEvent.click(equipe);
-    expect(screen.getByRole('heading', { name: 'Nossa equipe' })).toBeInTheDocument();
+    // O popup chega sob demanda (TeamPanel).
+    expect(await screen.findByRole('heading', { name: 'Nossa equipe' })).toBeInTheDocument();
   });
 
   test('som da fila alterna, e o estado muda o nome e o ícone', async () => {
@@ -155,10 +156,13 @@ describe('trilho da mesa', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent('encerrados');
   });
 
-  test('queda de conexão continua avisada no trilho', () => {
+  // C7-1: a queda tinha dois indicadores (o do trilho e o balão da casca).
+  // Agora é um aviso só, o da casca (AvisoDeConexao); o trilho não repete.
+  test('queda de conexão não vira um segundo indicador no trilho', () => {
     useSocketConnection.mockReturnValue('reconnecting');
     renderTrilho(ATENDENTE);
-    expect(within(trilho()).getByText(/reconectando\. as mensagens novas podem demorar/i)).toBeInTheDocument();
+    expect(within(trilho()).queryByText(/reconectando/i)).not.toBeInTheDocument();
+    expect(trilho().querySelector('.worknav-connection')).toBeNull();
   });
 
   test('gaveta do celular: abre com o foco no primeiro destino, Esc e o véu fecham', async () => {

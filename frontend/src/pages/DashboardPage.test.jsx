@@ -268,6 +268,27 @@ describe('DashboardPage', () => {
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
   });
 
+  // A4-4: a confirmação espera a resposta. Antes ela fechava antes do
+  // resultado e a falha sumia calada (`.catch(() => {})`).
+  test('"Finalizar sem motivo" que falha mostra o erro na própria confirmação, que continua aberta', async () => {
+    useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    closeConversation.mockRejectedValueOnce({ body: { error: 'Conversation is closed' } });
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    const confirmacao = await screen.findByRole('alertdialog', { name: 'Finalizar sem motivo?' });
+    expect(confirmacao).toHaveTextContent('O atendimento de Carlos será finalizado sem informar o motivo.');
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Finalizar' }));
+
+    expect(await within(confirmacao).findByRole('alert')).toHaveTextContent('Este atendimento já foi encerrado.');
+    expect(screen.getByRole('alertdialog')).toBe(confirmacao);
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(closeConversation).toHaveBeenCalledTimes(1);
+  });
+
   test('does not show a quick-close button in the Atendimento tab', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c3', contactDisplayName: 'Minha' }], status: 'ready' });
@@ -340,7 +361,7 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     await userEvent.click(screen.getByRole('button', { name: /nova conversa/i }));
-    await userEvent.click(screen.getByText('Mock Start Conversation'));
+    await userEvent.click(await screen.findByText('Mock Start Conversation'));
 
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
   });
@@ -364,7 +385,7 @@ describe('DashboardPage', () => {
     const { rerender } = render(shellTree());
 
     await userEvent.click(screen.getByRole('button', { name: /nova conversa/i }));
-    await userEvent.click(screen.getByText('Mock Start Conversation'));
+    await userEvent.click(await screen.findByText('Mock Start Conversation'));
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 
     useMyConversations.mockReturnValue({ conversations: [

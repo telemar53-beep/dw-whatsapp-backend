@@ -1,8 +1,9 @@
-import { memo, useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, useMatch } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useSocketConnection } from '../contexts/SocketContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
+import { useAlert } from '../hooks/useAlert';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
 import { useCompanyName } from '../hooks/useCompanyName';
 import { NAV_ITEMS, SETTINGS_SECTIONS, hasLevel } from '../navigation/navItems';
 import { marcaDaInstalacao } from '../branding';
@@ -23,7 +24,10 @@ import './trilho-mesa.css';
 // As classes `worknav*` são as do menu (side-nav.css, que a casca já carrega);
 // trilho-mesa.css só acrescenta o que é da mesa, sob [data-variante=mesa].
 
-const ClosedConversationsModal = lazy(() => import('./ClosedConversationsModal'));
+// Os encerrados chegam quando são abertos, pelo mesmo carregador dos outros
+// diálogos (utils/sobDemanda.js): se o trecho não baixar, o trilho avisa e a
+// mesa continua de pé — com React.lazy a falha subia até a rota.
+const ENCERRADOS = sobDemanda(() => import('./ClosedConversationsModal'));
 
 // Os mesmos destinos do menu, com as mesmas rotas e os mesmos níveis de acesso
 // (hasLevel) — só o nome e o ícone mudam. "Filas" é a Supervisão e "Canais" é
@@ -90,8 +94,13 @@ function TrilhoDaMesa({ onProfileClick, mobileOpen = false, onMobileClose = () =
   const { agent, logout } = useAuth();
   const { muted, toggleMuted } = useQueueNotificationSound();
   const { name: companyName, status: companyNameStatus } = useCompanyName();
-  const connectionState = useSocketConnection();
   const [closedOpen, setClosedOpen] = useState(false);
+  const { avisar, alertDialog } = useAlert();
+  const encerradosNaoBaixaram = useCallback(() => {
+    setClosedOpen(false);
+    avisar('Não foi possível abrir os atendimentos encerrados. Verifique a conexão e tente de novo.', { tom: 'erro' });
+  }, [avisar]);
+  const Encerrados = useSobDemanda(ENCERRADOS, closedOpen, encerradosNaoBaixaram);
   const [accountOpen, setAccountOpen] = useState(false);
   const navRef = useRef(null);
   const accountRef = useRef(null);
@@ -144,15 +153,8 @@ function TrilhoDaMesa({ onProfileClick, mobileOpen = false, onMobileClose = () =
         })}
       </div>
       <div className="worknav-personal">
-        {connectionState === 'reconnecting' && (
-          // Sem role="status": o anúncio é da região viva da casca.
-          <div className="worknav-connection" tabIndex={0}>
-            <span className="sr-only">Reconectando. As mensagens novas podem demorar a aparecer.</span>
-            <span className="worknav-connection-ponto" aria-hidden="true" />
-            <span className="worknav-label">Reconectando…</span>
-            <span className="worknav-connection-tip" aria-hidden="true">Reconectando… As mensagens novas podem demorar a aparecer.</span>
-          </div>
-        )}
+        {/* A queda da conexão não tem indicador aqui: o aviso é um só, o da
+            casca (AvisoDeConexao), também no celular, onde o trilho é gaveta. */}
         {agent?.role === 'agent' && (
           <button type="button" className="worknav-item" aria-label="Atendimentos encerrados" onClick={() => setClosedOpen(true)}>
             <IconeEncerrados /><span className="worknav-dica" aria-hidden="true">Atendimentos encerrados</span>
@@ -166,7 +168,9 @@ function TrilhoDaMesa({ onProfileClick, mobileOpen = false, onMobileClose = () =
           {accountOpen && <ul ref={accountPanel} className="worknav-account-panel" id="worknav-account-actions" aria-label="Opções da conta">
             {/* Só texto nos dois itens, iguais em tudo: a família DW ainda não
                 tem ícone de perfil, e o avatar já é o acionador da conta. */}
-            <li><button type="button" onClick={() => { setAccountOpen(false); onProfileClick(); }}>Meu perfil</button></li>
+            {/* O foco vai ao avatar ANTES de o perfil abrir: o item some com o
+                painel, e é ao avatar que o foco volta quando o perfil fecha. */}
+            <li><button type="button" onClick={() => { accountTrigger.current?.focus(); setAccountOpen(false); onProfileClick(); }}>Meu perfil</button></li>
             <li><button type="button" onClick={() => { setAccountOpen(false); logout(); }}>Sair</button></li>
           </ul>}
           <button type="button" ref={accountTrigger} className="worknav-account-trigger" aria-label={nomeDaConta} aria-expanded={accountOpen} aria-controls="worknav-account-actions" onClick={() => setAccountOpen((open) => !open)}>
@@ -176,11 +180,10 @@ function TrilhoDaMesa({ onProfileClick, mobileOpen = false, onMobileClose = () =
         </div>
       </div>
     </nav>
-    {closedOpen && (
-      <Suspense fallback={null}>
-        <ClosedConversationsModal onClose={() => setClosedOpen(false)} />
-      </Suspense>
-    )}
+    {closedOpen && (Encerrados
+      ? <Encerrados onClose={() => setClosedOpen(false)} />
+      : <p role="status" className="sr-only">Abrindo os atendimentos encerrados…</p>)}
+    {alertDialog}
   </>;
 }
 

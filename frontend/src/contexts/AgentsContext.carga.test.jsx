@@ -69,7 +69,11 @@ function Casca() {
 const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
 const esperar = (ms) => act(() => new Promise((r) => setTimeout(r, ms)));
 const rajada = (n, e = 'dashboard:conversation') => act(() => { for (let i = 0; i < n; i += 1) socket.disparar(e); });
-const abrirEquipe = () => act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Equipe/ })); });
+// O popup chega sob demanda (TeamPanel): abrir espera o diálogo existir.
+const abrirEquipe = async () => {
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Equipe/ })); });
+  await screen.findByRole('dialog', { name: /Nossa equipe/ });
+};
 const fecharEquipe = () => act(async () => { fireEvent.click(within(screen.getByRole('dialog', { name: /Nossa equipe/ })).getAllByRole('button', { name: 'Fechar' })[0]); });
 const abrirTransferencia = () => act(async () => { fireEvent.click(screen.getByText('abrir transferência')); });
 const fecharTransferencia = () => act(async () => { fireEvent.click(screen.getByText('fechar transferência')); });
@@ -137,7 +141,7 @@ describe('carga dos atendentes: ao abrir quem a mostra', () => {
     expect(screen.getByText('Carregando a equipe…')).toBeInTheDocument();
     await act(async () => { fila[1].resolve([ana(4), bruno(5)]); });
     const dialogo = screen.getByRole('dialog', { name: /Nossa equipe/ });
-    expect(within(dialogo).getByLabelText('4 atendimentos ativos')).toBeInTheDocument();
+    expect(within(dialogo).getByText('4 atendimentos ativos')).toBeInTheDocument();
   });
 
   test('4. abrir a transferência com a lista desatualizada = uma busca, e só então a lista (com a carga nova)', async () => {
@@ -173,7 +177,7 @@ describe('carga dos atendentes: ao abrir quem a mostra', () => {
     expect(listAgents).toHaveBeenCalledTimes(2);
     await act(async () => { fila[1].resolve([ana(2), bruno(3)]); });
     expect(linhaDaTransferencia('Ana')).toHaveTextContent('2 atendimentos');
-    expect(within(screen.getByRole('dialog', { name: /Nossa equipe/ })).getByLabelText('2 atendimentos ativos')).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: /Nossa equipe/ })).getByText('2 atendimentos ativos')).toBeInTheDocument();
   });
 
   test('12. "Menor carga" ordena pela carga atualizada', async () => {
@@ -198,7 +202,7 @@ describe('carga dos atendentes: enquanto alguém a mostra', () => {
     // Enquanto confere, a lista que já estava na tela continua (sem "carregando").
     expect(screen.queryByText('Carregando a equipe…')).not.toBeInTheDocument();
     await act(async () => { fila[1].resolve([ana(6), bruno(5)]); });
-    expect(within(screen.getByRole('dialog', { name: /Nossa equipe/ })).getByLabelText('6 atendimentos ativos')).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: /Nossa equipe/ })).getByText('6 atendimentos ativos')).toBeInTheDocument();
   });
 
   // Medido no navegador: com a transferência aberta, cada evento redesenhava o

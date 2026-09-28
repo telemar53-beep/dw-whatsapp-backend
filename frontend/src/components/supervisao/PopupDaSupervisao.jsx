@@ -13,8 +13,9 @@ import './popup-da-supervisao.css';
 // e com ele vêm a conversa, o compositor e os painéis.
 //
 // Não é uma segunda conversa: é a ConversationView da mesa (com a variante da
-// Supervisão e a folha clara da conversa aprovada, `.mesa-conversa`). O
-// modal dos Encerrados continua no ConversationModal, como estava.
+// Supervisão e a folha clara da conversa aprovada, `.mesa-conversa`). Os
+// Encerrados usam a mesma conversa, no diálogo mestre–detalhe deles
+// (ClosedConversationsModal: lista à esquerda, conversa à direita).
 //
 // memo com comparação rasa: a página passa a conversa com a mesma referência
 // enquanto o evento for de outra conversa, e callbacks estáveis — o popup

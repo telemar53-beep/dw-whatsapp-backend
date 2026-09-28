@@ -404,11 +404,31 @@ describe('ConversationListItem', () => {
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
 
     const confirmacao = await screen.findByRole('alertdialog');
-    expect(confirmacao).toHaveTextContent('Finalizar esse atendimento sem informar o motivo?');
+    expect(confirmacao).toHaveTextContent('O atendimento de Carlos será finalizado sem informar o motivo.');
     await userEvent.click(within(confirmacao).getByRole('button', { name: 'Finalizar' }));
 
     expect(onQuickClose).toHaveBeenCalledWith('c1');
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  // A4-4: a confirmação espera o `onQuickClose` e mostra a falha dentro dela.
+  test('quick-close que falha deixa a confirmação aberta com o erro', async () => {
+    const onQuickClose = vi.fn(() => Promise.reject({ body: { error: 'Conversation is closed' } }));
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+          onQuickClose={onQuickClose}
+        />
+      </ul>
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    const confirmacao = await screen.findByRole('alertdialog', { name: 'Finalizar sem motivo?' });
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Finalizar' }));
+    expect(await within(confirmacao).findByRole('alert')).toHaveTextContent('Este atendimento já foi encerrado.');
+    expect(screen.getByRole('alertdialog')).toBe(confirmacao);
   });
 
   // A linha é um `role="button"` e o "Finalizar" é um <button> DENTRO dela. O
@@ -431,7 +451,7 @@ describe('ConversationListItem', () => {
     screen.getByRole('button', { name: /finalizar/i }).focus();
     await userEvent.keyboard('{Enter}');
 
-    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Finalizar esse atendimento sem informar o motivo?');
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('O atendimento de Carlos será finalizado sem informar o motivo.');
     expect(onSelect).not.toHaveBeenCalled();
   });
 

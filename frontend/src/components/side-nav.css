@@ -25,13 +25,6 @@
 /* Estado persistente da conexão no rodapé do menu. Linha compacta, no mesmo
    ritmo do "Som da fila" — nunca um cartão. A dica só existe no modo
    recolhido, onde o rótulo some; no expandido o texto já está visível. */
-.worknav-connection{display:flex;align-items:center;gap:10px;width:100%;padding:6px 9px;margin-bottom:6px;border-radius:6px;border:1px solid #f2a93c38;background:#f2a93c14;color:#f0b65f;font-size:11px;line-height:1.3;position:relative}
-.worknav-connection svg{flex:none}
-.worknav.is-compact .worknav-connection{justify-content:center;padding:7px 0}
-.worknav-connection-tip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);width:208px;padding:8px 10px;border-radius:8px;border:1px solid #ffffff21;background:var(--color-ui-surface-overlay);color:#e6edf2;font-size:11px;line-height:1.45;box-shadow:0 8px 28px #0006;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none;z-index:var(--z-popover)}
-.worknav.is-compact .worknav-connection:hover .worknav-connection-tip,
-.worknav.is-compact .worknav-connection:focus-visible .worknav-connection-tip{opacity:1;visibility:visible}
-@media(prefers-reduced-motion:reduce){.worknav-connection-tip{transition:none}}
 
 /* Sem marca configurada em `branding`, a barra usa o monograma com as iniciais
    da empresa. As regras acima centram e zeram o gap porque esperam uma imagem;

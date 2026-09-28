@@ -166,6 +166,10 @@ export function Dialog({
   initialFocus = 'auto',
   closeLabel = 'Fechar',
   className = '',
+  // A moldura clara (ui/dialogo-claro.css): fundo liso, painel sólido, sem a
+  // animação de entrada, o desfoque e a sombra da moldura escura. Com ela o
+  // visual é todo da folha clara — as utilidades da escura nem entram.
+  claro = false,
   children,
 }) {
   const painelRef = useRef(null);
@@ -280,12 +284,19 @@ export function Dialog({
   }
 
   const nomeado = labelledBy || (title ? tituloId : undefined);
+  const direcao = orientation === 'row' ? 'flex-row' : 'flex-col';
+  const classeDoFundo = claro
+    ? 'chat-theme mc-fundo fixed inset-0 flex items-center justify-center font-wa'
+    : `chat-theme fixed inset-0 flex items-center justify-center bg-[var(--wa-overlay)] p-4 font-wa ${
+      camada.profundidade === 0 ? 'backdrop-blur-[var(--wa-overlay-blur)]' : ''
+    }`;
+  const classeDoPainel = claro
+    ? `dw-dialog mc relative flex w-full ${size} ${direcao} overflow-hidden ${className}`
+    : `dw-dialog animate-wa-pop relative flex w-full ${size} ${direcao} overflow-hidden rounded-[var(--wa-dialog-radius)] border border-[var(--wa-dialog-border)] bg-wa-panel shadow-[var(--wa-dialog-shadow)] backdrop-blur-[var(--wa-dialog-blur)] ${className}`;
 
   return createPortal(
     <div
-      className={`chat-theme fixed inset-0 flex items-center justify-center bg-[var(--wa-overlay)] p-4 font-wa ${
-        camada.profundidade === 0 ? 'backdrop-blur-[var(--wa-overlay-blur)]' : ''
-      }`}
+      className={classeDoFundo}
       style={{ zIndex: `calc(var(--z-dialog) + ${camada.profundidade * passoDeCamada()})` }}
       data-dialog-depth={camada.profundidade}
       inert={camada.topo ? undefined : ''}
@@ -302,7 +313,7 @@ export function Dialog({
         aria-describedby={describedBy || (title && description ? descricaoId : undefined)}
         tabIndex={-1}
         onKeyDown={prenderTab}
-        className={`dw-dialog animate-wa-pop relative flex w-full ${size} ${orientation === 'row' ? 'flex-row' : 'flex-col'} overflow-hidden rounded-[var(--wa-dialog-radius)] border border-[var(--wa-dialog-border)] bg-wa-panel shadow-[var(--wa-dialog-shadow)] backdrop-blur-[var(--wa-dialog-blur)] ${className}`}
+        className={classeDoPainel}
       >
         {dismissible && (
           <button

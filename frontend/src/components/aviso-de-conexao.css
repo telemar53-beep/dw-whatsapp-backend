@@ -1,0 +1,52 @@
+/* ---------- Aviso único de conexão (C7) ----------
+   Canto inferior direito, acima do compositor: avisar não empurra o layout nem
+   cobre trabalho. O compositor em repouso tem ~61 px e a casca reserva 12 px
+   embaixo; 96 px deixam folga e ainda cobrem uma linha extra digitada.
+   `pointer-events: none`: nada abaixo deixa de ser clicável.
+
+   Sólido e parado: sem desfoque, animação, pulso ou sombra pesada. Âmbar na
+   queda (é um alerta de verdade), verde na volta. A cor nunca vai sozinha: a
+   frase diz o estado. */
+.aviso-conexao {
+  position: absolute;
+  right: 20px;
+  bottom: 96px;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(calc(100vw - 24px), 26rem);
+  padding: 7px 14px 7px 12px;
+  border: 1px solid #f1d9a8;
+  border-radius: 999px;
+  background: #fff8eb;
+  color: #5c3b00;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  box-shadow: 0 6px 16px -10px rgba(20, 23, 40, 0.28);
+  pointer-events: none;
+}
+.aviso-conexao-ponto {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b45309;
+}
+.aviso-conexao[data-estado='voltou'] {
+  border-color: #bfe3cf;
+  background: #eef8f2;
+  color: #11704f;
+}
+.aviso-conexao[data-estado='voltou'] .aviso-conexao-ponto { background: #1f9d63; }
+
+/* Celular: a mesma altura, com margem de 12 px dos dois lados; a frase quebra
+   em vez de sair da tela. */
+@media (max-width: 767px) {
+  .aviso-conexao {
+    right: 12px;
+    left: auto;
+    border-radius: 12px;
+  }
+}

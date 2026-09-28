@@ -1,9 +1,14 @@
-import { useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useState } from 'react';
 import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
+import { useAlert } from '../hooks/useAlert';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
 import { IconeEquipe } from './icones';
-import TeamModal from './TeamModal';
+
+// O popup chega quando é aberto: o trilho (que a mesa e a Supervisão baixam)
+// não leva a lista nem a folha dele. Se o trecho não baixar, o botão avisa e
+// o próximo clique tenta de novo (guardas/bloco1SobDemanda.test.jsx).
+const EQUIPE = sobDemanda(() => import('./TeamModal'));
 
 function sortAgents(agents, onlineIds) {
   return [...agents].sort((a, b) => {
@@ -19,9 +24,8 @@ function sortAgents(agents, onlineIds) {
 // rodapé da lista de conversas; o "N online" que ela mostrava agora está no
 // nome e na dica do botão, com os mesmos três estados (carregando, erro e
 // online).
-// O popup vai por portal para o body: um `position: fixed` dentro de um
-// ancestral com overflow ou transform fica preso a ele em vez de à tela. O
-// wrapper .chat-theme mantém os tokens escuros do popup.
+// O diálogo já vai por portal para o body (ui/Dialog): o portal a mais que
+// havia aqui deixava um <div> vazio no body (C1-13).
 //
 // A carga de cada um só é buscada com o popup ABERTO (`carga: open`): fechado,
 // o botão usa a lista só para contar quem está online, e evento de conversa
@@ -31,12 +35,14 @@ function TeamPanel() {
   const { agents, status, refresh } = useAgents({ carga: open });
   const onlineIds = usePresence(agents);
   const sorted = sortAgents(agents, onlineIds);
+  const { avisar, alertDialog } = useAlert();
+  const equipeNaoBaixou = useCallback(() => {
+    setOpen(false);
+    avisar('Não foi possível abrir a equipe. Verifique a conexão e tente de novo.', { tom: 'erro' });
+  }, [avisar]);
+  const Equipe = useSobDemanda(EQUIPE, open, equipeNaoBaixou);
 
   const onlineCount = sorted.filter((teammate) => onlineIds.has(teammate.id)).length;
-
-  function openModal() {
-    setOpen(true);
-  }
 
   const situacao = status === 'error'
     ? 'não foi possível carregar'
@@ -47,17 +53,14 @@ function TeamPanel() {
 
   return (
     <>
-      <button type="button" onClick={openModal} aria-haspopup="dialog" aria-expanded={open} aria-label={nome} className="worknav-item">
+      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open} aria-label={nome} className="worknav-item">
         <IconeEquipe />
         <span className="worknav-dica" aria-hidden="true">{nome}</span>
       </button>
-      {open &&
-        createPortal(
-          <div className="chat-theme">
-            <TeamModal agents={sorted} onlineIds={onlineIds} status={status} onClose={() => setOpen(false)} onRetry={refresh} />
-          </div>,
-          document.body
-        )}
+      {open && (Equipe
+        ? <Equipe agents={sorted} onlineIds={onlineIds} status={status} onClose={() => setOpen(false)} onRetry={refresh} />
+        : <p role="status" className="sr-only">Abrindo a equipe…</p>)}
+      {alertDialog}
     </>
   );
 }

@@ -16,7 +16,6 @@ import PainelDadosCliente from './PainelDadosCliente';
 import { IconeDadosCliente } from './icones/conversa';
 import { PAINEL, CONVERSA_MINIMA } from '../hooks/useWorkspaceLayout';
 import AiSuggestionCard from './AiSuggestionCard';
-import SendTemplateModal from './SendTemplateModal';
 import { useAlert } from '../hooks/useAlert';
 import {
   IconArrowLeft,
@@ -160,6 +159,9 @@ const ConversationHistoryModal = lazy(() => import('./ConversationHistoryModal')
 // avalia nada dele (guardas/dialogosSobDemanda.test.jsx). Sem React.lazy: com
 // o trecho já em memória, o diálogo abre no mesmo render (utils/sobDemanda.js).
 const ENCERRAMENTO = sobDemanda(() => import('./CloseReasonModal'));
+// O "Enviar template" também: só existe com a janela de 24h fechada, e a
+// conversa comum não baixa o diálogo nem a folha dele (guardas/bloco1SobDemanda).
+const ENVIO_DE_TEMPLATE = sobDemanda(() => import('./SendTemplateModal'));
 
 // Enquanto o código do modal chega: nada que mude o lugar das coisas; só o
 // aviso para quem usa leitor de tela.
@@ -423,7 +425,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const [closingReason, setClosingReason] = useState(false);
   const encerramentoNaoBaixou = useCallback(() => {
     setClosingReason(false);
-    avisar('Não foi possível abrir o encerramento. Verifique a conexão e tente de novo.');
+    avisar('Não foi possível abrir o encerramento. Verifique a conexão e tente de novo.', { tom: 'erro' });
   }, [avisar]);
   const Encerramento = useSobDemanda(ENCERRAMENTO, closingReason, encerramentoNaoBaixou);
   // A sugestão que o atendente escolheu editar: { id, content } enquanto o texto
@@ -431,6 +433,11 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   // texto simples é atribuído a essa sugestão (rota de IA) em vez do envio comum.
   const [editedSuggestion, setEditedSuggestion] = useState(null);
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const templateNaoBaixou = useCallback(() => {
+    setSendingTemplate(false);
+    avisar('Não foi possível abrir o envio de template. Verifique a conexão e tente de novo.', { tom: 'erro' });
+  }, [avisar]);
+  const EnvioDeTemplate = useSobDemanda(ENVIO_DE_TEMPLATE, sendingTemplate, templateNaoBaixou);
   const bottomRef = useRef(null);
   const linhaDoTempoRef = useRef(null);
 
@@ -603,7 +610,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await claimConversation(conversation.id, token);
     } catch (err) {
-      avisar(descreverErro(err, 'Não foi possível assumir este atendimento.'));
+      avisar(descreverErro(err, 'Não foi possível assumir este atendimento.'), { tom: 'erro' });
     }
   }
 
@@ -616,7 +623,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await sendSuggestion(item);
     } catch (err) {
-      avisar(descreverErro(err, 'Não foi possível enviar a sugestão da IA.'));
+      avisar(descreverErro(err, 'Não foi possível enviar a sugestão da IA.'), { tom: 'erro' });
     }
   }
 
@@ -629,7 +636,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await discardSuggestion(item);
     } catch (err) {
-      avisar(descreverErro(err, 'Não foi possível descartar a sugestão da IA.'));
+      avisar(descreverErro(err, 'Não foi possível descartar a sugestão da IA.'), { tom: 'erro' });
     }
   }
 
@@ -1043,14 +1050,14 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           />
         </>
       )}
-      {sendingTemplate && (
-        <SendTemplateModal
+      {sendingTemplate && (EnvioDeTemplate ? (
+        <EnvioDeTemplate
           conversationId={conversation.id}
           channelId={conversation.channelId}
           onClose={() => setSendingTemplate(false)}
           onSent={() => setSendingTemplate(false)}
         />
-      )}
+      ) : ABRINDO)}
       {showingHistory && (
         <Suspense fallback={ABRINDO}>
           <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />

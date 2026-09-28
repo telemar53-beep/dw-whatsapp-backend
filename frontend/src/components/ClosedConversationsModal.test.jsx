@@ -20,171 +20,291 @@ vi.mock('../services/api', async (importOriginal) => ({
   updateContact: vi.fn(),
   listCities: vi.fn(() => new Promise(() => {})),
   listSectors: vi.fn(() => new Promise(() => {})),
+  getConversationHistory: vi.fn(() => new Promise(() => {})),
 }));
 
-const CLOSED_CONVERSATION = {
+// Dados fictícios.
+const ENCERRADA = {
   id: 'c-old',
-  contactDisplayName: 'Ana Encerrada',
+  contactId: 'contato-1',
+  contactDisplayName: 'Cliente 101',
+  contactPhoneNumber: '5500000000001',
+  contactInternalNote: 'Nota antiga',
   status: 'closed',
+  closedAt: '2026-09-20T15:00:00.000Z',
   assignedAgentId: 'agent-1',
+  sectorName: 'Suporte',
+  channelName: 'Canal Exemplo',
+  lastMessageContent: 'Obrigado pelo atendimento!',
 };
+const OUTRA = { ...ENCERRADA, id: 'c-2', contactId: 'contato-2', contactDisplayName: 'Cliente 102', contactInternalNote: null };
+
+function listaPronta(extra = {}) {
+  useMyClosedConversations.mockReturnValue({
+    items: [ENCERRADA, OUTRA],
+    hasMore: false,
+    loading: false,
+    status: 'ready',
+    loadMore: vi.fn(),
+    refresh: vi.fn(),
+    erroAoCarregarMais: false,
+    aplicarContatoSalvo: vi.fn(),
+    ...extra,
+  });
+}
+
+// Largura de celular: o jsdom não mede nada, então a conversa recebe a medida
+// por um ResizeObserver de mentira, e a tela responde pela largura pedida.
+function largura(px) {
+  vi.stubGlobal('innerWidth', px);
+  vi.stubGlobal('matchMedia', (consulta) => {
+    const max = /max-width:\s*(\d+)px/.exec(consulta);
+    return { matches: Boolean(max) && px <= Number(max[1]), media: consulta, addEventListener() {}, removeEventListener() {} };
+  });
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(aoMedir) { this.aoMedir = aoMedir; }
+    observe() { this.aoMedir([{ contentRect: { width: px } }]); }
+    disconnect() {}
+  });
+}
+
+const dialogo = () => screen.getByRole('dialog', { name: /Atendimentos encerrados/ });
+const linha = (nome) => screen.getByRole('button', { name: new RegExp(nome) });
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'agent' } });
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
-  useMyClosedConversations.mockReturnValue({
-    items: [CLOSED_CONVERSATION],
-    hasMore: false,
-    loading: false,
-    status: 'ready',
-    loadMore: vi.fn(),
-    refresh: vi.fn(),
-  });
+  listaPronta();
 });
+afterEach(() => vi.unstubAllGlobals());
 
-describe('ClosedConversationsModal', () => {
-  test('shows the agent\'s closed conversations', () => {
+describe('Encerrados: a lista', () => {
+  test('claro, com a lista do atendente e a contagem no título', () => {
     render(<ClosedConversationsModal onClose={vi.fn()} />);
-    expect(screen.getByText('Ana Encerrada')).toBeInTheDocument();
+    expect(dialogo()).toHaveClass('mc');
+    expect(within(dialogo()).getByRole('heading', { level: 2 })).toHaveTextContent('Atendimentos encerrados, 2');
+    expect(dialogo()).toHaveAccessibleName(/^Atendimentos encerrados\s*,\s*2$/);
+    expect(linha('Cliente 101')).toHaveTextContent('Obrigado pelo atendimento!');
+    expect(linha('Cliente 101')).toHaveTextContent('Suporte');
+    expect(document.querySelector('[data-dialog-close]')).toBeNull();
   });
 
-  test('closing the dialog calls onClose', async () => {
+  test('Escape e "Fechar" fecham o diálogo', async () => {
     const onClose = vi.fn();
     render(<ClosedConversationsModal onClose={onClose} />);
-
     await userEvent.keyboard('{Escape}');
-
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  test('selecting a closed conversation opens it read-only, without message input or action buttons', async () => {
-    render(<ClosedConversationsModal onClose={vi.fn()} />);
-
-    await userEvent.click(screen.getByText('Ana Encerrada'));
-
-    expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /fechar atendimento/i })).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/mensagem/i)).not.toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   test('clicking Carregar mais calls loadMore', async () => {
     const loadMore = vi.fn();
-    useMyClosedConversations.mockReturnValue({
-      items: [CLOSED_CONVERSATION],
-      hasMore: true,
-      loading: false,
-      status: 'ready',
-      loadMore,
-      refresh: vi.fn(),
-    });
+    listaPronta({ hasMore: true, loadMore });
     render(<ClosedConversationsModal onClose={vi.fn()} />);
-
+    expect(within(dialogo()).getByRole('heading', { level: 2 })).toHaveTextContent('2+');
     await userEvent.click(screen.getByRole('button', { name: /carregar mais/i }));
-
     expect(loadMore).toHaveBeenCalled();
   });
 
   // CVM-ENC-11: antes o erro do "Carregar mais" voltava calado.
   test('"Carregar mais" que falhou diz o erro, vira "Tentar de novo" e mantém a lista', async () => {
     const loadMore = vi.fn();
-    useMyClosedConversations.mockReturnValue({
-      items: [CLOSED_CONVERSATION], hasMore: true, loading: false, status: 'ready',
-      loadMore, refresh: vi.fn(), erroAoCarregarMais: true,
-    });
+    listaPronta({ hasMore: true, loadMore, erroAoCarregarMais: true });
     render(<ClosedConversationsModal onClose={vi.fn()} />);
     expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível carregar mais atendimentos.');
     await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
     expect(loadMore).toHaveBeenCalledTimes(1);
+    expect(linha('Cliente 101')).toBeInTheDocument();
   });
 
   test('erro da 1ª carga oferece "Tentar de novo"', async () => {
     const refresh = vi.fn();
-    useMyClosedConversations.mockReturnValue({
-      items: [], hasMore: false, loading: false, status: 'error', loadMore: vi.fn(), refresh, erroAoCarregarMais: false,
-    });
+    listaPronta({ items: [], status: 'error', refresh });
     render(<ClosedConversationsModal onClose={vi.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível carregar os atendimentos encerrados.');
     await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   test('em carregamento não mostra "Nenhum atendimento encerrado"', () => {
-    useMyClosedConversations.mockReturnValue({
-      items: [],
-      hasMore: false,
-      loading: false,
-      status: 'loading',
-      loadMore: vi.fn(),
-      refresh: vi.fn(),
-    });
+    listaPronta({ items: [], status: 'loading', loading: true });
     render(<ClosedConversationsModal onClose={vi.fn()} />);
-
     expect(screen.queryByText(/nenhum atendimento encerrado/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Carregando os atendimentos…');
+  });
+
+  test('lista vazia diz que não há nenhum', () => {
+    listaPronta({ items: [] });
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    expect(screen.getByText('Nenhum atendimento encerrado ainda.')).toBeInTheDocument();
+  });
+
+  test('sem permissão, diz — sem fingir lista vazia', () => {
+    listaPronta({ items: [], status: 'forbidden' });
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    expect(screen.getByText('Você não tem permissão para ver esta lista.')).toBeInTheDocument();
+    expect(screen.queryByText(/nenhum atendimento encerrado/i)).not.toBeInTheDocument();
   });
 });
 
-describe('empilhamento da conversa aberta a partir de Encerrados', () => {
-  test('a conversa abre numa camada acima do diálogo que a abriu', async () => {
-    // O diálogo "Encerrados" é um portal no fim do <body>. Enquanto a conversa
-    // era renderizada na árvore do #root, ficava atrás dele e clicar num
-    // atendimento parecia não fazer nada.
-    const { container } = render(<ClosedConversationsModal onClose={vi.fn()} />);
+describe('Encerrados no desktop: lista à esquerda, conversa à direita', () => {
+  test('sem escolha, a direita orienta; ao escolher, a conversa abre no mesmo diálogo, só de leitura', async () => {
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    expect(screen.getByText('Escolha um atendimento na lista para ler a conversa.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByText('Ana Encerrada'));
+    await userEvent.click(linha('Cliente 101'));
 
-    const camadaDaConversa = document.querySelector('[data-dialog="conversation"]');
-    const camadaDeEncerrados = document.querySelector('[data-dialog="closed"]');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(linha('Cliente 101')).toHaveAttribute('aria-current', 'true');
+    expect(linha('Cliente 101')).toHaveFocus();
+    const conversa = document.querySelector('.ae-conversa');
+    expect(within(conversa.querySelector('.ae-cab')).getByRole('heading', { name: 'Cliente 101' })).toBeInTheDocument();
+    // A lista continua ali, ao lado.
+    expect(linha('Cliente 102')).toBeInTheDocument();
+    // Só de leitura: sem compositor, transferir ou encerrar.
+    expect(screen.queryByPlaceholderText(/mensagem/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /encerrar/i })).not.toBeInTheDocument();
+    expect(within(conversa).getByText(/Atendimento encerrado em/)).toBeInTheDocument();
+    // A conversa aprovada (clara), e não uma segunda conversa.
+    expect(conversa).toHaveClass('mesa-conversa');
+    expect(conversa.querySelector('.conv-raiz')).not.toBeNull();
+  });
 
-    expect(camadaDaConversa).toBeTruthy();
-    // Fora da árvore do componente pai: foi para o portal no body.
-    expect(container.contains(camadaDaConversa)).toBe(false);
-    expect(document.body.contains(camadaDaConversa)).toBe(true);
-    // E o tema escuro acompanha o portal, senão o modal sairia claro.
-    expect(camadaDaConversa.closest('.chat-theme')).not.toBeNull();
-    // A camada não é mais um número escrito à mão: vem da profundidade na
-    // pilha. A conversa está um nível acima de quem a abriu, e o nível de
-    // baixo fica inerte enquanto ela existir.
-    const fundoDaConversa = camadaDaConversa.parentElement;
-    const fundoDeEncerrados = camadaDeEncerrados.parentElement;
-    expect(Number(fundoDaConversa.dataset.dialogDepth)).toBeGreaterThan(Number(fundoDeEncerrados.dataset.dialogDepth));
-    expect(fundoDeEncerrados).toHaveAttribute('inert');
-    expect(fundoDaConversa).not.toHaveAttribute('inert');
+  test('Dados do cliente à vista ao lado da conversa, com Encerrado em; Histórico dentro dele', async () => {
+    largura(1366);
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    await userEvent.click(linha('Cliente 101'));
+    const painel = screen.getByRole('complementary', { name: 'Dados do cliente' });
+    expect(within(painel).getByText('Encerrado')).toBeInTheDocument();
+    expect(within(painel).getByText('Nota antiga')).toBeInTheDocument();
+    await userEvent.click(within(painel).getByRole('button', { name: 'Dados do atendimento' }));
+    expect(within(painel).getByText('Encerrado em')).toBeInTheDocument();
+    expect(within(painel).queryByRole('button', { name: /Fechar dados do cliente|Voltar à conversa/ })).not.toBeInTheDocument();
+    expect(within(painel).getByRole('button', { name: 'Histórico' })).toBeInTheDocument();
+  });
 
+  test('trocar de atendimento na lista troca a conversa aberta', async () => {
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    await userEvent.click(linha('Cliente 101'));
+    await userEvent.click(linha('Cliente 102'));
+    const conversa = document.querySelector('.ae-conversa');
+    expect(within(conversa.querySelector('.ae-cab')).getByRole('heading', { name: 'Cliente 102' })).toBeInTheDocument();
+    expect(linha('Cliente 102')).toHaveAttribute('aria-current', 'true');
+    expect(linha('Cliente 101')).not.toHaveAttribute('aria-current');
+  });
+
+  test('o painel do SGP abre dentro do diálogo; o Escape ainda fecha tudo, como antes', async () => {
+    largura(1366);
+    const onClose = vi.fn();
+    render(<ClosedConversationsModal onClose={onClose} />);
+    await userEvent.click(linha('Cliente 101'));
+    await userEvent.click(screen.getByRole('button', { name: 'Consultar SGP' }));
+    const sgp = await screen.findByRole('region', { name: 'Consulta SGP' });
+    expect(dialogo()).toContainElement(sgp);
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('Histórico abre por cima; o Escape fecha só ele e o foco volta ao botão', async () => {
+    largura(1366);
+    api.getConversationHistory.mockResolvedValue([
+      { id: 'at-1', status: 'closed', createdAt: '2026-09-21T14:30:00', closeReasonName: 'Sem conexão', channelName: 'Canal Exemplo' },
+    ]);
+    const onClose = vi.fn();
+    render(<ClosedConversationsModal onClose={onClose} />);
+    await userEvent.click(linha('Cliente 101'));
+    const historico = within(screen.getByRole('complementary', { name: 'Dados do cliente' })).getByRole('button', { name: 'Histórico' });
+    await userEvent.click(historico);
+    expect(await screen.findByRole('dialog', { name: 'Histórico de atendimentos' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Histórico de atendimentos' })).not.toBeInTheDocument();
+    expect(dialogo()).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(historico).toHaveFocus();
   });
 });
 
-// O popup guarda o item da lista no clique. Com o hook DE VERDADE: depois de
-// salvar, fechar e reabrir o mesmo atendimento não pode trazer a nota antiga.
+describe('Encerrados no celular: a lista, depois a conversa em tela cheia', () => {
+  test('a conversa toma a tela com a seta "Voltar para a lista" como única saída, e o foco vai para ela', async () => {
+    largura(390);
+    const onClose = vi.fn();
+    render(<ClosedConversationsModal onClose={onClose} />);
+    expect(dialogo()).toHaveClass('is-celular');
+    expect(screen.getByRole('button', { name: 'Voltar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument();
+
+    await userEvent.click(linha('Cliente 101'));
+    const voltar = screen.getByRole('button', { name: 'Voltar para a lista' });
+    await waitFor(() => expect(voltar).toHaveFocus());
+    // A lista e o cabeçalho dela saem de cena: um controle só.
+    expect(screen.queryByRole('button', { name: /Cliente 102/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Voltar' })).not.toBeInTheDocument();
+
+    await userEvent.click(voltar);
+    expect(linha('Cliente 101')).toBeInTheDocument();
+    await waitFor(() => expect(linha('Cliente 101')).toHaveFocus());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test('Dados do cliente no lugar da conversa: só o voltar do painel; Escape volta um passo por vez', async () => {
+    largura(390);
+    const onClose = vi.fn();
+    render(<ClosedConversationsModal onClose={onClose} />);
+    await userEvent.click(linha('Cliente 101'));
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+
+    const painel = screen.getByRole('complementary', { name: 'Dados do cliente' });
+    expect(within(painel).getByText('Encerrado')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Voltar à conversa' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Voltar para a lista' })).not.toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Dados do cliente' })).toHaveFocus());
+
+    await userEvent.keyboard('{Escape}');
+    expect(linha('Cliente 101')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('Histórico à vista no cabeçalho da conversa', async () => {
+    largura(390);
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    await userEvent.click(linha('Cliente 101'));
+    await userEvent.click(screen.getByRole('button', { name: 'Histórico' }));
+    expect(await screen.findByRole('dialog', { name: 'Histórico de atendimentos' })).toBeInTheDocument();
+  });
+});
+
+// O item aberto vem da lista (pelo id): com o hook DE VERDADE, o que o
+// "Editar cliente" salvou vai para a lista, e reabrir não traz a nota antiga.
 describe('Encerrados: reabrir não traz a nota antiga', () => {
   let encerradosReais;
   beforeAll(async () => {
     encerradosReais = await vi.importActual('../hooks/useMyClosedConversations');
   });
 
-  const ENCERRADA = {
-    id: 'c-old',
-    contactId: 'contato-1',
-    contactDisplayName: 'Ana Encerrada',
-    contactInternalNote: 'Nota antiga',
-    status: 'closed',
-    closedAt: '2026-09-20T15:00:00.000Z',
-    assignedAgentId: 'agent-1',
-  };
-
   beforeEach(() => {
     useMyClosedConversations.mockImplementation(encerradosReais.useMyClosedConversations);
     api.getMyClosedConversations.mockResolvedValue({ items: [ENCERRADA], hasMore: false });
     api.listCities.mockResolvedValue([]);
     api.updateContact.mockReset();
-    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Ana Encerrada', cityId: null, localityId: null, internalNote: 'Nota nova' });
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Cliente 101', cityId: null, localityId: null, internalNote: 'Nota nova' });
   });
 
-  test('salvar, fechar a conversa e reabrir mostra e carrega a nota nova', async () => {
+  test('salvar, voltar à lista e reabrir mostra e carrega a nota nova', async () => {
+    largura(390);
     render(<ClosedConversationsModal onClose={vi.fn()} />);
-    await userEvent.click(await screen.findByText('Ana Encerrada'));
-    await userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Cliente 101/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar cliente' }));
     const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
     const nota = within(edicao).getByLabelText('Nota interna');
     await userEvent.clear(nota);
@@ -192,45 +312,13 @@ describe('Encerrados: reabrir não traz a nota antiga', () => {
     await userEvent.click(within(edicao).getByRole('button', { name: 'Salvar alterações' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
-    expect(screen.queryByRole('dialog', { name: 'Conversa' })).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByText('Ana Encerrada'));
-    const conversa = screen.getByRole('dialog', { name: 'Conversa' });
-    expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
-    await userEvent.click(within(conversa).getByRole('button', { name: /^Editar cliente:/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar à conversa' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar para a lista' }));
+    await userEvent.click(screen.getByRole('button', { name: /Cliente 101/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    const painel = screen.getByRole('complementary', { name: 'Dados do cliente' });
+    expect(within(painel).getByText('Nota nova')).toBeInTheDocument();
+    await userEvent.click(within(painel).getByRole('button', { name: 'Editar cliente' }));
     expect(within(await screen.findByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
-  });
-});
-
-// Encerrados no celular: a conversa é só de leitura, mas os dados do cliente
-// continuam acessíveis — pelo cabeçalho do popup, no lugar da conversa.
-describe('Encerrados: Dados do cliente no celular', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test('o cabeçalho dá acesso ao painel, que substitui a conversa com um único voltar', async () => {
-    vi.stubGlobal('innerWidth', 390);
-    vi.stubGlobal('ResizeObserver', class {
-      constructor(aoMedir) { this.aoMedir = aoMedir; }
-      observe() { this.aoMedir([{ contentRect: { width: 390 } }]); }
-      disconnect() {}
-    });
-    render(<ClosedConversationsModal onClose={vi.fn()} />);
-    await userEvent.click(screen.getByText('Ana Encerrada'));
-    const conversa = screen.getByRole('dialog', { name: 'Conversa' });
-    expect(within(conversa).queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
-
-    await userEvent.click(within(conversa).getByRole('button', { name: 'Dados do cliente' }));
-    const painel = within(conversa).getByRole('complementary', { name: 'Dados do cliente' });
-    expect(painel).toHaveClass('dados-cliente');
-    expect(within(painel).getByText('Encerrado')).toBeInTheDocument();
-    expect(within(conversa).getAllByRole('button', { name: 'Voltar à conversa' })).toHaveLength(1);
-    expect(within(conversa).queryByPlaceholderText(/mensagem/i)).not.toBeInTheDocument();
-    // Um controle só: o "×" do popup some enquanto o painel ocupa a tela…
-    expect(within(conversa).queryByRole('button', { name: 'Fechar conversa' })).not.toBeInTheDocument();
-
-    // …e volta com a conversa.
-    await userEvent.click(within(conversa).getByRole('button', { name: 'Voltar à conversa' }));
-    expect(within(conversa).getByRole('button', { name: 'Fechar conversa' })).toBeInTheDocument();
   });
 });

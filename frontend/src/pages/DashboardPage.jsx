@@ -15,7 +15,6 @@ import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
-import StartConversationModal from '../components/StartConversationModal';
 import TrilhoDaMesa, { IconeDoMenu, iniciais } from '../components/TrilhoDaMesa';
 import { VARIANTE_DA_MESA } from '../components/ConversaDaMesa';
 import { marcaDaInstalacao } from '../branding';
@@ -39,6 +38,9 @@ const ConversaAbertaDaMesa = memo(ConversationView);
 // A transferência chega quando é aberta: a mesa não baixa nem avalia o diálogo
 // (nem a folha dele) antes de alguém pedir (guardas/dialogosSobDemanda.test.jsx).
 const TRANSFERENCIA = sobDemanda(() => import('../components/TransferModal'));
+// A "Nova conversa" também: o formulário e a folha dele chegam no clique
+// (guardas/bloco1SobDemanda.test.jsx), e nada dele roda com o diálogo fechado.
+const NOVA_CONVERSA = sobDemanda(() => import('../components/StartConversationModal'));
 
 // O chevron de recolher/expandir da família DW, girado: para a direita abre a
 // lista estreita, para a esquerda volta à conversa.
@@ -115,19 +117,27 @@ function DashboardPage() {
     dismissTransferNotice();
   }
 
-  const quickCloseConversation = useCallback((conversationId) => {
-    closeConversation(conversationId, null, token).catch(() => {});
-  }, [token]);
+  // Devolve a promessa: quem espera o resultado (e mostra o erro) é a
+  // confirmação da linha (A4-4). Antes a falha era engolida aqui.
+  const quickCloseConversation = useCallback(
+    (conversationId) => closeConversation(conversationId, null, token),
+    [token]
+  );
 
   const [transferringId, setTransferringId] = useState(null);
   const { avisar, alertDialog } = useAlert();
   const fecharTransferencia = useCallback(() => setTransferringId(null), []);
   const transferenciaNaoBaixou = useCallback(() => {
     setTransferringId(null);
-    avisar('Não foi possível abrir a transferência. Verifique a conexão e tente de novo.');
+    avisar('Não foi possível abrir a transferência. Verifique a conexão e tente de novo.', { tom: 'erro' });
   }, [avisar]);
   const Transferencia = useSobDemanda(TRANSFERENCIA, Boolean(transferringId), transferenciaNaoBaixou);
   const [startingConversation, setStartingConversation] = useState(false);
+  const novaConversaNaoBaixou = useCallback(() => {
+    setStartingConversation(false);
+    avisar('Não foi possível abrir a nova conversa. Verifique a conexão e tente de novo.', { tom: 'erro' });
+  }, [avisar]);
+  const NovaConversa = useSobDemanda(NOVA_CONVERSA, startingConversation, novaConversaNaoBaixou);
   const [pendingConversation, setPendingConversation] = useState(null);
 
   // "Editar cliente" salvou, e a rota não emite evento. Sem isto, voltar à
@@ -364,8 +374,8 @@ function DashboardPage() {
         ? <Transferencia conversationId={transferringId} onClose={fecharTransferencia} />
         : <p role="status" className="sr-only">Abrindo a transferência…</p>)}
       {alertDialog}
-      {startingConversation && (
-        <StartConversationModal
+      {startingConversation && (NovaConversa ? (
+        <NovaConversa
           onClose={() => setStartingConversation(false)}
           onCreated={(conversation) => {
             setPendingConversation(conversation);
@@ -373,7 +383,7 @@ function DashboardPage() {
             setStartingConversation(false);
           }}
         />
-      )}
+      ) : <p role="status" className="sr-only">Abrindo a nova conversa…</p>)}
       <TransferNotice notice={transferNotice} onOpen={openTransferred} onDismiss={dismissTransferNotice} />
       {/* Trilho e ícone do botão "Abrir menu" vão para os encaixes que a casca
           reserva na mesa (AppShell.jsx): chegam com esta página, e a casca não

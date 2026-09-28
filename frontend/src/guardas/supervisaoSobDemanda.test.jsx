@@ -33,11 +33,13 @@ function importsEstaticos(relativo) {
     .replace(/^\s*\/\/.*$/gm, '');
   return [...fonte.matchAll(/^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/gm)].map((m) => m[1]);
 }
-const PESADOS = /ConversationModal|ConversationView|TransferModal|PopupDaSupervisao|ConversaDaSupervisao|popup-da-supervisao/;
+const PESADOS = /ClosedConversationsModal|ConversationView|TransferModal|PopupDaSupervisao|ConversaDaSupervisao|popup-da-supervisao/;
 
 const avaliados = vi.hoisted(() => new Set());
-vi.mock('../components/ConversationModal', async (original) => {
-  avaliados.add('ConversationModal');
+// O antigo modal de conversa saiu (28/09): a conversa dos Encerrados mora no
+// diálogo deles. O popup da Supervisão não passa por esse módulo.
+vi.mock('../components/ClosedConversationsModal', async (original) => {
+  avaliados.add('ClosedConversationsModal');
   return original();
 });
 vi.mock('../components/ConversationView', async (original) => {
@@ -101,8 +103,8 @@ describe('Supervisão: a conversa e a transferência chegam sob demanda', () => 
     const lista = screen.getByRole('region', { name: /^Conversas/ });
     await user.click(within(lista).getByRole('button', { name: /Cliente 101/ }));
     await screen.findByRole('dialog', { name: /^Conversa com/ });
-    // O popup novo não passa pelo modal antigo (que ficou só nos Encerrados).
-    expect(avaliados.has('ConversationModal')).toBe(false);
+    // O popup não passa pelo diálogo dos Encerrados.
+    expect(avaliados.has('ClosedConversationsModal')).toBe(false);
     expect(avaliados.has('ConversationView')).toBe(true);
     expect(avaliados.has('TransferModal')).toBe(false);
 

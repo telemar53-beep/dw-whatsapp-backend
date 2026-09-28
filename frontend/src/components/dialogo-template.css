@@ -1,0 +1,125 @@
+/* ---------- Enviar template (Bloco 1) ----------
+   Chega junto com o diálogo, sob demanda. Moldura, campos, botões, erro fixo
+   e rodapé são da base clara (ui/dialogo-claro.css). Aqui: a lista de
+   escolha (o rádio do Transferir aprovado) à esquerda e a prévia com as
+   variáveis à direita, presa no alto enquanto a lista rola — o corpo continua
+   sendo o único eixo de rolagem. No celular, uma coluna. */
+
+[data-dialog='send-template'].dw-dialog.mc { --mc-largura: 820px; height: min(640px, calc(100dvh - 48px)); }
+[data-dialog='send-template'].dw-dialog.mc .te-grade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: start;
+  gap: 16px 20px;
+  padding-top: 4px;
+}
+
+/* ---------- Lista ---------- */
+[data-dialog='send-template'].dw-dialog.mc .te-lista { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+[data-dialog='send-template'].dw-dialog.mc .te-linha {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--mc-linha);
+  border-radius: 10px;
+  background: var(--mc-papel);
+  text-align: left;
+  color: var(--mc-texto);
+  cursor: pointer;
+}
+[data-dialog='send-template'].dw-dialog.mc .te-linha:hover { background: var(--mc-suave); }
+[data-dialog='send-template'].dw-dialog.mc .te-linha[aria-checked='true'] { border-color: var(--mc-indigo-linha); background: var(--mc-indigo-claro); }
+[data-dialog='send-template'].dw-dialog.mc .te-linha:focus-visible { outline: 2px solid var(--mc-indigo); outline-offset: -2px; }
+[data-dialog='send-template'].dw-dialog.mc .te-linha-texto { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+[data-dialog='send-template'].dw-dialog.mc .te-nome {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+[data-dialog='send-template'].dw-dialog.mc .te-meta { display: flex; flex-wrap: wrap; gap: 0 10px; font-size: 12px; line-height: 16px; color: var(--mc-texto-2); }
+[data-dialog='send-template'].dw-dialog.mc .te-corpo {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--mc-texto-2);
+}
+/* A marca de escolha: o anel vira anel grosso índigo, como o rádio nativo. */
+[data-dialog='send-template'].dw-dialog.mc .te-marca {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1.5px solid #b3b9c4;
+  border-radius: 50%;
+  background: var(--mc-papel);
+}
+[data-dialog='send-template'].dw-dialog.mc .te-linha[aria-checked='true'] .te-marca { border: 5px solid var(--mc-indigo); }
+
+/* ---------- Prévia e variáveis ---------- */
+[data-dialog='send-template'].dw-dialog.mc .te-compor {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+[data-dialog='send-template'].dw-dialog.mc .te-previa {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #eef0f4;
+}
+[data-dialog='send-template'].dw-dialog.mc .te-previa-titulo { margin: 0 0 4px; font-size: 12.5px; line-height: 17px; font-weight: 600; color: var(--mc-texto-2); }
+/* A bolha como o cliente vai ver: papel sobre o fundo da conversa. */
+[data-dialog='send-template'].dw-dialog.mc .te-bolha {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border-top-left-radius: 3px;
+  background: var(--mc-papel);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--mc-texto);
+}
+[data-dialog='send-template'].dw-dialog.mc .te-botao-previa {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--mc-papel);
+  text-align: center;
+  font-size: 13.5px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--mc-indigo-texto);
+}
+[data-dialog='send-template'].dw-dialog.mc .te-previa .mc-ajuda { margin-top: 4px; }
+[data-dialog='send-template'].dw-dialog.mc .te-previa-vazia {
+  margin: 0;
+  padding: 24px 12px;
+  border: 1px dashed var(--mc-borda);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 13.5px;
+  line-height: 19px;
+  color: var(--mc-texto-2);
+}
+[data-dialog='send-template'].dw-dialog.mc .te-variaveis { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- Celular: uma coluna, a prévia depois da lista ---------- */
+[data-dialog='send-template'].dw-dialog.mc.is-celular { height: 100dvh; }
+[data-dialog='send-template'].dw-dialog.mc.is-celular .te-grade { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+[data-dialog='send-template'].dw-dialog.mc.is-celular .te-compor { position: static; }
+[data-dialog='send-template'].dw-dialog.mc.is-celular .te-linha { min-height: 56px; }

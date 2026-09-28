@@ -1,0 +1,144 @@
+/* ---------- Nossa equipe (Bloco 1) ----------
+   Chega junto com o popup, sob demanda. A moldura, o cabeçalho, a busca, o
+   rodapé e os estados são da base clara (ui/dialogo-claro.css); aqui fica o
+   que é só da equipe: os filtros e a linha — a do Transferir aprovado, sem o
+   rádio. Toda regra começa em [data-dialog='team'].mc. */
+
+[data-dialog='team'].dw-dialog.mc { --mc-largura: 640px; height: min(640px, calc(100dvh - 48px)); }
+
+/* ---------- Busca e filtros ---------- */
+[data-dialog='team'].dw-dialog.mc .eq-ferramentas {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+  padding: 0 20px 12px;
+  border-bottom: 1px solid var(--mc-linha);
+}
+[data-dialog='team'].dw-dialog.mc .eq-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-dialog='team'].dw-dialog.mc .eq-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--mc-borda);
+  border-radius: 999px;
+  background: var(--mc-papel);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--mc-texto);
+  cursor: pointer;
+}
+[data-dialog='team'].dw-dialog.mc .eq-filtro:hover { background: var(--mc-suave); }
+[data-dialog='team'].dw-dialog.mc .eq-filtro[aria-pressed='true'] {
+  border-color: var(--mc-indigo-linha);
+  background: var(--mc-indigo-claro);
+  color: var(--mc-indigo-texto);
+}
+[data-dialog='team'].dw-dialog.mc .eq-filtro-total { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--mc-texto-2); }
+[data-dialog='team'].dw-dialog.mc .eq-filtro[aria-pressed='true'] .eq-filtro-total { color: var(--mc-indigo-texto); }
+
+/* ---------- Lista ---------- */
+[data-dialog='team'].dw-dialog.mc .eq-corpo { padding-top: 0; }
+[data-dialog='team'].dw-dialog.mc .eq-grupo-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 4px 6px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--mc-texto-2);
+}
+[data-dialog='team'].dw-dialog.mc .eq-grupo-total { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--mc-texto-3); }
+[data-dialog='team'].dw-dialog.mc .eq-lista { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--mc-linha); }
+[data-dialog='team'].dw-dialog.mc .eq-lista > li + li { border-top: 1px solid var(--mc-linha); }
+[data-dialog='team'].dw-dialog.mc .eq-linha {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 58px;
+  padding: 8px 12px;
+}
+[data-dialog='team'].dw-dialog.mc .eq-avatar { display: flex; }
+[data-dialog='team'].dw-dialog.mc :is(.eq-quem, .eq-carga) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+[data-dialog='team'].dw-dialog.mc .eq-carga { padding-left: 14px; border-left: 1px solid var(--mc-linha); }
+[data-dialog='team'].dw-dialog.mc .eq-nome {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--mc-texto);
+}
+[data-dialog='team'].dw-dialog.mc .eq-presenca {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--mc-texto-2);
+}
+[data-dialog='team'].dw-dialog.mc .eq-presenca i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--mc-cinza-ponto); }
+[data-dialog='team'].dw-dialog.mc .eq-presenca[data-tom='verde'] { color: var(--mc-verde); }
+[data-dialog='team'].dw-dialog.mc .eq-presenca[data-tom='verde'] i { background: var(--mc-verde-ponto); }
+[data-dialog='team'].dw-dialog.mc .eq-carga-num { font-size: 13.5px; line-height: 18px; color: var(--mc-texto); }
+[data-dialog='team'].dw-dialog.mc .eq-carga-dica {
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 17px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--mc-texto-2);
+}
+
+/* ---------- Estados ---------- */
+[data-dialog='team'].dw-dialog.mc .eq-carregando { padding: 4px 0; }
+[data-dialog='team'].dw-dialog.mc .eq-carregando .mc-carregando { display: block; padding: 12px 4px 8px; }
+[data-dialog='team'].dw-dialog.mc .eq-carregando-linha {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  height: 58px;
+  padding: 0 12px;
+  border-top: 1px solid var(--mc-linha);
+}
+[data-dialog='team'].dw-dialog.mc .eq-carregando-linha i { width: 40px; height: 40px; border-radius: 50%; background: #eef0f4; }
+[data-dialog='team'].dw-dialog.mc .eq-carregando-linha b { width: 70%; height: 12px; border-radius: 6px; background: #eef0f4; }
+[data-dialog='team'].dw-dialog.mc .eq-sem-resultado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mc-texto-2);
+}
+[data-dialog='team'].dw-dialog.mc .eq-sem-resultado p { margin: 0; }
+
+/* ---------- Celular ---------- */
+[data-dialog='team'].dw-dialog.mc.is-celular { height: 100dvh; }
+[data-dialog='team'].dw-dialog.mc.is-celular .eq-ferramentas { padding: 0 12px 10px; }
+[data-dialog='team'].dw-dialog.mc.is-celular .eq-filtro { height: 36px; }
+[data-dialog='team'].dw-dialog.mc.is-celular .eq-linha {
+  grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px 8px;
+}
+[data-dialog='team'].dw-dialog.mc.is-celular .eq-carga { padding-left: 10px; }
+[data-dialog='team'].dw-dialog.mc.is-celular .eq-nome { font-size: 13.5px; line-height: 18px; }
+[data-dialog='team'].dw-dialog.mc.is-celular :is(.eq-presenca, .eq-carga-num) { font-size: 12px; line-height: 16px; }
+/* No celular a última atividade quebra a linha em vez de sumir nas reticências. */
+[data-dialog='team'].dw-dialog.mc.is-celular .eq-carga-dica { font-size: 11.5px; line-height: 15px; white-space: normal; }
+@media (pointer: coarse) {
+  [data-dialog='team'].dw-dialog.mc .eq-filtro { min-height: 44px; }
+}

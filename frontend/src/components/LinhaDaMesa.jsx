@@ -46,10 +46,18 @@ function LinhaDaMesa({ conversation, onSelect, onQuickClose, unread, selected, s
     }
   }
 
-  async function handleQuickClose(event) {
+  // A confirmação espera a resposta do servidor (A4-4): falhou, o erro fica
+  // nela, e ela continua aberta.
+  function handleQuickClose(event) {
     event.stopPropagation();
-    const ok = await confirm('Finalizar esse atendimento sem informar o motivo?', { danger: true, confirmLabel: 'Finalizar' });
-    if (ok) onQuickClose(conversation.id);
+    confirm(`O atendimento de ${nameLabel} será finalizado sem informar o motivo.`, {
+      title: 'Finalizar sem motivo?',
+      danger: true,
+      confirmLabel: 'Finalizar',
+      busyLabel: 'Finalizando…',
+      erroPadrao: 'Não foi possível finalizar este atendimento. Tente de novo.',
+      acao: () => onQuickClose(conversation.id),
+    });
   }
 
   return (

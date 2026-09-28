@@ -46,10 +46,8 @@
 /* Conexão: no trilho não cabe a frase; fica um ponto âmbar com halo num alvo
    do mesmo tamanho dos outros, e a frase inteira na dica que o menu já tem.
    Sem placa de fundo: sobre o índigo ela ficava marrom. */
-.worknav[data-variante=mesa] .worknav-connection{justify-content:center;width:44px;height:44px;margin:0;padding:0;border:0;border-radius:10px;background:transparent;color:#f5c177}
-.worknav-connection-ponto{width:10px;height:10px;flex:none;border-radius:50%;background:#f2a93c;outline:3px solid rgba(242,169,60,.28)}
 @media(max-height:640px){.worknav[data-variante=mesa] :is(.worknav-destinations,.worknav-personal){gap:4px}.worknav[data-variante=mesa] .worknav-brand{margin-bottom:10px}}
-@media(max-height:560px){.worknav[data-variante=mesa] :is(.worknav-item,.worknav-account-trigger,.worknav-connection){height:36px}.worknav[data-variante=mesa] :is(.worknav-destinations,.worknav-personal){gap:2px}}
+@media(max-height:560px){.worknav[data-variante=mesa] :is(.worknav-item,.worknav-account-trigger){height:36px}.worknav[data-variante=mesa] :is(.worknav-destinations,.worknav-personal){gap:2px}}
 /* Celular: a gaveta tem largura para texto, então a dica volta a ser rótulo,
    e a marca se alinha com os ícones em vez de ficar centralizada. */
 @media(max-width:767px){
@@ -57,11 +55,10 @@
   .worknav[data-variante=mesa].is-mobile-open .worknav-brand{justify-content:flex-start;margin:4px 0 16px 10px}
   .worknav[data-variante=mesa].is-mobile-open .worknav-destinations{align-items:stretch;gap:4px;overflow-y:auto}
   .worknav[data-variante=mesa].is-mobile-open .worknav-personal{align-items:stretch;gap:4px;margin-inline:0}
-  .worknav[data-variante=mesa].is-mobile-open :is(.worknav-item,.worknav-account-trigger,.worknav-connection){display:flex;justify-content:flex-start;gap:12px;width:100%;padding:0 10px}
+  .worknav[data-variante=mesa].is-mobile-open :is(.worknav-item,.worknav-account-trigger){display:flex;justify-content:flex-start;gap:12px;width:100%;padding:0 10px}
   .worknav[data-variante=mesa].is-mobile-open .worknav-dica{position:static;transform:none;padding:0;background:none;color:inherit;font-size:13.5px;font-weight:500;opacity:1;visibility:visible}
   .worknav[data-variante=mesa].is-mobile-open .worknav-item[aria-current=page]::before{left:-10px}
   /* O ponto de conexão no mesmo eixo dos ícones de 20px. */
-  .worknav[data-variante=mesa].is-mobile-open .worknav-connection-ponto{margin-inline:5px}
   /* Véu no tom do trilho, não preto puro. */
   [data-encaixe='trilho'] > div[aria-hidden='true']{background:rgba(15,13,38,.55)}
 }

@@ -1,5 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import StartConversationModal from './StartConversationModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -269,6 +269,13 @@ describe('StartConversationModal — o que acontece depois do template', () => {
     await waitFor(() => expect(screen.getByLabelText(/telefone/i)).toHaveFocus());
   });
 
+  test('o título é o do botão que abre: "Nova conversa"', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    expect(screen.getByRole('dialog', { name: 'Nova conversa' })).toHaveClass('mc');
+    await screen.findByText('Berg');
+  });
+
   test('mensagem vazia: erro na tela junto do campo, como o do telefone, e nada é enviado (A1-10)', async () => {
     api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
     render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
@@ -279,5 +286,120 @@ describe('StartConversationModal — o que acontece depois do template', () => {
     expect(screen.getByLabelText(/mensagem/i)).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByLabelText(/mensagem/i)).not.toBeRequired();
     expect(api.startConversation).not.toHaveBeenCalled();
+  });
+});
+
+function largura(px) {
+  vi.stubGlobal('matchMedia', (consulta) => {
+    const max = /max-width:\s*(\d+)px/.exec(consulta);
+    return { matches: Boolean(max) && px <= Number(max[1]), media: consulta, addEventListener() {}, removeEventListener() {} };
+  });
+}
+
+// A1-6: a seção de conteúdo (mensagem ou template) só aparece depois de saber
+// o tipo do canal — antes, o campo de mensagem aparecia e trocava pelo template.
+// A1-7: o erro do envio fica fixo entre o corpo e o rodapé.
+describe('Nova conversa: conteúdo só com o tipo do canal, erro fixo', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const OFICIAL = [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', status: 'connected' }];
+
+  test('carregando os canais: nem mensagem nem template (A1-6)', () => {
+    api.listChannelsForAgent.mockReturnValue(new Promise(() => {}));
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    expect(screen.queryByLabelText(/mensagem/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^template$/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/telefone/i)).toBeInTheDocument();
+  });
+
+  test('canal oficial: nunca mostra o campo de mensagem, nem enquanto os templates chegam (A1-6)', async () => {
+    let entregar;
+    api.listChannelsForAgent.mockResolvedValue(OFICIAL);
+    api.listTemplatesForChannel.mockReturnValue(new Promise((r) => { entregar = r; }));
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    expect(await screen.findByText('Carregando templates…')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/mensagem/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Nenhum template aprovado para este canal.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Iniciar conversa' })).toBeDisabled();
+    expect(screen.getByText('Aguarde a lista de templates.')).toBeInTheDocument();
+    await act(async () => { entregar([{ id: 'tpl-1', name: 'fatura_vencida', variableCount: 0 }]); });
+    expect(screen.getByLabelText(/^template$/i)).toHaveValue('tpl-1');
+  });
+
+  test('falha nos templates: diz, oferece "Tentar de novo" e não finge lista vazia', async () => {
+    api.listChannelsForAgent.mockResolvedValue(OFICIAL);
+    api.listTemplatesForChannel
+      .mockRejectedValueOnce(new Error('rede'))
+      .mockResolvedValueOnce([{ id: 'tpl-1', name: 'fatura_vencida', variableCount: 0 }]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    expect(await screen.findByText('Não foi possível carregar os templates.')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum template aprovado para este canal.')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByLabelText(/^template$/i)).toHaveValue('tpl-1');
+    expect(api.listTemplatesForChannel).toHaveBeenCalledTimes(2);
+  });
+
+  test('resposta atrasada de outro canal não vira a lista do canal escolhido', async () => {
+    const pedidos = {};
+    api.listChannelsForAgent.mockResolvedValue([
+      { id: 'ch-a', type: 'meta_cloud', name: 'Oficial A', status: 'connected' },
+      { id: 'ch-b', type: 'meta_cloud', name: 'Oficial B', status: 'connected' },
+    ]);
+    api.listTemplatesForChannel.mockImplementation((canal) => new Promise((r) => { pedidos[canal] = r; }));
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    await screen.findByRole('option', { name: 'Oficial B' });
+    await userEvent.selectOptions(screen.getByLabelText('Canal'), 'ch-b');
+    await act(async () => { pedidos['ch-b']([{ id: 'tpl-b', name: 'do_b', variableCount: 0 }]); });
+    await act(async () => { pedidos['ch-a']([{ id: 'tpl-a', name: 'do_a', variableCount: 0 }]); });
+    expect(screen.getByLabelText(/^template$/i)).toHaveValue('tpl-b');
+    expect(screen.queryByRole('option', { name: 'do_a' })).not.toBeInTheDocument();
+  });
+
+  test('erro do envio: fixo acima do rodapé, fora do corpo que rola (A1-7); um envio por clique', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    let recusar;
+    api.startConversation.mockReturnValue(new Promise((_, r) => { recusar = r; }));
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    await screen.findByText('Berg');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '98999990000');
+    await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi');
+    const iniciar = screen.getByRole('button', { name: 'Iniciar conversa' });
+    await userEvent.click(iniciar);
+    await userEvent.click(iniciar);
+    expect(api.startConversation).toHaveBeenCalledTimes(1);
+    await act(async () => { recusar({ body: { error: 'There is already an open conversation with this contact on this channel' } }); });
+    const erro = screen.getByRole('alert');
+    expect(erro).toHaveTextContent('Já existe um atendimento aberto com este cliente neste canal.');
+    expect(erro).toHaveClass('mc-erro');
+    expect(erro.closest('.mc-corpo')).toBeNull();
+  });
+
+  test('celular: tela cheia, só a seta de voltar; campos com a classe de 16 px', async () => {
+    largura(390);
+    const onClose = vi.fn();
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<StartConversationModal onClose={onClose} onCreated={vi.fn()} />);
+    await screen.findByText('Berg');
+    const dialogo = screen.getByRole('dialog', { name: 'Nova conversa' });
+    expect(dialogo).toHaveClass('is-celular');
+    expect(screen.queryByRole('button', { name: 'Fechar' })).not.toBeInTheDocument();
+    for (const campo of [screen.getByLabelText(/telefone/i), screen.getByLabelText(/país/i), screen.getByLabelText(/mensagem/i)]) {
+      expect(campo).toHaveClass('mc-entrada');
+    }
+    // No celular o teclado não sobe sozinho: o foco começa no diálogo.
+    expect(dialogo).toHaveFocus();
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('desktop: "Fechar" no cabeçalho e Escape fecham; sem "×"', async () => {
+    const onClose = vi.fn();
+    api.listChannelsForAgent.mockResolvedValue([]);
+    render(<StartConversationModal onClose={onClose} onCreated={vi.fn()} />);
+    await screen.findByText(/nenhum canal conectado/i);
+    expect(document.querySelector('[data-dialog-close]')).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

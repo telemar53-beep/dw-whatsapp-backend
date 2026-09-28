@@ -5,13 +5,13 @@ import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useAlert } from '../hooks/useAlert';
 import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
 import { useCompanyName } from '../hooks/useCompanyName';
-import { NAV_ITEMS, SETTINGS_SECTIONS, hasLevel } from '../navigation/navItems';
+import { NAV_ITEMS, hasLevel } from '../navigation/navItems';
 import { marcaDaInstalacao } from '../branding';
 import AgentAvatar from './AgentAvatar';
 import TeamPanel from './TeamPanel';
 import { primeiroFocavel, prenderTabEm } from './ui/Dialog';
 import {
-  IconeAtendimento, IconeFilas, IconeCanais, IconeCampanhas, IconeRelatorios, IconeConfiguracoes,
+  IconeAtendimento, IconeFilas, IconeCampanhas, IconeRelatorios, IconeConfiguracoes,
   IconeEncerrados, IconeSom, IconeSomDesativado, IconeMenu,
 } from './icones';
 import './trilho-mesa.css';
@@ -30,16 +30,14 @@ import './trilho-mesa.css';
 const ENCERRADOS = sobDemanda(() => import('./ClosedConversationsModal'));
 
 // Os mesmos destinos do menu, com as mesmas rotas e os mesmos níveis de acesso
-// (hasLevel) — só o nome e o ícone mudam. "Filas" é a Supervisão e "Canais" é
-// Configurações > Números conectados; nada de rota ou permissão nova. A ordem
-// aqui é a ordem na tela.
-const CANAIS = SETTINGS_SECTIONS.flatMap((grupo) => grupo.items).find((item) => item.key === 'canais');
+// (hasLevel) — só o nome e o ícone mudam. "Filas" é a Supervisão; nada de
+// rota ou permissão nova. A ordem aqui é a ordem na tela. Canais (Números
+// conectados) não tem atalho: fica em Configurações, que então é o ativo.
 const doMenu = (key) => NAV_ITEMS.find((item) => item.key === key);
 const DESTINOS = [
   { ...doMenu('atendimento'), icone: IconeAtendimento },
   { ...doMenu('supervisao'), label: 'Filas (Supervisão)', icone: IconeFilas },
   { key: 'equipe' },
-  { key: CANAIS.key, label: 'Canais (Números conectados)', to: CANAIS.to, match: `${CANAIS.to}/*`, level: CANAIS.level, icone: IconeCanais },
   { ...doMenu('campanhas'), icone: IconeCampanhas },
   { ...doMenu('relatorios'), icone: IconeRelatorios },
 ];

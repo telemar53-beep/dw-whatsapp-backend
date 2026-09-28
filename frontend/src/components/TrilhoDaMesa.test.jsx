@@ -27,10 +27,10 @@ let logout;
 let toggleMuted;
 let retangulos;
 
-function renderTrilho(agent, props = {}) {
+function renderTrilho(agent, props = {}, rota = '/') {
   useAuth.mockReturnValue({ agent, logout });
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[rota]}>
       <TrilhoDaMesa onProfileClick={vi.fn()} {...props} />
     </MemoryRouter>
   );
@@ -76,10 +76,11 @@ describe('trilho da mesa', () => {
     }
   });
 
-  test('admin: Filas leva à Supervisão, Canais aos números conectados; Campanhas e Configurações como hoje', () => {
+  test('admin: Filas leva à Supervisão; Campanhas e Configurações como hoje; sem atalho de Canais', () => {
     renderTrilho(ADMIN);
     expect(screen.getByRole('link', { name: /^filas/i })).toHaveAttribute('href', '/supervisao');
-    expect(screen.getByRole('link', { name: /^canais/i })).toHaveAttribute('href', '/configuracoes/canais');
+    // Canais (Números conectados) saiu do trilho: mora em Configurações.
+    expect(screen.queryByRole('link', { name: /canais|números conectados/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Campanhas' })).toHaveAttribute('href', '/campanhas');
     expect(screen.getByRole('link', { name: 'Configurações' })).toHaveAttribute('href', '/configuracoes');
     // Encerrados continua só do atendente, como no menu das outras páginas.
@@ -90,6 +91,16 @@ describe('trilho da mesa', () => {
     renderTrilho(GERENTE);
     expect(screen.getByRole('link', { name: /^filas/i })).toHaveAttribute('href', '/supervisao');
     expect(screen.getByRole('link', { name: 'Campanhas' })).toBeInTheDocument();
+  });
+
+  test('na rota de Canais, quem fica ativo é Configurações — também na gaveta do celular', () => {
+    for (const mobileOpen of [false, true]) {
+      const { unmount } = renderTrilho(ADMIN, { mobileOpen }, '/configuracoes/canais');
+      expect(screen.queryByRole('link', { name: /canais|números conectados/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Configurações' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Atendimento' })).not.toHaveAttribute('aria-current');
+      unmount();
+    }
   });
 
   test('na mesa, Atendimento é a página atual', () => {
@@ -179,7 +190,9 @@ describe('trilho da mesa', () => {
   test('todo ícone do trilho é da família DW, nenhum do conjunto antigo', () => {
     renderTrilho(ADMIN);
     const desenhos = [...trilho().querySelectorAll('svg')];
-    expect(desenhos.length).toBeGreaterThanOrEqual(8);
+    // 7 no admin: Atendimento, Filas, Equipe, Campanhas, Relatórios, som e
+    // Configurações (Canais saiu do trilho).
+    expect(desenhos.length).toBeGreaterThanOrEqual(7);
     desenhos.forEach((svg) => {
       expect(svg.getAttribute('viewBox')).toBe('0 0 24 24');
       expect(svg.getAttribute('stroke-width')).toBe('1.75');

@@ -3,9 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=3" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=3" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png?v=3" />
+    <!-- Favicon com fundo índigo próprio: legível em aba clara e escura. Cada
+         tamanho é desenhado à parte. O .ico traz os mesmos quatro tamanhos,
+         mas é anunciado só como 48x48, o maior deles: anunciado com os quatro,
+         o Chrome o escolhia no lugar dos PNGs (medido numa aba real, em
+         qualquer ordem), baixando 5 KB por ~1. Assim o PNG do tamanho certo
+         vence e o .ico fica de alternativa. `?v=` muda a cada troca de
+         desenho: o navegador guarda favicon num cache próprio, teimoso. -->
+    <link rel="icon" type="image/x-icon" sizes="48x48" href="/favicon.ico?v=4" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=4" />
+    <link rel="icon" type="image/png" sizes="24x24" href="/favicon-24.png?v=4" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=4" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png?v=4" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png?v=4" />
     <!-- Titulo neutro: o nome real da empresa entra em runtime, via
          useTituloDaAba (GET /api/public/company). O favicon ainda e o
          arquivo desta instalacao: o backend nao entrega marca por tenant. -->

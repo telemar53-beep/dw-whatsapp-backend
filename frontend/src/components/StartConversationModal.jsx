@@ -302,7 +302,7 @@ function StartConversationModal({ onClose, onCreated }) {
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="98 98500-4187"
+                placeholder="(00) 00000-0000"
                 inputMode="tel"
                 autoComplete="tel-national"
                 className="mc-entrada"

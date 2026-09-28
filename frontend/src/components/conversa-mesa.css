@@ -28,7 +28,8 @@
   --cm-texto-3: #6b7180;
   --cm-indigo: #4f46e5;
   --cm-indigo-texto: #3f37c9;
-  --cm-enviada: #e6e4fb;
+  /* Um degrau mais clara que #e6e4fb: o lilás competia com os tiques. */
+  --cm-enviada: #e9e7fc;
   --cm-ia: #5b3fb3;
 
   /* Tokens do tema que os componentes de dentro leem. Laranja (`chat-orange`)
@@ -192,7 +193,7 @@
 .chat-workspace .mesa-conversa .chat-workspace-bubble .text-chat-faint { color: var(--cm-texto-2); font-size: 11.5px; }
 .chat-workspace .mesa-conversa .chat-workspace-bubble :is([title='Enviado'], [title='Entregue']) { color: var(--cm-texto-3); }
 /* Selo "IA" e tique são irmãos na linha da hora, e a regra do selo no
-   dashboard.css pinta os dois: "lido" perdia o verde e "falha" o vermelho na
+   dashboard.css pinta os dois: "lido" perdia o azul e "falha" o vermelho na
    mensagem da IA. Aqui só o selo leva a cor da IA; o tique volta às classes
    dele (revert-layer desfaz as regras sem camada e devolve as utilities). */
 .chat-workspace .mesa-conversa .chat-workspace-bubble.is-ai .text-chat-faint > span:not([title]) { background: var(--chat-ai-chip); color: var(--chat-ai-chip-ink); }

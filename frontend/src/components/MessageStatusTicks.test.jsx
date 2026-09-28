@@ -1,4 +1,7 @@
 import { describe, test, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { render, screen } from '@testing-library/react';
 import MessageStatusTicks from './MessageStatusTicks';
 
@@ -32,8 +35,34 @@ describe('MessageStatusTicks', () => {
 
     expect(lido.tiques).toBe(2);
     expect(lido.className).not.toBe(entregue.className);
-    // O token aprovado para "lido", e nao um hexadecimal solto.
-    expect(lido.className).toMatch(/text-chat-online/);
+    // O token próprio de "lido", e nao um hexadecimal solto. O verde de
+    // `chat-online` (conexão, status) ficava perto dos cinzas num notebook real.
+    expect(lido.className).toMatch(/text-chat-lido/);
+    expect(lido.className).not.toMatch(/text-chat-online/);
+  });
+
+  test('o azul de "lido" é um token só, azul, que nenhuma folha redefine', () => {
+    const RAIZ = dirname(dirname(fileURLToPath(import.meta.url)));
+    const folhas = [];
+    (function varrer(pasta) {
+      for (const nome of readdirSync(pasta)) {
+        const caminho = join(pasta, nome);
+        if (statSync(caminho).isDirectory()) varrer(caminho);
+        else if (nome.endsWith('.css')) folhas.push(caminho);
+      }
+    })(RAIZ);
+    const definicoes = folhas.flatMap((caminho) =>
+      [...readFileSync(caminho, 'utf8').matchAll(/--color-chat-lido:\s*(#[0-9a-f]{6})/gi)].map((m) => ({ caminho, hex: m[1] })));
+
+    // Uma definição, no tema: Mesa, Supervisão e Encerrados leem a mesma.
+    expect(definicoes).toHaveLength(1);
+    expect(definicoes[0].caminho.endsWith('index.css')).toBe(true);
+    // Azul (matiz entre 190° e 220°), nunca o verde de antes.
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(definicoes[0].hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const matiz = max === b ? 60 * ((r - g) / (max - min)) + 240 : max === g ? 60 * ((b - r) / (max - min)) + 120 : 60 * (((g - b) / (max - min)) % 6);
+    expect(matiz).toBeGreaterThanOrEqual(190);
+    expect(matiz).toBeLessThanOrEqual(220);
   });
 
   test('renders a failure indicator for a failed message', () => {

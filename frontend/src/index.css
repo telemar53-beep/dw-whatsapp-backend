@@ -102,6 +102,11 @@
   --color-chat-orange: #f28c45;
   --color-chat-orange-ink: #2a1b12;
   --color-chat-online: #33d9a6;
+  /* Dois traços de "lido": o azul de leitura do WhatsApp (#53bdeb) no mesmo
+     matiz, escurecido até passar de 3:1 sobre a bolha enviada e as listas
+     claras. O verde de `chat-online` ficava perto dos cinzas num notebook real.
+     Uma definição só: Mesa, Supervisão e Encerrados leem esta. */
+  --color-chat-lido: #0288cd;
 }
 
 /* ---------- Vidro fumê nos pop-ups da página de atendimento ----------

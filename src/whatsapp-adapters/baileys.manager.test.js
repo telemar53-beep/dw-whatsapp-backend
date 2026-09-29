@@ -1072,7 +1072,7 @@ describe('baileys.manager', () => {
       expect(params.order.subtotal).toEqual({ value: 13500, offset: 100 });
       expect(params.order.items).toEqual([
         {
-          name: 'Fatura \u00b7 vence 15/09/2026',
+          name: '2\u00aa via v\u00e1lida at\u00e9 15/09/2026',
           amount: { value: 13500, offset: 100 },
           quantity: 1,
           sale_amount: { value: 13500, offset: 100 },
@@ -1105,8 +1105,10 @@ describe('baileys.manager', () => {
       const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'automacao' }, 'Provedor X');
       expect(Object.keys(content)).toEqual(['interactiveMessage']);
       expect(content.interactiveMessage.nativeFlowMessage.messageVersion).toBe(1);
-      // Título, corpo e rodapé são o texto visível do cartão no celular.
-      expect(content.interactiveMessage.header).toEqual({ title: 'Fatura · vence 15/09/2026', hasMediaAttachment: false });
+      // Título, corpo e rodapé são o texto visível do cartão no celular. A data é a da 2ª via
+      // (fatura2via): num título atrasado, o dia da reemissão, e não o vencimento original.
+      expect(content.interactiveMessage.header).toEqual({ title: '2ª via válida até 15/09/2026', hasMediaAttachment: false });
+      expect(content.interactiveMessage.header.title).not.toMatch(/vence/i);
       expect(content.interactiveMessage.body.text.replace(/ /g, ' ')).toBe('R$ 135,00');
       expect(content.interactiveMessage.footer).toEqual({ text: 'Pix para pagamento' });
     });

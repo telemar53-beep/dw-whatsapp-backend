@@ -797,7 +797,7 @@ describe('buildPixOrderDetailsBody', () => {
       type: 'interactive',
       interactive: {
         type: 'order_details',
-        body: { text: 'Pix da fatura - vence 15/09/2026' },
+        body: { text: 'Pix da fatura - validade da 2a via: 15/09/2026' },
         action: {
           name: 'review_and_pay',
           parameters: {
@@ -822,7 +822,7 @@ describe('buildPixOrderDetailsBody', () => {
               items: [
                 {
                   retailer_id: '4321',
-                  name: 'Fatura - vence 15/09/2026',
+                  name: 'Fatura - validade da 2a via: 15/09/2026',
                   amount: { value: 13500, offset: 100 },
                   quantity: 1,
                 },
@@ -836,6 +836,19 @@ describe('buildPixOrderDetailsBody', () => {
         },
       },
     });
+  });
+
+  // A data do cartao vem da 2a via (fatura2via): num titulo atrasado, o dia da reemissao, e nao o
+  // vencimento original (bug de 28/09/2026). Os textos visiveis seguem em ASCII puro, a mesma
+  // precaucao do titulo contra recusa da Meta.
+  test('o texto visivel chama a data de validade da 2a via, nunca de "vence", e fica em ASCII', () => {
+    const body = buildPixOrderDetailsBody('5511999998888', CARD);
+    const textos = [body.interactive.body.text, body.interactive.action.parameters.order.items[0].name];
+    for (const texto of textos) {
+      expect(texto).toContain('validade da 2a via: 15/09/2026');
+      expect(texto).not.toMatch(/vence/i);
+      expect(texto).toMatch(/^[\x20-\x7e]+$/);
+    }
   });
 
   test('arredonda centavos em vez de truncar', () => {

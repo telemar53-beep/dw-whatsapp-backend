@@ -200,6 +200,34 @@ describe('useSgpLookup — só a busca mais recente vale', () => {
 
     expect(result.current.duplicateState).toEqual({});
   });
+
+  // A conferência dos títulos chega na mesma resposta da 2ª via: pertence à mesma busca, e o
+  // total de A não pode aparecer com B aberta.
+  test('a conferência de A que chega atrasada não aparece com B aberta; a de B fica só no contrato de B', async () => {
+    const segundaViaDeA = adiado();
+    const CONFERENCIA_DE_B = { estado: 'completa', vencidas: [{ faturaId: 7, vencimentoOriginal: '2026-09-15', valor: 50 }], venceHoje: [], totalVencidas: 50 };
+    api.lookupSgpClient.mockResolvedValueOnce(RESPOSTA_A).mockResolvedValueOnce(RESPOSTA_B);
+    api.generateSgpDuplicateInvoice
+      .mockReturnValueOnce(segundaViaDeA.promise)
+      .mockResolvedValueOnce({ hasOpenInvoice: false, duplicates: [], conferencia: CONFERENCIA_DE_B });
+    const { result } = renderHook(() => useSgpLookup());
+
+    await act(() => result.current.search('111'));
+    let pedidoDeA;
+    act(() => {
+      pedidoDeA = result.current.fetchDuplicate(1001);
+    });
+    await act(() => result.current.search('222'));
+    await act(() => result.current.fetchDuplicate(2002));
+    await act(async () => {
+      segundaViaDeA.resolve({ hasOpenInvoice: true, duplicates: [{ id: 'fat-A' }], conferencia: { estado: 'completa', vencidas: [], venceHoje: [], totalVencidas: 200 } });
+      await pedidoDeA;
+    });
+
+    expect(result.current.duplicateState).toEqual({
+      2002: { loading: false, error: null, hasOpenInvoice: false, duplicates: [], conferencia: CONFERENCIA_DE_B },
+    });
+  });
 });
 
 // Dois cliques antes da resposta viravam duas chamadas ao SGP — e a 2ª via

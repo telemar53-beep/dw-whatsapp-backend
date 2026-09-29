@@ -56,7 +56,8 @@ function PixCardMessage({ message }) {
       </span>
       {(dueLabel || valueLabel) && (
         <span className="text-[13.5px] leading-[18px] text-chat-muted">
-          {dueLabel && <>Vence <span>{dueLabel}</span></>}
+          {/* A data é a da 2ª via (fatura2via): num título atrasado, o dia da reemissão. */}
+          {dueLabel && <>2ª via válida até <span>{dueLabel}</span></>}
           {dueLabel && valueLabel && ' · '}
           {valueLabel && <span>{valueLabel}</span>}
         </span>

@@ -111,6 +111,8 @@ button.sgp-linha:hover { background: var(--sgp-indigo-claro); }
 /* Faturas */
 .sgp-resumo { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px; border: 1px solid var(--sgp-ambar-linha); border-radius: 10px; background: var(--sgp-ambar-fundo); color: var(--sgp-ambar-texto); font-size: 12.5px; line-height: 17px; font-weight: 600; }
 .sgp-resumo svg { flex: none; color: var(--sgp-ambar-icone); }
+/* Pendências conferidas: linhas só de leitura, na mesma forma das do seletor. */
+.sgp-pendencias { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .sgp-segunda-via { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; border: 1.5px solid var(--sgp-indigo); border-radius: 10px; background: var(--sgp-papel); color: var(--sgp-indigo-texto); font-size: 14px; font-weight: 600; }
 .sgp-segunda-via:hover { background: var(--sgp-indigo-claro); }
 .sgp-nota { margin: -2px 0 0; font-size: 12.5px; line-height: 17px; color: var(--sgp-texto-2); text-align: center; }

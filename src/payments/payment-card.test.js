@@ -25,13 +25,16 @@ describe('formatarData', () => {
   });
 });
 
+// A data dos cartões vem sempre da 2ª via (fatura2via), que manda a data da REEMISSÃO — num título
+// atrasado, o dia em que a 2ª via foi gerada. Chamá-la só de "Vencimento" a fazia passar pelo
+// vencimento original (bug de 28/09/2026). Valor e ordem das linhas não mudam.
 describe('cartaoPix', () => {
   test('monta o cartão com valor, vencimento e instrução de copia e cola', () => {
     const texto = cartaoPix({ valor: 135, vencimento: '2026-09-15' });
     expect(texto).toBe(
       '💠 PIX da fatura\n' +
       `Valor: ${formatarValor(135)}\n` +
-      'Vencimento: 15/09/2026\n' +
+      'Vencimento da 2ª via: 15/09/2026\n' +
       '\n' +
       'Copie o código da próxima mensagem e cole no app do banco em Pix > Pix Copia e Cola.'
     );
@@ -45,7 +48,7 @@ describe('cartaoPixQr', () => {
     expect(texto).toBe(
       '💠 PIX da fatura\n' +
       `Valor: ${formatarValor(135)}\n` +
-      'Vencimento: 15/09/2026\n' +
+      'Vencimento da 2ª via: 15/09/2026\n' +
       '\n' +
       'Escaneie este QR no app do banco, ou copie o código da próxima mensagem em Pix > Pix Copia e Cola.'
     );
@@ -59,7 +62,7 @@ describe('cartaoBoleto', () => {
     expect(texto).toBe(
       '🧾 Boleto da fatura\n' +
       `Valor: ${formatarValor(135)}\n` +
-      'Vencimento: 15/09/2026\n' +
+      'Vencimento da 2ª via: 15/09/2026\n' +
       '\n' +
       'Copie a linha digitável da próxima mensagem e cole no app do banco em Pagar > Boleto.'
     );

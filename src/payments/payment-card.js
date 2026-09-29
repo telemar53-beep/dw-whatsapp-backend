@@ -2,6 +2,9 @@
 // mandado ao cliente. Sem markdown (*/**) — o WhatsApp mostra os asteriscos
 // literalmente em alguns clientes, e o formatador da IA só trata isso nas
 // respostas dela, não em texto fixo como este.
+//
+// A data vem sempre da 2ª via (fatura2via), que num título atrasado manda o dia
+// da reemissão, não o vencimento original: por isso "Vencimento da 2ª via".
 
 /** '135' / 135 / '89.9' → 'R$ 135,00'; não numérico → 'R$ ' + valor original. */
 function formatarValor(valor) {
@@ -22,7 +25,7 @@ function cartaoPix({ valor, vencimento }) {
   return (
     '💠 PIX da fatura\n' +
     `Valor: ${formatarValor(valor)}\n` +
-    `Vencimento: ${formatarData(vencimento)}\n` +
+    `Vencimento da 2ª via: ${formatarData(vencimento)}\n` +
     '\n' +
     'Copie o código da próxima mensagem e cole no app do banco em Pix > Pix Copia e Cola.'
   );
@@ -32,7 +35,7 @@ function cartaoPixQr({ valor, vencimento }) {
   return (
     '💠 PIX da fatura\n' +
     `Valor: ${formatarValor(valor)}\n` +
-    `Vencimento: ${formatarData(vencimento)}\n` +
+    `Vencimento da 2ª via: ${formatarData(vencimento)}\n` +
     '\n' +
     'Escaneie este QR no app do banco, ou copie o código da próxima mensagem em Pix > Pix Copia e Cola.'
   );
@@ -42,7 +45,7 @@ function cartaoBoleto({ valor, vencimento }) {
   return (
     '🧾 Boleto da fatura\n' +
     `Valor: ${formatarValor(valor)}\n` +
-    `Vencimento: ${formatarData(vencimento)}\n` +
+    `Vencimento da 2ª via: ${formatarData(vencimento)}\n` +
     '\n' +
     'Copie a linha digitável da próxima mensagem e cole no app do banco em Pagar > Boleto.'
   );

@@ -535,7 +535,9 @@ async function sendTextMessage(channel, toPhoneNumber, content, replyContext = {
 function buildPixNativeFlowContent(card, channel, empresa) {
   const centavos = Math.round(Number(card.value) * 100);
   const referenceId = String(card.faturaId || `PIX${Date.now()}`);
-  const titulo = `Fatura · vence ${formatarData(card.dueDate)}`;
+  // A data é a da 2ª via (fatura2via): num título atrasado, o dia da reemissão, e não o
+  // vencimento original — por isso "válida até", e não "vence".
+  const titulo = `2ª via válida até ${formatarData(card.dueDate)}`;
   const valor = { value: centavos, offset: 100 };
   return {
     interactiveMessage: {

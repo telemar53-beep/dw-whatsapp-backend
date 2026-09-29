@@ -1,0 +1,25 @@
+/* Aviso de sucesso das ações de canal (Fatia S2): canto inferior direito no
+   computador, rodapé no celular. Verde claro com borda; sem sombra pesada e
+   sem animação de entrada. */
+.cfg-aviso-sucesso { position: fixed; right: 24px; bottom: 24px; z-index: var(--z-popover, 50); pointer-events: none; }
+.cfg-aviso-sucesso-caixa {
+  display: flex; align-items: flex-start; gap: 14px; max-width: 380px; padding: 12px 12px 12px 15px;
+  border: 1px solid #bee3d1; border-radius: 12px; background: #f0faf5; color: #145c43;
+  box-shadow: 0 8px 20px -14px rgba(20, 60, 45, 0.35); pointer-events: auto;
+}
+.cfg-aviso-sucesso-caixa strong { display: block; margin-bottom: 2px; font-size: 13.5px; line-height: 18px; }
+.cfg-aviso-sucesso-caixa span { display: block; font-size: 12.5px; line-height: 17px; color: #22614a; }
+/* Dentro de Configurações o R7 fixa os botões com (0,3,1); este seletor tem (0,4,1). */
+.settings-workspace .cfg-aviso-sucesso .cfg-aviso-sucesso-caixa button:not([role=tab]),
+.cfg-aviso-sucesso-caixa button {
+  flex: none; min-height: 32px; margin-left: auto; padding: 0 8px; border: 0; border-radius: 8px;
+  background: none; color: #145c43; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.settings-workspace .cfg-aviso-sucesso .cfg-aviso-sucesso-caixa button:not([role=tab]):hover,
+.cfg-aviso-sucesso-caixa button:hover { background: #dff2e8; }
+@media (max-width: 767px) {
+  .cfg-aviso-sucesso { right: 12px; bottom: 12px; left: 12px; }
+  .cfg-aviso-sucesso-caixa { max-width: none; }
+  .settings-workspace .cfg-aviso-sucesso .cfg-aviso-sucesso-caixa button:not([role=tab]),
+  .cfg-aviso-sucesso-caixa button { min-height: 44px; }
+}

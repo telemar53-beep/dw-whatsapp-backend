@@ -41,6 +41,31 @@
 .cfg-canais-ocultos input { width: 16px; height: 16px; accent-color: var(--cfg-indigo); }
 
 .cfg-canais-contagem { margin: 0; color: var(--cfg-apoio); font-size: 12.5px; }
+
+/* Lista vazia e falha ao carregar (S2, terceiro mockup): um convite a agir,
+   não só uma frase. */
+.cfg-canais-estado {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 340px; padding: 40px 24px;
+  border: 1px dashed #d6d9e2; border-radius: 15px; background: #fcfcfe; text-align: center;
+}
+.settings-workspace .cfg-canais-estado[role=alert] { padding: 40px 24px; border: 1px dashed #efc4c7; border-radius: 15px; background: #fffbfb; font-size: 13.5px; }
+.cfg-canais-estado-icone {
+  display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 14px; border-radius: 16px;
+  background: var(--cfg-indigo-suave); color: var(--cfg-indigo);
+}
+.cfg-canais-estado h2 { margin: 0 0 7px; color: var(--cfg-tinta); font-size: 17px; font-weight: 700; line-height: 23px; }
+.cfg-canais-estado p { max-width: 380px; margin: 0 0 18px; color: var(--cfg-apoio); font-size: 13.5px; line-height: 20px; }
+.settings-workspace .cfg-canais-estado button.cfg-canais-estado-botao:not([role=tab]) {
+  min-height: 40px; padding: 0 16px; border: 1px solid #d4d8e0; border-radius: 10px; background: var(--cfg-papel);
+  color: #2a2e3c; font-size: 13.5px; font-weight: 650;
+}
+.settings-workspace .cfg-canais-estado button.cfg-canais-estado-botao.is-principal:not([role=tab]) {
+  border-color: var(--cfg-indigo); background: var(--cfg-indigo); color: #ffffff;
+}
+.settings-workspace p.cfg-canais-aviso-erro[role=alert] { margin: 0; border-left: 0; border-radius: 10px; background: #fdecea; color: #8c1d18; font-size: 13px; }
+@media (max-width: 1023px) {
+  .settings-workspace .cfg-canais-estado button.cfg-canais-estado-botao:not([role=tab]) { min-height: 44px; }
+}
 .cfg-canais-vazio {
   margin: 0; padding: 32px 16px; border: 1px dashed var(--cfg-linha); border-radius: 14px;
   color: var(--cfg-apoio); font-size: 13.5px; text-align: center;
@@ -58,16 +83,27 @@
 }
 .cfg-canal.precisa-atencao { border-color: var(--cfg-ambar-linha); background: #fffdfa; }
 .cfg-canal.is-oculto { background: var(--cfg-diretorio); }
+/* Ação em andamento e erro, no próprio cartão (S2, terceiro mockup). */
+.cfg-canal.is-pendente { border-color: #cfcaf8; background: #faf9ff; }
+.cfg-canal.is-erro { border-color: #efb9bd; background: #fffafa; }
+.cfg-canal-acao[aria-disabled=true] { opacity: 0.55; cursor: default; pointer-events: none; }
+.settings-workspace .cfg-canal .cfg-canal-menu button.cfg-canal-mais[aria-disabled=true] { opacity: 0.55; cursor: default; }
+.settings-workspace .cfg-canal .cfg-canal-falha[role=alert] {
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px;
+  margin-top: 14px; padding: 12px 0 0; border: 0; border-top: 1px solid #f0d1d3; border-radius: 0; font-size: 12.5px;
+}
+.cfg-canal-falha p { flex: 1 1 16rem; margin: 0; color: #7f292e; font-size: 12.5px; line-height: 18px; }
+.cfg-canal-falha-acoes { display: flex; flex: none; gap: 6px; }
+.settings-workspace .cfg-canal .cfg-canal-falha button.cfg-canal-falha-botao:not([role=tab]) {
+  min-height: 34px; padding: 0 11px; border: 1px solid #e5c3c6; border-radius: 8px; background: #ffffff;
+  color: #7f292e; font-size: 12.5px; font-weight: 650;
+}
+.settings-workspace .cfg-canal .cfg-canal-falha button.cfg-canal-falha-botao.is-discreto:not([role=tab]) { border-color: transparent; background: none; color: #5d6474; }
 
 .cfg-canal-topo { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 11px; }
 
-/* O emblema: o tipo em letras. Oficial (API, BSP) em índigo cheio; o
-   Baileys (BL), não oficial, em índigo claro. */
-.cfg-emblema {
-  display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
-  background: var(--cfg-indigo-texto); color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
-}
-.cfg-emblema.is-nao-oficial { background: var(--cfg-indigo-suave); color: var(--cfg-indigo-texto); }
+/* O emblema (API, BSP, BL) mora em emblema.css: é o mesmo do detalhe e dos
+   diálogos. */
 
 .cfg-canal-id { min-width: 0; }
 .cfg-canal-nome {
@@ -77,26 +113,17 @@
 .cfg-canal-nome:hover { text-decoration: underline; }
 .cfg-canal-numero { margin: 2px 0 0; color: var(--cfg-apoio); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 
-/* Estado: ponto colorido e texto. Os ícones do ConnectionStatus ficam
-   escondidos aqui (a folha de canais já os esconde) e o selo de qualidade vira
-   fato do cartão. */
-.cfg-canal-estado { justify-self: end; max-width: 150px; min-width: 0; }
-.cfg-canal-estado .channel-connection { gap: 6px; color: var(--cfg-tinta); font-size: 12px; font-weight: 650; line-height: 16px; }
+/* Estado: o selo de ponto e texto (channels-polish.css), menor no cartão. A
+   qualidade da Meta é fato do cartão, e não selo. Durante uma ação, o lugar do
+   estado diz o que está acontecendo ("Ocultando canal…"). */
+.cfg-canal-estado { justify-self: end; max-width: 160px; min-width: 0; }
+.cfg-canal-estado .channel-connection { gap: 6px; font-size: 12.5px; line-height: 16px; }
 .cfg-canal-estado .channel-status-dot { width: 7px; height: 7px; }
-.cfg-canal-estado .channel-quality-chip { display: none; }
-.cfg-canal-estado .channel-connection[data-connection=connected] { color: var(--cfg-verde); }
-.cfg-canal-estado .channel-connection[data-connection=connected] .channel-status-dot { background: var(--cfg-verde); }
-.cfg-canal-estado .channel-connection[data-connection=awaiting_qr] { color: var(--cfg-ambar); }
-.cfg-canal-estado .channel-connection[data-connection=awaiting_qr] .channel-status-dot { background: var(--cfg-ambar); }
-.cfg-canal-estado .channel-connection:is([data-connection=error], [data-connection=disconnected]) { color: var(--cfg-vermelho); }
-.cfg-canal-estado .channel-connection:is([data-connection=error], [data-connection=disconnected]) .channel-status-dot { background: var(--cfg-vermelho); }
 .cfg-canal-estado .channel-connection-reason { max-width: 18ch; }
-/* "Não verificada": o relógio sai e entra o ponto cinza — estado neutro. */
-.cfg-canal-estado .channel-connection[data-connection=unknown] { color: var(--cfg-apoio); }
-.cfg-canal-estado .channel-connection[data-connection=unknown] svg { display: none; }
-.cfg-canal-estado .channel-connection[data-connection=unknown]::before {
-  content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: #9aa0ad;
+.cfg-canal-andamento {
+  display: inline-flex; align-items: center; gap: 6px; color: var(--cfg-indigo-texto); font-size: 12.5px; font-weight: 650; line-height: 16px;
 }
+.cfg-canal-andamento::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cfg-indigo); }
 
 /* Fatos */
 .cfg-canal-fatos {
@@ -104,7 +131,8 @@
   border-top: 1px solid var(--cfg-linha-suave); border-bottom: 1px solid var(--cfg-linha-suave);
 }
 .cfg-canal-fatos > div { min-width: 0; }
-.cfg-canal-fatos dt { margin-bottom: 4px; color: #8a8f9d; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
+/* Rótulos em cinza escuro (S2): o #8a8f9d de antes dava 3,2:1 em 10,5 px. */
+.cfg-canal-fatos dt { margin-bottom: 4px; color: #5d6474; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .cfg-canal-fatos dd { margin: 0; overflow: hidden; color: #3d4251; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
 .cfg-canal-fatos dd[data-qualidade=YELLOW] { color: var(--cfg-ambar); font-weight: 600; }
 .cfg-canal-fatos dd[data-qualidade=RED] { color: var(--cfg-vermelho); font-weight: 600; }
@@ -162,4 +190,5 @@
   .settings-workspace .cfg-canal .cfg-canal-menu button.cfg-canal-mais { width: 44px; height: 44px; min-height: 44px; }
   .settings-workspace .cfg-canal .cfg-canal-menu .cfg-canal-menu-lista button { min-height: 44px; }
   .cfg-canal-nome { line-height: 22px; }
+  .settings-workspace .cfg-canal .cfg-canal-falha button.cfg-canal-falha-botao:not([role=tab]) { min-height: 44px; }
 }

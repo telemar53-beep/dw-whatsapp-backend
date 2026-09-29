@@ -1,29 +1,28 @@
-/* Números conectados e detalhe do canal. A lista em tabela virou os cartões
-   da Fatia S1 (cartoes-de-canais.css); aqui ficam o estado da conexão, as
-   marcas do diálogo de criar canal e o QR do detalhe. O título de Canais usa
-   o ícone DW aprovado no ladrilho da casca: a máscara do WhatsApp que ficava
-   aqui saiu (mask-image com url() some no build publicado). */
-.channel-status-icon {display:none}
-/* As marcas sao <svg> inline com `fill: currentColor` — nada de mask, nada de
-   url(), nada de data URI. A cor e declarada AQUI porque esta folha fica fora
-   de @layer e vence a utility do Tailwind: com a cor vindo so da classe
-   `text-[#85d9a4]` do JSX, o glifo saia num azul-acinzentado herdado
-   (rgb(154,191,208) medido), e nao no verde do WhatsApp. */
-.channel-brand {position:relative;display:block;line-height:0;color:#25d366}
-.channel-brand-mark {display:block;width:24px;height:24px}
-/* Selo do provedor: canto inferior direito, com anel na cor da caixa para nao
-   encostar no glifo. Pequeno de proposito — ele diz COMO o numero esta
-   conectado, nao O QUE o canal e. */
-.channel-brand-badge {position:absolute;right:-4px;bottom:-4px;width:13px;height:13px;border-radius:50%;box-shadow:0 0 0 2px var(--chat-surface-panel,#2b343b)}
-.channel-brand-badge:not(.is-logo) {color:#0081fb;background:var(--chat-surface-panel,#2b343b);padding:1px}
-.channel-brand-badge.is-logo {object-fit:contain;background:#0b1f21}
-
-/* QR de conexao, no tema. Era um iframe de fundo branco; agora e a imagem
-   dentro de uma moldura do produto, com o texto do que fazer ao lado. */
-.channel-qr {display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--color-ui-line)}
-.channel-qr-quadro {width:188px;height:188px;flex:none;display:grid;place-items:center;border-radius:12px;border:1px solid #ffffff14;background:#f6f7f8;padding:10px}
-.channel-qr-imagem {width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
-.channel-qr-vazio {font-size:11px;line-height:16px;text-align:center;color:#5b6472;padding:0 8px}
-.channel-qr-lado {display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
-.channel-qr-instrucao {font-size:12px;line-height:18px;color:var(--color-ui-ink-muted);margin:0}
-@container(max-width:520px){.channel-qr{grid-template-columns:minmax(0,1fr);justify-items:center}.channel-qr-lado{align-items:center;text-align:center}}
+/* O selo de estado da conexão (ChannelsTable.jsx): ponto na cor do tom e o
+   texto, sem ícone. Vale nos cartões, no detalhe e onde mais o selo entrar.
+   As cores são literais: o selo também aparece fora de .settings-workspace.
+   Tons: ok (verde), espera (âmbar), erro (vermelho), neutro (cinza). O verde
+   e o âmbar escurecidos passam de 4,5:1 sobre branco em 12 px (S2). */
+.channel-connection {
+  display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%;
+  color: #1c2030; font-size: 13px; font-weight: 650; line-height: 18px; white-space: nowrap;
+}
+.channel-status-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #8a909d; }
+.channel-connection-reason { overflow: hidden; text-overflow: ellipsis; }
+.channel-connection[data-tom=ok] { color: #11704f; }
+.channel-connection[data-tom=ok] .channel-status-dot { background: #1f9d63; }
+.channel-connection[data-tom=espera] { color: #8a4b00; }
+.channel-connection[data-tom=espera] .channel-status-dot { background: #c77700; }
+.channel-connection[data-tom=erro] { color: #a8241c; }
+.channel-connection[data-tom=erro] .channel-status-dot { background: #c62828; }
+.channel-connection[data-tom=neutro] { color: #5b6272; }
+/* Conectado com qualidade reduzida: o texto continua "Conectado" em verde; o
+   selo da qualidade é que avisa. */
+.channel-connection[data-connection=connected][data-tom=espera] { color: #11704f; }
+.channel-connection[data-connection=connected][data-tom=espera] .channel-status-dot { background: #1f9d63; }
+.channel-quality-chip {
+  flex: none; margin-left: 2px; padding: 2px 8px; border-radius: 999px; background: #e7f5ee;
+  color: #11704f; font-size: 12px; font-weight: 600; line-height: 16px;
+}
+.channel-quality-chip[data-qualidade=YELLOW] { background: #fff4dc; color: #7a4a00; }
+.channel-quality-chip[data-qualidade=RED] { background: #fdecea; color: #8c1d18; }

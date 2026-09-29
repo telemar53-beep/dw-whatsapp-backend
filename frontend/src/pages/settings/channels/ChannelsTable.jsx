@@ -1,13 +1,13 @@
-import { SettingsIcon } from '../SettingsVisuals';
-import { ProviderMark, QrStatusIcon } from './ChannelVisuals';
 import './channels-polish.css';
-import { IconClock, IconCheckCircle, IconWarning } from '../../../components/icons/WaIcons';
 import { isOfficialChannelType } from '../../../utils/channelTypes';
 import { STATUS_LABELS } from './channelStatus';
 
-// Peças compartilhadas por Números conectados (CartoesDeCanais.jsx) e pelo
-// detalhe do canal: o estado da conexão, o símbolo e os nomes do provedor. A
-// lista em tabela que morava aqui virou os cartões da Fatia S1.
+// Peças compartilhadas por Números conectados (CartoesDeCanais.jsx), pelo
+// detalhe do canal e pelas confirmações: o estado da conexão e os nomes do
+// provedor. A lista em tabela que morava aqui virou os cartões da Fatia S1.
+//
+// Desde a S2 o estado é só ponto e texto: sem os ícones da família antiga,
+// que eram desenhados e depois escondidos por CSS.
 
 const PROVIDER_LABELS = { baileys: 'Baileys', meta_cloud: 'Meta Cloud', '360dialog': '360dialog' };
 // Como a conexao e feita, dito por extenso. A 360dialog e BSP: oficial, mas
@@ -21,79 +21,47 @@ export function providerLabel(type) {
   return PROVIDER_LABELS[type] || type;
 }
 
-export function ChannelIcon({ size = 36, type }) {
-  return (
-    <span
-      aria-hidden="true"
-      data-provider={type}
-      style={{ width: size, height: size }}
-      className="settings-channel-symbol flex shrink-0 items-center justify-center rounded-lg bg-[#25d366]/10 text-[#85d9a4]"
-    >
-      {type ? <ProviderMark type={type} /> : <SettingsIcon name="canais" size={Math.round(size * 0.55)} />}
-    </span>
-  );
-}
-
 // A qualidade que a Meta atribui ao número: é o aviso que vem ANTES de ela
 // limitar ou bloquear o envio. UNKNOWN (número novo, sem histórico) não vira
-// chip — não há o que dizer.
+// selo — não há o que dizer.
+export const QUALIDADE = { GREEN: 'Alta', YELLOW: 'Média', RED: 'Baixa' };
 const QUALITY_LABELS = { GREEN: 'Qualidade alta', YELLOW: 'Qualidade média', RED: 'Qualidade baixa' };
-const QUALITY_TONES = {
-  GREEN: 'border-wa-chip-text/30 bg-wa-chip text-wa-chip-text',
-  YELLOW: 'border-wa-warn-text/30 bg-wa-warn-bg text-wa-warn-text',
-  RED: 'border-wa-error-text/30 bg-wa-error-bg text-wa-error-text',
-};
 
-function NotVerified() {
-  return (
-    <span data-connection="unknown" className="channel-connection inline-flex items-center gap-1.5 whitespace-nowrap text-[13.5px] text-wa-muted">
-      <IconClock size={15} />
-      Não verificada
-    </span>
-  );
-}
-
+// O estado lido do canal, uma coisa só para o selo, a faixa do detalhe e a
+// confirmação: `tom` (ok, espera, erro, neutro), o texto curto e, no oficial,
+// a qualidade e o motivo que a Meta deu.
+//
 // Conexão: o Baileys tem handshake próprio e o status vem do banco. O oficial
 // não tem — quem sabe é a Meta, e o backend pergunta a ela ao montar a lista
 // (só meta_cloud; o 360dialog continua sem verificação). Sem resposta dela, o
-// selo volta a ser o "Não verificada" de sempre, que é honesto: não sabemos.
-export function ConnectionStatus({ channel }) {
+// estado é "Não verificada", que é honesto: não sabemos.
+export function estadoDoCanal(channel) {
   if (isOfficialChannelType(channel.type)) {
     const { connection } = channel;
-    if (!connection || connection.state === 'unknown') {
-      return <NotVerified />;
-    }
+    if (!connection || connection.state === 'unknown') return { chave: 'unknown', tom: 'neutro', texto: 'Não verificada' };
     if (connection.state === 'connected') {
-      const quality = QUALITY_LABELS[connection.quality];
-      return (
-        <span data-connection="connected" className="channel-connection inline-flex items-center gap-2 whitespace-nowrap text-[13.5px] text-wa-text">
-          <span className="channel-status-icon" aria-hidden="true"><IconCheckCircle size={13} /></span>
-          <span aria-hidden="true" className="channel-status-dot h-2 w-2 rounded-full bg-wa-chip-text" />
-          Conectado
-          {quality && (
-            <span className={`channel-quality-chip rounded-full border px-2 py-0.5 text-[12px] font-medium ${QUALITY_TONES[connection.quality]}`}>
-              {quality}
-            </span>
-          )}
-        </span>
-      );
+      const qualidade = connection.quality;
+      const reduzida = qualidade === 'YELLOW' || qualidade === 'RED';
+      return { chave: 'connected', tom: reduzida ? 'espera' : 'ok', texto: 'Conectado', qualidade: QUALIDADE[qualidade] ? qualidade : null };
     }
-    const motivo = connection.state === 'disconnected' ? 'Desconectado' : connection.motivo;
-    return (
-      <span data-connection="error" className="channel-connection inline-flex items-center gap-2 text-[13.5px] text-wa-text" title={motivo}>
-        <span className="channel-status-icon" aria-hidden="true"><IconWarning size={13} /></span>
-        <span aria-hidden="true" className="channel-status-dot h-2 w-2 shrink-0 rounded-full bg-wa-error-text" />
-        <span className="channel-connection-reason max-w-[22ch] truncate">{motivo}</span>
-      </span>
-    );
+    if (connection.state === 'disconnected') return { chave: 'disconnected', tom: 'erro', texto: 'Desconectado' };
+    return { chave: 'error', tom: 'erro', texto: connection.motivo || 'Erro na conexão', motivo: connection.motivo || null };
   }
-  const color =
-    channel.status === 'connected' ? 'bg-wa-chip-text' : channel.status === 'awaiting_qr' ? 'bg-wa-warn-text' : 'bg-wa-error-text';
+  const tons = { connected: 'ok', awaiting_qr: 'espera', disconnected: 'erro' };
+  return { chave: channel.status, tom: tons[channel.status] || 'neutro', texto: STATUS_LABELS[channel.status] || channel.status };
+}
+
+// Selo de estado: ponto na cor do tom e o texto. No detalhe, o oficial
+// conectado leva também a qualidade que a Meta informou (`comQualidade`).
+export function ConnectionStatus({ channel, comQualidade = false }) {
+  const estado = estadoDoCanal(channel);
   return (
-    <span data-connection={channel.status} className="channel-connection inline-flex max-w-full items-center gap-2 text-[13.5px] text-wa-text">
-      <span className="channel-status-icon" aria-hidden="true">{channel.status === 'connected' ? <IconCheckCircle size={13} /> : channel.status === 'awaiting_qr' ? <QrStatusIcon /> : <IconWarning size={13} />}</span>
-      <span aria-hidden="true" className={`channel-status-dot h-2 w-2 shrink-0 rounded-full ${color}`} />
-      <span className="min-w-0 leading-[18px]">{STATUS_LABELS[channel.status] || channel.status}</span>
+    <span className="channel-connection" data-connection={estado.chave} data-tom={estado.tom} title={estado.motivo || undefined}>
+      <span aria-hidden="true" className="channel-status-dot" />
+      <span className="channel-connection-reason">{estado.texto}</span>
+      {comQualidade && estado.qualidade && (
+        <span className="channel-quality-chip" data-qualidade={estado.qualidade}>{QUALITY_LABELS[estado.qualidade]}</span>
+      )}
     </span>
   );
 }

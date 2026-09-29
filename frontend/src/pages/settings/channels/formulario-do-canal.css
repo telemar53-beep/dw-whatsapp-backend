@@ -1,0 +1,110 @@
+/* ---------- Diálogos de canal com formulário (Fatia S2) ----------
+   Adicionar canal e Credenciais da Meta. Vêm só quando abertos, e esta folha
+   vem com eles. Moldura: a clara do Bloco 1 (ui/dialogo-claro.css), com os
+   tokens --mc-*. Os seletores repetem o prefixo da moldura porque a base
+   (overlays.css) tem regras largas fora de @layer: `.dw-dialog button` (0,1,1)
+   e o campo (0,5,1). Sem blur, sem gradiente, sem animação. */
+
+[data-dialog].dw-dialog.mc.cfg-dlg-adicionar { --mc-largura: 760px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-credenciais { --mc-largura: 600px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-cab { padding: 20px 18px 14px 22px; border-bottom: 1px solid var(--mc-linha); }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-cab-texto h2 { font-size: 20px; line-height: 26px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-corpo { padding: 18px 22px 20px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-erro { margin: 0 22px 12px; }
+
+/* Etapas: é uma sequência de verdade (escolher, depois preencher). */
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-passos {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none;
+  color: var(--mc-texto-3); font-size: 12.5px; font-weight: 600; line-height: 16px;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-passos li { display: inline-flex; align-items: center; gap: 7px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-passos li:not(.cfg-passos-linha)::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%; background: #d4d7df;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-passos li[aria-current=step] { color: var(--mc-indigo-texto); }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-passos li[aria-current=step]::before { background: var(--mc-indigo); }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-passos-linha { width: 28px; height: 1px; background: var(--mc-linha); }
+
+/* Escolha da conexão */
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolhas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-escolha {
+  display: flex; flex-direction: column; align-items: flex-start; min-height: 184px; padding: 16px;
+  border: 1px solid var(--mc-borda); border-radius: 12px; background: var(--mc-papel); color: var(--mc-texto);
+  font: inherit; text-align: left; cursor: pointer;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-escolha:hover { border-color: var(--mc-indigo-linha); background: #fbfbff; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-escolha:focus-visible { border-color: var(--mc-indigo); outline: 1px solid var(--mc-indigo); outline-offset: 0; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolha .cfg-emblema { margin-bottom: 14px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolha strong { margin-bottom: 4px; font-size: 15px; line-height: 20px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolha-texto { color: var(--mc-texto-2); font-size: 13px; line-height: 19px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolha-seguir {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 14px;
+  color: var(--mc-indigo-texto); font-size: 13px; font-weight: 650;
+}
+
+/* Formulário */
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-form-intro {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--mc-linha);
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-form-intro > div > strong { display: block; font-size: 15px; line-height: 20px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-form-intro > div > span { color: var(--mc-texto-2); font-size: 13px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-campo-inteiro { grid-column: 1 / -1; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-campo-rotulo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-campo-rotulo small { color: var(--mc-texto-3); font-size: 12px; }
+
+/* Credencial mascarada, com "Mostrar" dentro da caixa. */
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-segredo { position: relative; }
+[data-dialog].dw-dialog.mc.mc.cfg-dlg-canal .cfg-segredo input.mc-entrada { padding-right: 88px; letter-spacing: 0.04em; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-segredo-mostrar {
+  position: absolute; top: 1px; right: 1px; bottom: 1px; min-width: 76px; padding: 0 12px;
+  border: 0; border-left: 1px solid var(--mc-linha); border-radius: 0 8px 8px 0; background: var(--mc-suave);
+  color: var(--mc-indigo-texto); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-segredo-mostrar:disabled { color: var(--mc-texto-3); cursor: default; }
+
+/* Resumo do canal e nota (credenciais da Meta) */
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-canal-resumo {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 12px; border-radius: 10px; background: var(--mc-suave);
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-canal-resumo > div > strong { display: block; font-size: 14px; line-height: 19px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-canal-resumo > div > span { display: block; color: var(--mc-texto-2); font-size: 12.5px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-texto { margin: 0 0 12px; color: var(--mc-texto-2); font-size: 14px; line-height: 21px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-nota {
+  margin: 0 0 16px; padding: 11px 12px; border-radius: 10px; background: var(--mc-ambar-fundo);
+  color: var(--mc-ambar-texto); font-size: 13px; line-height: 19px;
+}
+
+/* Rodapé: voltar à esquerda, ações à direita; durante o envio, a nota. */
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-rodape { background: #fafafd; }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-voltar-conexao {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px 0 2px;
+  border: 0; border-radius: 8px; background: none; color: var(--mc-indigo-texto); font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-voltar-conexao:hover { background: var(--mc-indigo-claro); }
+[data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-trava { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: var(--mc-texto-2); font-size: 12.5px; line-height: 17px; }
+
+/* ---------- Celular: folha que sobe do rodapé (mockup) ---------- */
+@media (max-width: 767px) {
+  .chat-theme.mc-fundo:has(> .cfg-dlg-canal) { align-items: flex-end; padding: 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal { max-width: none; max-height: 92dvh; border: 0; border-radius: 20px 20px 0 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-cab { padding: 16px 12px 12px 18px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-cab-texto h2 { font-size: 19px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-fechar { min-height: 44px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-corpo { padding: 14px 18px 16px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-erro { margin: 0 18px 10px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolhas { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-escolha {
+    display: grid; grid-template-columns: 42px minmax(0, 1fr); column-gap: 12px; min-height: 0; padding: 14px;
+  }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolha .cfg-emblema { grid-row: 1 / 4; margin: 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-escolha-seguir { padding-top: 8px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-campos { grid-template-columns: minmax(0, 1fr); }
+  [data-dialog].dw-dialog.mc.mc.cfg-dlg-canal :is(input, select).mc-entrada { height: 44px; font-size: 16px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-rodape {
+    flex-wrap: wrap; gap: 10px; padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .cfg-dlg-rodape .mc-acoes { display: grid; grid-template-columns: 1fr 1fr; width: 100%; margin-left: 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal .mc-botao { height: 44px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-canal button.cfg-voltar-conexao { height: 44px; }
+}

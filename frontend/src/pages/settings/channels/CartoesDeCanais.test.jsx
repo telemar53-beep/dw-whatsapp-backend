@@ -140,10 +140,9 @@ describe('Números conectados: busca, filtro e vazio', () => {
     expect(screen.getAllByRole('link', { name: /^Canal/ }).map((a) => a.textContent)).toEqual(['Canal Suporte']);
   });
 
-  test('sem canal nenhum e sem resultado no filtro, as frases de sempre', async () => {
-    const { unmount } = render(<MemoryRouter><CartoesDeCanais channels={[]} summaryContext={pronto} /></MemoryRouter>);
-    expect(screen.getByText('Nenhum canal cadastrado ainda.')).toBeInTheDocument();
-    unmount();
+  // S2: a lista vazia de verdade é da página (ListaVazia, com a ação de
+  // adicionar o primeiro canal); aqui fica só o "sem resultado" do filtro.
+  test('sem resultado no filtro: a frase de sempre', async () => {
     montar();
     await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar por nome ou número' }), 'zzz');
     expect(screen.getByText('Nenhum canal com esse filtro.')).toBeInTheDocument();
@@ -151,36 +150,79 @@ describe('Números conectados: busca, filtro e vazio', () => {
 });
 
 describe('Números conectados: mais ações', () => {
-  const acoes = () => ({ reconnect: vi.fn(), toggleHidden: vi.fn(), remove: vi.fn(), busyChannelId: null });
+  // A API da S2: o menu só pede (pedir); andamento e erro chegam por cartão.
+  const acoes = (extra = {}) => ({ pedir: vi.fn(), pendentes: {}, erros: {}, limparErro: vi.fn(), ...extra });
 
   test('só aparece para quem pode gerenciar', () => {
     montar({ actions: acoes(), canManage: false });
     expect(screen.queryByRole('button', { name: /Mais ações/ })).not.toBeInTheDocument();
   });
 
-  test('Reconectar só no Baileys; Ocultar e Excluir chamam as mesmas ações de antes', async () => {
+  test('Reconectar só no Baileys; cada item pede a ação certa para o canal certo', async () => {
     const a = acoes();
     montar({ actions: a, canManage: true });
     await userEvent.click(screen.getByRole('button', { name: 'Mais ações para Canal Comercial' }));
     expect(screen.queryByRole('button', { name: 'Reconectar' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ocultar' }));
-    expect(a.toggleHidden).toHaveBeenCalledWith(meta);
+    expect(a.pedir).toHaveBeenLastCalledWith('ocultar', meta);
     await userEvent.click(screen.getByRole('button', { name: 'Mais ações para Canal Suporte' }));
     await userEvent.click(screen.getByRole('button', { name: 'Reconectar' }));
-    expect(a.reconnect).toHaveBeenCalledWith(baileys);
+    expect(a.pedir).toHaveBeenLastCalledWith('reconectar', baileys);
     await userEvent.click(screen.getByRole('button', { name: 'Mais ações para Canal Cobrança' }));
     await userEvent.click(screen.getByRole('button', { name: 'Excluir' }));
-    expect(a.remove).toHaveBeenCalledWith(bsp);
+    expect(a.pedir).toHaveBeenLastCalledWith('excluir', bsp);
+    expect(a.pedir).toHaveBeenCalledTimes(3);
   });
 
-  test('Esc fecha o menu; canal oculto oferece Reexibir; ocupado desliga as ações', async () => {
-    const a = { ...acoes(), busyChannelId: 'c1' };
+  test('escolher um item devolve o foco ao "⋯" de origem', async () => {
+    montar({ actions: acoes(), canManage: true });
+    const botao = screen.getByRole('button', { name: 'Mais ações para Canal Cobrança' });
+    await userEvent.click(botao);
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(botao).toHaveFocus();
+    expect(botao).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('Esc fecha o menu; canal oculto oferece Reexibir', async () => {
+    const a = acoes();
     render(<MemoryRouter><CartoesDeCanais channels={[{ ...baileys, hidden: true }]} summaryContext={pronto} actions={a} canManage /></MemoryRouter>);
     const botao = screen.getByRole('button', { name: 'Mais ações para Canal Suporte' });
     await userEvent.click(botao);
     expect(botao).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: 'Reexibir' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Reexibir' }));
+    expect(a.pedir).toHaveBeenCalledWith('reexibir', { ...baileys, hidden: true });
+    await userEvent.click(botao);
     await userEvent.keyboard('{Escape}');
     expect(botao).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('em andamento: o cartão diz o que está acontecendo e não abre o menu nem o Configurar', async () => {
+    const a = acoes({ pendentes: { c1: 'Excluindo…' } });
+    montar({ actions: a, canManage: true });
+    const c = cartao('Canal Suporte');
+    expect(c).toHaveAttribute('aria-busy', 'true');
+    expect(c).toHaveClass('is-pendente');
+    expect(within(c).getByText('Excluindo…')).toBeInTheDocument();
+    const botao = screen.getByRole('button', { name: 'Mais ações para Canal Suporte' });
+    expect(botao).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(botao);
+    expect(botao).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument();
+    expect(within(c).getByRole('link', { name: 'Configurar' })).toHaveAttribute('aria-disabled', 'true');
+    expect(cartao('Canal Comercial')).not.toHaveAttribute('aria-busy');
+  });
+
+  test('o erro aparece no cartão de origem, com Tentar novamente e Dispensar', async () => {
+    const repetir = vi.fn();
+    const a = acoes({ erros: { c3: { mensagem: 'Não foi possível reconectar o canal.', repetir } } });
+    montar({ actions: a, canManage: true });
+    const c = cartao('Canal Cobrança');
+    expect(c).toHaveClass('is-erro');
+    expect(within(c).getByRole('alert')).toHaveTextContent('Não foi possível reconectar o canal.');
+    expect(within(cartao('Canal Suporte')).queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(within(c).getByRole('button', { name: 'Tentar novamente' }));
+    expect(repetir).toHaveBeenCalledTimes(1);
+    await userEvent.click(within(c).getByRole('button', { name: 'Dispensar' }));
+    expect(a.limparErro).toHaveBeenCalledWith('c3');
   });
 });

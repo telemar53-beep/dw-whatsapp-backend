@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { createElement, useCallback, useRef, useState } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useConfirm } from '../../../hooks/useConfirm';
 import {
   setChannelTriageEnabled,
   setChannelWabaId,
@@ -13,162 +12,229 @@ import {
   setMetaCloudCredentials,
   setChannelName,
 } from '../../../services/api';
-import { descreverErro } from '../../../utils/errorMessages';
+import { mensagemDoCanal, exclusaoRecusada } from './mensagensDoCanal';
+import { ConfirmacaoDoCanal } from './ConfirmacaoDoCanal';
 
-const EMPTY_ERRORS = { triage: null, ai: null, aiTriage: null, aiNightMode: null, wabaId: null, name: null, action: null };
+// As ações sobre um canal, na lista e no detalhe (Fatia S2).
+//
+// Antes, a confirmação fechava na hora e a ação corria depois: a falha (um
+// 409 ao excluir, por exemplo) aparecia longe, no topo da página, e o cartão
+// não mostrava nada enquanto isso. Agora:
+//
+// - excluir, ocultar, reexibir e reconectar um canal conectado pedem
+//   confirmação, e a confirmação ESPERA a resposta: fica aberta, com o botão
+//   dizendo o que acontece ("Excluindo…"), sem Cancelar, Esc ou clique fora, e
+//   sem segundo envio. Deu errado → o motivo aparece nela mesma;
+// - a exclusão recusada (o canal tem atendimentos ou integração SGP) oferece
+//   "Ocultar em vez de excluir", que é o caminho que o próprio backend indica;
+// - reconectar um canal que não está conectado não pergunta nada (como
+//   antes); o andamento e o erro ficam no cartão de onde saiu a ação;
+// - o cartão mostra o andamento ("Ocultando canal…") durante a ação;
+// - no fim, quem usa decide o sucesso (aviso na lista, volta para a lista
+//   depois de excluir no detalhe) por `aoConcluir(tipo, canal)`.
+//
+// As APIs, os métodos e os payloads são os de antes. A ordem do "um robô por
+// vez" (IA primeiro, depois desliga a triagem) também.
+const ANDAMENTO = {
+  excluir: 'Excluindo canal…',
+  ocultar: 'Ocultando canal…',
+  reexibir: 'Reexibindo canal…',
+  reconectar: 'Reconectando…',
+};
 
-// Handlers vindos de AdminChannelsPage.jsx (Tasks 1-16), sem alteração de
-// lógica: só o estado virou um objeto único (`errors`) e os `window.confirm`
-// viraram `useConfirm`, para que a tela de detalhe use o mesmo ConfirmDialog
-// das outras páginas de Configurações em vez do confirm() nativo do browser.
-export function useChannelActions(refresh) {
+const PADRAO = {
+  excluir: 'Não foi possível excluir o canal. Tente novamente.',
+  ocultar: 'Não foi possível ocultar o canal. Tente novamente.',
+  reexibir: 'Não foi possível reexibir o canal. Tente novamente.',
+  reconectar: 'Não foi possível reconectar o canal. Tente novamente.',
+};
+
+const RECUSA_DE_EXCLUSAO =
+  'Este canal já tem atendimentos ou uma integração SGP e não pode ser excluído sem perder esse histórico. Oculte o canal para tirá-lo da lista.';
+
+function falhaSegura(erro, padrao) {
+  return Object.assign(new Error(mensagemDoCanal(erro, padrao)), { causa: erro });
+}
+
+export function useChannelActions(refresh, { aoConcluir } = {}) {
   const { token } = useAuth();
-  const { confirm, confirmDialog } = useConfirm();
-  const [errors, setErrors] = useState(EMPTY_ERRORS);
-  const [busyChannelId, setBusyChannelId] = useState(null);
+  const [confirmacao, setConfirmacao] = useState(null);
+  const [pendentes, setPendentes] = useState({});
+  const [erros, setErros] = useState({});
+  const emCurso = useRef(false);
 
-  function setFieldError(field, value) {
-    setErrors((prev) => ({ ...prev, [field]: value }));
+  const chamar = useCallback(
+    (tipo, canal) => {
+      if (tipo === 'excluir') return deleteChannel(canal.id, token);
+      if (tipo === 'ocultar') return setChannelHidden(canal.id, true, token);
+      if (tipo === 'reexibir') return setChannelHidden(canal.id, false, token);
+      return reconnectChannel(canal.id, token);
+    },
+    [token]
+  );
+
+  function marcar(canal, tipo) {
+    setPendentes((atual) => ({ ...atual, [canal.id]: ANDAMENTO[tipo] }));
+  }
+  function desmarcar(canal) {
+    setPendentes((atual) => {
+      const { [canal.id]: _fora, ...resto } = atual;
+      return resto;
+    });
+  }
+  function limparErro(id) {
+    setErros((atual) => {
+      const { [id]: _fora, ...resto } = atual;
+      return resto;
+    });
   }
 
-  async function runChannelAction(channel, action) {
-    setFieldError('action', null);
-    setBusyChannelId(channel.id);
+  async function concluir(tipo, canal) {
+    if (refresh) await refresh();
+    if (aoConcluir) aoConcluir(tipo, canal);
+  }
+
+  // Ação sem confirmação: andamento e erro no cartão de origem.
+  async function executarDireto(tipo, canal) {
+    if (pendentes[canal.id]) return;
+    limparErro(canal.id);
+    marcar(canal, tipo);
     try {
-      await action();
-      refresh();
-    } catch (err) {
-      setFieldError('action', descreverErro(err, 'Não foi possível concluir a ação neste canal'));
-    } finally {
-      setBusyChannelId(null);
+      await chamar(tipo, canal);
+      desmarcar(canal);
+      await concluir(tipo, canal);
+    } catch (erro) {
+      desmarcar(canal);
+      setErros((atual) => ({
+        ...atual,
+        [canal.id]: { mensagem: mensagemDoCanal(erro, PADRAO[tipo]), repetir: () => executarDireto(tipo, canal) },
+      }));
     }
   }
 
-  async function reconnect(channel) {
-    if (channel.status === 'connected') {
-      const ok = await confirm(
-        `O canal "${channel.name}" está conectado. Reconectar vai derrubar a sessão atual e pedir um QR code novo. Continuar?`,
-        { danger: true, confirmLabel: 'Continuar' }
-      );
-      if (!ok) return;
+  function pedir(tipo, canal) {
+    if (pendentes[canal.id] || confirmacao) return;
+    limparErro(canal.id);
+    if (tipo === 'reconectar' && canal.status !== 'connected') {
+      executarDireto(tipo, canal);
+      return;
     }
-    runChannelAction(channel, () => reconnectChannel(channel.id, token));
+    setConfirmacao({ tipo, canal, ocupado: false, erro: null, recusada: false, emAndamento: tipo });
   }
 
-  async function toggleHidden(channel) {
-    const nextHidden = !channel.hidden;
-    const message = nextHidden
-      ? `Ocultar o canal "${channel.name}"? Ele sai da lista e a sessão do WhatsApp é encerrada. O histórico é preservado.`
-      : `Reexibir o canal "${channel.name}"?`;
-    const ok = await confirm(message, { danger: true, confirmLabel: nextHidden ? 'Ocultar' : 'Reexibir' });
-    if (!ok) return;
-    runChannelAction(channel, () => setChannelHidden(channel.id, nextHidden, token));
-  }
-
-  async function remove(channel) {
-    const ok = await confirm(
-      `Excluir o canal "${channel.name}" definitivamente? Só é possível se ele nunca teve conversas.`,
-      { danger: true, confirmLabel: 'Excluir' }
-    );
-    if (!ok) return;
-    runChannelAction(channel, () => deleteChannel(channel.id, token));
-  }
-
-  async function toggleTriage(channelId, triageEnabled) {
-    setFieldError('triage', null);
+  async function confirmar(tipoDaAcao) {
+    const atual = confirmacao;
+    if (!atual || emCurso.current) return;
+    const tipo = tipoDaAcao || atual.tipo;
+    emCurso.current = true;
+    setConfirmacao({ ...atual, ocupado: true, erro: null, emAndamento: tipo });
+    marcar(atual.canal, tipo);
     try {
-      await setChannelTriageEnabled(channelId, triageEnabled, token);
-      refresh();
-    } catch (err) {
-      setFieldError('triage', descreverErro(err, 'Falha ao atualizar a triagem deste canal'));
+      await chamar(tipo, atual.canal);
+      emCurso.current = false;
+      desmarcar(atual.canal);
+      setConfirmacao(null);
+      await concluir(tipo, atual.canal);
+    } catch (erro) {
+      emCurso.current = false;
+      desmarcar(atual.canal);
+      const recusada = tipo === 'excluir' && exclusaoRecusada(erro);
+      setConfirmacao({
+        ...atual,
+        ocupado: false,
+        recusada: atual.recusada || recusada,
+        emAndamento: tipo,
+        erro: recusada ? RECUSA_DE_EXCLUSAO : mensagemDoCanal(erro, PADRAO[tipo]),
+      });
     }
   }
+
+  function cancelar() {
+    if (emCurso.current) return;
+    setConfirmacao(null);
+  }
+
+  // ---- Atendimento, identificação e credenciais ----
+  // Cada uma devolve uma promessa que falha com a mensagem segura: quem chama
+  // (o interruptor, o editor do nome, o diálogo das credenciais) mostra o erro
+  // junto de si e restaura o que precisar.
+  async function comRecarga(fazer, padrao, { recarregarSempre = false } = {}) {
+    try {
+      await fazer();
+    } catch (erro) {
+      if (recarregarSempre && refresh) await refresh();
+      throw falhaSegura(erro, padrao);
+    }
+    if (refresh) await refresh();
+  }
+
+  const definirTriagem = (id, ligado) =>
+    comRecarga(() => setChannelTriageEnabled(id, ligado, token), 'Não foi possível salvar a triagem por menu. Tente novamente.');
 
   // Um robô por vez: ligar a IA num canal desliga a triagem dele na mesma
   // ação. A IA é ligada primeiro — se a segunda chamada falhar, o canal fica
-  // com a IA respondendo e a triagem ainda marcada no banco, o que é seguro
-  // (o backend já para de iniciar a triagem quando a IA está ligada); a ordem
-  // inversa arriscaria deixar o canal sem nenhum robô caso a chamada da IA
-  // falhasse. O refresh() roda sempre (sucesso ou falha) para que, se a
-  // segunda chamada falhar, a tela pare de mostrar o estado antigo (anterior
-  // ao clique) e passe a mostrar o estado real do canal junto com o erro —
-  // sem isso o admin veria a tela como se nada tivesse mudado.
-  async function toggleAi(channelId, aiEnabled) {
-    setFieldError('ai', null);
+  // com a IA respondendo e a triagem ainda marcada no banco, o que é seguro (o
+  // backend já para de iniciar a triagem quando a IA está ligada). A releitura
+  // roda também na falha, para a tela mostrar o estado real junto do erro.
+  const definirIa = (id, ligado) =>
+    comRecarga(
+      async () => {
+        await setChannelAiEnabled(id, ligado, token);
+        if (ligado) await setChannelTriageEnabled(id, false, token);
+      },
+      'Não foi possível salvar o atendimento com IA. Tente novamente.',
+      { recarregarSempre: true }
+    );
+
+  const definirTriagemIa = (id, ligado) =>
+    comRecarga(() => setChannelAiTriageEnabled(id, ligado, token), 'Não foi possível salvar a triagem com IA. Tente novamente.');
+
+  const definirNoturno = (id, ligado) =>
+    comRecarga(() => setChannelAiNightModeEnabled(id, ligado, token), 'Não foi possível salvar o atendimento noturno. Tente novamente.');
+
+  const salvarNome = (id, nome) => comRecarga(() => setChannelName(id, nome, token), 'Não foi possível salvar o nome. Tente novamente.');
+
+  const salvarWaba = (id, valor) => comRecarga(() => setChannelWabaId(id, valor, token), 'Não foi possível salvar o WABA ID. Tente novamente.');
+
+  // O motivo que a Meta deu chega em português (conferência do backend) e
+  // aparece no próprio diálogo. A releitura só roda no sucesso.
+  async function salvarCredenciaisMeta(id, credenciais) {
+    let canal;
     try {
-      await setChannelAiEnabled(channelId, aiEnabled, token);
-      if (aiEnabled) {
-        await setChannelTriageEnabled(channelId, false, token);
-      }
-    } catch (err) {
-      setFieldError('ai', descreverErro(err, 'Falha ao atualizar a IA deste canal'));
-    } finally {
-      refresh();
+      canal = await setMetaCloudCredentials(id, credenciais, token);
+    } catch (erro) {
+      throw falhaSegura(erro, 'Não foi possível salvar as credenciais. Confira os dados e tente novamente.');
     }
+    if (refresh) await refresh();
+    return canal;
   }
 
-  async function toggleAiTriage(channelId, aiTriageEnabled) {
-    setFieldError('aiTriage', null);
-    try {
-      await setChannelAiTriageEnabled(channelId, aiTriageEnabled, token);
-      refresh();
-    } catch (err) {
-      setFieldError('aiTriage', descreverErro(err, 'Falha ao atualizar a triagem com IA deste canal'));
-    }
-  }
-
-  async function toggleAiNightMode(channelId, aiNightModeEnabled) {
-    setFieldError('aiNightMode', null);
-    try {
-      await setChannelAiNightModeEnabled(channelId, aiNightModeEnabled, token);
-      refresh();
-    } catch (err) {
-      setFieldError('aiNightMode', descreverErro(err, 'Falha ao atualizar o atendimento noturno deste canal'));
-    }
-  }
-
-  async function saveChannelName(channelId, value) {
-    setFieldError('name', null);
-    try {
-      await setChannelName(channelId, value, token);
-      refresh();
-    } catch (err) {
-      setFieldError('name', descreverErro(err, 'Falha ao renomear o canal'));
-    }
-  }
-
-  async function saveWabaId(channelId, value) {
-    setFieldError('wabaId', null);
-    try {
-      await setChannelWabaId(channelId, value, token);
-      refresh();
-    } catch (err) {
-      setFieldError('wabaId', descreverErro(err, 'Falha ao atualizar o WABA ID'));
-    }
-  }
-
-  // Sem try/catch de proposito: o erro tem que chegar ao formulário da
-  // migração, que mostra o motivo que a Meta deu ao lado dos campos. O refresh
-  // só roda no sucesso, senão a tela recarregaria como se algo tivesse mudado.
-  async function saveMetaCloudCredentials(channelId, credentials) {
-    const channel = await setMetaCloudCredentials(channelId, credentials, token);
-    refresh();
-    return channel;
-  }
+  const dialogo = confirmacao
+    ? createElement(ConfirmacaoDoCanal, {
+        tipo: confirmacao.tipo,
+        canal: confirmacao.canal,
+        ocupado: confirmacao.ocupado,
+        emAndamento: confirmacao.emAndamento,
+        erro: confirmacao.erro,
+        recusada: confirmacao.recusada,
+        onConfirmar: () => confirmar(),
+        onOcultarEmVez: () => confirmar('ocultar'),
+        onCancelar: cancelar,
+      })
+    : null;
 
   return {
-    errors,
-    busyChannelId,
-    saveMetaCloudCredentials,
-    saveChannelName,
-    toggleTriage,
-    toggleAi,
-    toggleAiTriage,
-    toggleAiNightMode,
-    saveWabaId,
-    reconnect,
-    toggleHidden,
-    remove,
-    confirmDialog,
+    pedir,
+    pendentes,
+    erros,
+    limparErro,
+    dialogo,
+    definirTriagem,
+    definirIa,
+    definirTriagemIa,
+    definirNoturno,
+    salvarNome,
+    salvarWaba,
+    salvarCredenciaisMeta,
   };
 }

@@ -1,118 +1,101 @@
 import { Link, useOutletContext } from 'react-router-dom';
-import { Toggle } from '../../../components/ui';
 import { useTriage } from '../../../hooks/useTriage';
 import { useAiConfig } from '../../../hooks/useAiConfig';
 import { useBusinessHoursConfig } from '../../../hooks/useBusinessHoursConfig';
 import { computeStatus } from '../../../components/OpenAiConfigCard';
+import { InterruptorDoCanal } from './InterruptorDoCanal';
 
-const PERMISSION_REASON = 'Requer permissão de Canais e Integrações';
-
-function ErrorNote({ children }) {
-  if (!children) return null;
-  return <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">{children}</p>;
-}
-
-function SummaryRow({ to, label, value }) {
+// Aba Atendimento do detalhe do canal (Fatia S2, primeiro mockup): as
+// automações deste canal, cada uma com envio, deduplicação e restauração
+// (InterruptorDoCanal), e ao lado as regras globais que valem para ele.
+//
+// As regras de antes continuam: um robô por vez (ligar a IA desliga a triagem
+// por menu, na ordem de useChannelActions); a triagem com IA exige a IA; o
+// noturno exige a triagem com IA e a janela — e, já ligado, pode sempre ser
+// desligado, mesmo sem a janela.
+function LinhaRelacionada({ to, rotulo, valor }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-wa-border py-2.5 last:border-b-0">
-      <Link to={to} className="text-[13.5px] font-medium text-wa-link hover:underline">
-        {label}
-      </Link>
-      <span className="text-[13.5px] text-wa-muted">{value}</span>
+    <div className="cfg-linha">
+      <dt><Link to={to}>{rotulo}</Link></dt>
+      <dd><span className="cfg-linha-valor">{valor}</span></dd>
     </div>
   );
 }
 
 function ChannelBehaviorTab() {
-  const { channel, actions, canManage } = useOutletContext();
+  const { channel, actions } = useOutletContext();
   const { options } = useTriage();
   const { config: aiConfig } = useAiConfig();
   const { config: businessHours } = useBusinessHoursConfig();
 
-  const nightWindowSet = Boolean(aiConfig.nightStartTime && aiConfig.nightEndTime);
-  const openAiStatus = computeStatus({ mode: aiConfig.mode, configured: aiConfig.configured, hasError: false });
+  const janelaDefinida = Boolean(aiConfig.nightStartTime && aiConfig.nightEndTime);
+  const openAi = computeStatus({ mode: aiConfig.mode, configured: aiConfig.configured, hasError: false });
 
-  const triageOptionsLabel =
-    options.length === 0 ? 'sem opções' : `${options.length} ${options.length === 1 ? 'opção' : 'opções'}`;
-  const welcomeLabel = channel.welcomeMessage || 'não definida';
-  const businessHoursLabel = businessHours.enabled ? `${businessHours.startTime}–${businessHours.endTime}` : 'não configurado';
-  const nightWindowLabel = nightWindowSet ? `${aiConfig.nightStartTime}–${aiConfig.nightEndTime}` : 'não definida';
-
-  const aiTriageDisabledReason = !canManage
-    ? PERMISSION_REASON
-    : !channel.aiEnabled
-      ? 'Precisa de Atendimento com IA ligado'
-      : undefined;
-
-  const nightModeDisabledReason = !canManage
-    ? PERMISSION_REASON
-    : !channel.aiTriageEnabled
-      ? 'Precisa de Triagem com IA ligada'
-      : !nightWindowSet
-        ? (
-            <Link to="/configuracoes/automacao/noturno" className="font-medium text-wa-link underline">
-              Defina a janela em Automação e IA › Atendimento noturno
-            </Link>
-          )
-        : undefined;
+  const noturnoIndisponivel = !channel.aiNightModeEnabled && (!channel.aiTriageEnabled || !janelaDefinida);
+  const motivoDoNoturno = !channel.aiTriageEnabled ? (
+    'Precisa de Triagem com IA ligada'
+  ) : (
+    <Link to="/configuracoes/automacao/noturno">Defina a janela em IA e automações › Atendimento noturno</Link>
+  );
 
   return (
-    <div className="settings-channel-behavior space-y-3">
-      {!canManage && (
-        <p className="rounded-[12px] bg-wa-warn-bg px-3 py-2.5 text-[13.5px] text-wa-warn-text">{PERMISSION_REASON}</p>
-      )}
-      <ErrorNote>{actions.errors.triage}</ErrorNote>
-      <ErrorNote>{actions.errors.ai}</ErrorNote>
-      <ErrorNote>{actions.errors.aiTriage}</ErrorNote>
-      <ErrorNote>{actions.errors.aiNightMode}</ErrorNote>
-
-      <section aria-labelledby="channel-automation-title" className="rounded-[14px] border border-wa-border bg-black/[0.08] px-4 py-4 sm:px-5">
-        <h3 id="channel-automation-title" className="mb-3 text-[15px] font-semibold text-wa-text">Automações deste canal</h3>
-        <div className="grid items-start gap-x-5 gap-y-0 md:grid-cols-2 [&>*]:border-b [&>*]:border-wa-border [&>*]:py-3">
-        <Toggle
-          id="channel-triage"
-          checked={Boolean(channel.triageEnabled)}
-          onChange={(e) => actions.toggleTriage(channel.id, e.target.checked)}
-          disabled={!canManage}
-          disabledReason={!canManage ? PERMISSION_REASON : undefined}
-          label="Triagem por menu"
-        />
-        <Toggle
-          id="channel-ai"
-          checked={Boolean(channel.aiEnabled)}
-          onChange={(e) => actions.toggleAi(channel.id, e.target.checked)}
-          disabled={!canManage}
-          disabledReason={!canManage ? PERMISSION_REASON : undefined}
-          label="Atendimento com IA"
-          description="Ligar a IA desliga a triagem por menu neste canal: só um robô responde por vez."
-        />
-        <Toggle
-          id="channel-ai-triage"
-          checked={Boolean(channel.aiTriageEnabled)}
-          onChange={(e) => actions.toggleAiTriage(channel.id, e.target.checked)}
-          disabled={!canManage || !channel.aiEnabled}
-          disabledReason={aiTriageDisabledReason}
-          label="Triagem com IA"
-        />
-        <Toggle
-          id="channel-ai-night-mode"
-          checked={Boolean(channel.aiNightModeEnabled)}
-          onChange={(e) => actions.toggleAiNightMode(channel.id, e.target.checked)}
-          disabled={!canManage || (!channel.aiNightModeEnabled && (!channel.aiTriageEnabled || !nightWindowSet))}
-          disabledReason={nightModeDisabledReason}
-          label="Atendimento noturno"
-        />
+    <div className="cfg-atendimento">
+      <section aria-labelledby="cfg-automacoes-titulo" className="cfg-secao">
+        <div className="cfg-cartao">
+          <h2 id="cfg-automacoes-titulo">Automações deste canal</h2>
+          <InterruptorDoCanal
+            rotulo="Triagem por menu"
+            descricao="O cliente escolhe uma opção antes do atendimento."
+            ligado={channel.triageEnabled}
+            onAlterar={(ligado) => actions.definirTriagem(channel.id, ligado)}
+          />
+          <InterruptorDoCanal
+            rotulo="Atendimento com IA"
+            descricao="Ao ativar, a triagem por menu é desligada neste canal: só um robô responde por vez."
+            ligado={channel.aiEnabled}
+            onAlterar={(ligado) => actions.definirIa(channel.id, ligado)}
+          />
+          <InterruptorDoCanal
+            rotulo="Triagem com IA"
+            descricao="A IA identifica o assunto e encaminha o atendimento."
+            ligado={channel.aiTriageEnabled}
+            indisponivel={!channel.aiEnabled}
+            motivo="Precisa de Atendimento com IA ligado"
+            onAlterar={(ligado) => actions.definirTriagemIa(channel.id, ligado)}
+          />
+          <InterruptorDoCanal
+            rotulo="Atendimento noturno"
+            descricao="A IA atende sozinha dentro da janela noturna."
+            ligado={channel.aiNightModeEnabled}
+            indisponivel={noturnoIndisponivel}
+            motivo={motivoDoNoturno}
+            onAlterar={(ligado) => actions.definirNoturno(channel.id, ligado)}
+          />
         </div>
       </section>
 
-      <section aria-labelledby="channel-global-title" className="rounded-[14px] border border-wa-border bg-black/[0.08] px-4 py-4 sm:px-5">
-        <h3 id="channel-global-title" className="mb-2 text-[15px] font-semibold text-wa-text">Configurações globais que valem para este canal</h3>
-        <div className="grid gap-x-6 md:grid-cols-2">
-          <SummaryRow to="/configuracoes/automacao/triagem-menu" label="Triagem por menu" value={triageOptionsLabel} />
-          <SummaryRow to="/configuracoes/mensagens/boas-vindas" label="Boas-vindas" value={welcomeLabel} />
-          <SummaryRow to="/configuracoes/regras/horario" label="Horário de atendimento" value={businessHoursLabel} />
-          <SummaryRow to="/configuracoes/automacao/noturno" label="Janela noturna" value={nightWindowLabel} />
-          <SummaryRow to="/configuracoes/integracoes/openai" label="OpenAI" value={openAiStatus} />
+      <section aria-labelledby="cfg-regras-titulo" className="cfg-secao">
+        <div className="cfg-cartao">
+          <h2 id="cfg-regras-titulo">Regras relacionadas</h2>
+          <dl className="cfg-linhas">
+            <LinhaRelacionada
+              to="/configuracoes/automacao/triagem-menu"
+              rotulo="Triagem por menu"
+              valor={options.length === 0 ? 'sem opções' : `${options.length} ${options.length === 1 ? 'opção' : 'opções'}`}
+            />
+            <LinhaRelacionada to="/configuracoes/mensagens/boas-vindas" rotulo="Boas-vindas" valor={channel.welcomeMessage || 'não definida'} />
+            <LinhaRelacionada
+              to="/configuracoes/regras/horario"
+              rotulo="Horário de atendimento"
+              valor={businessHours.enabled ? `${businessHours.startTime}–${businessHours.endTime}` : 'não configurado'}
+            />
+            <LinhaRelacionada
+              to="/configuracoes/automacao/noturno"
+              rotulo="Janela noturna"
+              valor={janelaDefinida ? `${aiConfig.nightStartTime}–${aiConfig.nightEndTime}` : 'não definida'}
+            />
+            <LinhaRelacionada to="/configuracoes/integracoes/openai" rotulo="OpenAI" valor={openAi} />
+          </dl>
         </div>
       </section>
     </div>

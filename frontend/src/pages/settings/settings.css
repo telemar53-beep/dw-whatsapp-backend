@@ -442,7 +442,6 @@
 .settings-workspace .text-\[\#e9b18b\] { color: var(--cfg-ambar); }
 .settings-workspace .bg-\[\#a46e45\]\/\[0\.18\] { background-color: var(--cfg-ambar-suave); }
 /* Símbolo do canal no detalhe (ChannelIcon sem tipo): o verde claro some. */
-.settings-workspace .settings-channel-symbol { background-color: var(--cfg-indigo-suave); color: var(--cfg-indigo); }
 
 /* ---------- 4. Composições do conteúdo ---------- */
 
@@ -578,34 +577,6 @@
 .settings-sgp-deliveries { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .settings-sgp-deliveries > * { margin: 0; border-radius: 5px; box-shadow: none; border: 0; border-top: 1px solid var(--color-ui-line); background: transparent; }
 @container (min-width: 950px) { .settings-sgp-deliveries { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* Detalhe do canal (fatia S2). A ordem do DOM é a ordem visual: estado,
-   identidade, relacionadas, avançado. */
-.channel-connection-page { display: flex; flex-direction: column; gap: 12px; }
-.channel-section { border-radius: 5px; border: 1px solid var(--color-ui-line); background: transparent; padding: 12px 14px; }
-.channel-section-estado { border-color: rgba(79, 70, 229, 0.25); background: var(--cfg-indigo-fundo); }
-.channel-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
-.channel-section-title { font-size: 13px; font-weight: 600; color: var(--color-wa-text); margin: 0; }
-.channel-section-text { font-size: 12px; line-height: 18px; color: var(--color-ui-ink-muted); margin: 6px 0 0; max-width: 80ch; }
-.channel-data-list { margin-top: 6px; }
-.channel-data-row + .channel-data-row { border-top: 1px solid var(--color-ui-line); }
-.channel-inline-edit { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-ui-line); }
-.channel-inline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.channel-related-link { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 500; color: var(--color-chat-orange); }
-.channel-related-link:hover { text-decoration: underline; }
-.channel-advanced { border-radius: 5px; border: 1px solid var(--color-ui-line); background: var(--cfg-diretorio); }
-.channel-advanced-summary { display: flex; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; font-size: 12.5px; color: var(--color-wa-text); }
-.channel-advanced-summary::-webkit-details-marker { display: none; }
-.channel-advanced-body { padding: 0 14px 12px; }
-.settings-channel-behavior { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
-@container (min-width: 860px) { .settings-channel-behavior { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .settings-channel-behavior > p { grid-column: 1 / -1; } }
-.settings-workspace [aria-labelledby=channel-detail-title] { border-radius: 6px; border: 0; background: none; }
-.settings-workspace .settings-channel-detail-head { padding: 10px 0; }
-.settings-workspace .settings-channel-detail-body { padding: 12px 0; }
-.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section { border: 0; border-radius: 0; background: transparent; padding: 16px 0 20px; }
-.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section + .settings-section { border-top: 1px solid var(--cfg-linha); }
-.settings-workspace .settings-channel-switch { border: 0; border-radius: 0; background: none; padding: 0 0 10px; border-bottom: 1px solid var(--color-ui-line); }
-.settings-channel-switch label { flex-direction: row; align-items: center; gap: 10px; }
 
 /* Cadastros: a barra operacional precede a tabela, sem moldura de cartão. */
 .settings-register-summary { margin-bottom: 8px !important; padding: 7px 0 !important; border-top: 1px solid var(--color-ui-line); border-bottom: 1px solid var(--color-ui-line); font-size: 11px !important; }

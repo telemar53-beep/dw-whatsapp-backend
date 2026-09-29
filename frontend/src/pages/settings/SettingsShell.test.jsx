@@ -46,3 +46,45 @@ describe('SettingsShell: cabeçalho da página (mockup S1)', () => {
     expect(document.querySelector('.cfg-sem-acesso-icone svg')).not.toBeNull();
   });
 });
+
+// Opcionais da Fatia S2 (detalhe do canal). Sem eles, nada muda (acima).
+describe('SettingsShell: trilha própria, voltar, marca e sem acesso (S2)', () => {
+  const trilha = [{ label: 'Configurações', to: '/configuracoes' }, { label: 'Números conectados' }, { label: 'Canal Suporte' }];
+  const voltar = { to: '/configuracoes/canais', rotulo: 'Números conectados' };
+
+  test('a trilha própria substitui a padrão; o voltar é o único link para a lista', () => {
+    montar('/configuracoes/canais/c1/conexao', { level: 'integrations', title: 'Canal Suporte', trilha, voltar });
+    const nav = screen.getByRole('navigation', { name: 'Você está em' });
+    expect(nav).toHaveTextContent('Configurações›Números conectados›Canal Suporte');
+    expect(within(nav).getAllByRole('link')).toHaveLength(1);
+    const links = screen.getAllByRole('link', { name: 'Números conectados' });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/configuracoes/canais');
+    expect(links[0]).toHaveClass('cfg-voltar-link');
+  });
+
+  test('a marca toma o lugar do ladrilho do ícone', () => {
+    montar('/configuracoes/canais/c1/conexao', { level: 'integrations', title: 'Canal Suporte', iconName: 'canais', marca: <span className="cfg-emblema">BL</span> });
+    expect(document.querySelector('.cfg-titulo-marca .cfg-emblema')).toHaveTextContent('BL');
+    expect(document.querySelector('.settings-title-mark')).toBeNull();
+  });
+
+  test('sem acesso com texto próprio: título, texto, trilha e voltar, e nada do conteúdo', () => {
+    montar(
+      '/configuracoes/canais/c1/conexao',
+      {
+        level: 'integrations',
+        trilha,
+        voltar,
+        semAcesso: { titulo: 'Sem acesso a este canal', texto: 'Seu perfil pode ver a lista.', voltar: { to: '/configuracoes/canais', rotulo: 'Voltar aos canais' } },
+      },
+      { role: 'manager', canManageIntegrations: false }
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'Sem acesso a este canal' })).toBeInTheDocument();
+    expect(screen.getByText('Seu perfil pode ver a lista.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Voltar aos canais' })).toHaveAttribute('href', '/configuracoes/canais');
+    expect(screen.getByRole('navigation', { name: 'Você está em' })).toBeInTheDocument();
+    expect(document.querySelector('.cfg-sem-acesso-topo .cfg-voltar-link')).toHaveAttribute('href', '/configuracoes/canais');
+    expect(screen.queryByText('conteúdo')).not.toBeInTheDocument();
+  });
+});

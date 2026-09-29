@@ -252,10 +252,11 @@
 /* Cabeçalho da página */
 .settings-workspace .settings-shell-header { padding: 26px clamp(22px, 3.4vw, 48px) 0; }
 .cfg-cabecalho { display: flex; flex-direction: column; padding-bottom: 22px; }
-.cfg-trilha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; color: #777d8d; font-size: 12px; line-height: 16px; }
+.cfg-trilha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--cfg-apoio); font-size: 12px; line-height: 16px; }
 .cfg-trilha a { color: inherit; text-decoration: none; }
 .cfg-trilha a:hover { color: var(--cfg-tinta); text-decoration: underline; }
-.cfg-trilha-sep { margin-left: 6px; color: #a0a5b1; }
+.cfg-trilha-sep { margin-left: 6px; color: var(--cfg-fraco); }
+.cfg-trilha > :last-child > :first-child { color: var(--cfg-tinta); }
 .cfg-cabecalho-linha { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px 20px; }
 .cfg-titulo { display: flex; flex: 1 1 18rem; align-items: flex-start; gap: 14px; min-width: 0; }
 .settings-title-mark {

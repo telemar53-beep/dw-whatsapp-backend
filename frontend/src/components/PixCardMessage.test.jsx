@@ -2,6 +2,10 @@ import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import PixCardMessage from './PixCardMessage';
 
+// A data da metadata vem da 2ª via do SGP (fatura2via): num título atrasado, é o dia da
+// reemissão, não o vencimento original (bug de 28/09/2026). A bolha não pode dizer "Vence".
+const linhaDaValidade = (data) => (_, el) => el.tagName === 'SPAN' && el.textContent.startsWith(`2ª via válida até ${data}`);
+
 describe('PixCardMessage', () => {
   test('shows the title, formatted due date and value, and a truncated code', () => {
     const message = {
@@ -17,6 +21,8 @@ describe('PixCardMessage', () => {
       .replace(/ /g, ' ');
     expect(screen.getByText('Pix da fatura')).toBeInTheDocument();
     expect(screen.getByText('15/09/2026')).toBeInTheDocument();
+    expect(screen.getByText(linhaDaValidade('15/09/2026'))).toBeInTheDocument();
+    expect(screen.queryByText(/\bVence\b/)).not.toBeInTheDocument();
     expect(screen.getByText(expectedValue)).toBeInTheDocument();
     expect(screen.getByText('000201ABCDEFGHIJKL…')).toBeInTheDocument();
     expect(screen.queryByText(message.content)).not.toBeInTheDocument();
@@ -26,7 +32,7 @@ describe('PixCardMessage', () => {
   test('omits the due date line when there is none', () => {
     const message = { content: '000201ABC', metadata: { value: 50 } };
     render(<PixCardMessage message={message} />);
-    expect(screen.queryByText(/vence/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vence|válida até/i)).not.toBeInTheDocument();
   });
 
   test('omits the value when it is not a number', () => {
@@ -47,6 +53,7 @@ describe('PixCardMessage', () => {
     expect(screen.queryByText('Pix da fatura')).not.toBeInTheDocument();
     expect(screen.queryByText('Cartão com botão Copiar código Pix')).not.toBeInTheDocument();
     expect(screen.getByText('15/09/2026')).toBeInTheDocument();
+    expect(screen.getByText(linhaDaValidade('15/09/2026'))).toBeInTheDocument();
     expect(screen.getByText('000201ABCDEFGHIJKL…')).toBeInTheDocument();
     expect(screen.queryByText(message.content)).not.toBeInTheDocument();
     expect(

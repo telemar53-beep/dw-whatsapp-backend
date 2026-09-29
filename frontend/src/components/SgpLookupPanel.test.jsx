@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SgpLookupPanel from './SgpLookupPanel';
@@ -60,6 +60,13 @@ function abrir(hook = {}, props = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   QRCode.toDataURL.mockResolvedValue('data:image/png;base64,FAKE');
+  // Só o relógio: 28/09/2026 (as datas curtas saem sem o ano). Os timers seguem reais.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-28T12:00:00-03:00'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('busca', () => {
@@ -191,10 +198,10 @@ describe('contratos', () => {
 });
 
 describe('faturas', () => {
-  test('antes da 2ª via: resumo da consulta do contrato, o botão e o aviso — sem chamada automática', () => {
+  test('antes da 2ª via: o que a consulta do contrato informou, o botão e o aviso — sem chamada automática', () => {
     const fetchDuplicate = vi.fn();
     abrir({ client: CLIENTE, contracts: [CONTRATO_A], fetchDuplicate });
-    expect(screen.getByText('2 faturas em aberto · Total R$ 179,80')).toBeInTheDocument();
+    expect(screen.getByText('2 títulos informados pelo SGP · Valor informado R$ 179,80')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Consultar 2ª via' })).toBeInTheDocument();
     expect(screen.getByText('Pode gerar Pix no SGP.')).toBeInTheDocument();
     expect(fetchDuplicate).not.toHaveBeenCalled();
@@ -213,9 +220,10 @@ describe('faturas', () => {
     expect(screen.queryByRole('button', { name: 'Consultar 2ª via' })).not.toBeInTheDocument();
   });
 
-  test('nenhuma fatura em aberto', () => {
+  test('nenhuma 2ª via liberada: diz isso, sem afirmar que não há fatura em aberto', () => {
     abrir({ client: CLIENTE, contracts: [CONTRATO_A], duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: false, duplicates: [] } } });
-    expect(screen.getByText('Nenhuma fatura em aberto para este contrato.')).toBeInTheDocument();
+    expect(screen.getByText('O SGP não liberou segunda via para este contrato.')).toBeInTheDocument();
+    expect(screen.queryByText(/nenhuma fatura em aberto/i)).not.toBeInTheDocument();
   });
 
   test('erro da 2ª via: mensagem traduzida e o botão de volta para tentar de novo', () => {
@@ -224,33 +232,193 @@ describe('faturas', () => {
     expect(screen.getByRole('button', { name: 'Consultar 2ª via' })).toBeInTheDocument();
   });
 
-  test('fechada, mostra só a fatura escolhida; o resumo soma as faturas devolvidas', () => {
+  test('fechada, mostra só a 2ª via escolhida, com a data como validade; a soma das 2ª vias não vira total', () => {
     abrir({ client: CLIENTE, contracts: [CONTRATO_A], duplicateState: COM_FATURAS });
     const faturas = screen.getByRole('region', { name: 'Faturas' });
     expect(within(faturas).getByText(/Nº 901/)).toBeInTheDocument();
     expect(within(faturas).queryByText(/Nº 902/)).not.toBeInTheDocument();
     expect(within(faturas).getByText('R$ 89,90')).toBeInTheDocument();
-    expect(within(faturas).getByText(/^Venc(e|eu) 20 set$/)).toBeInTheDocument();
+    expect(within(faturas).getByText('2ª via válida até 20 set')).toBeInTheDocument();
     expect(within(faturas).getByText('Em aberto')).toBeInTheDocument();
-    expect(within(faturas).getByText('2 faturas')).toBeInTheDocument();
-    expect(screen.getByText('2 faturas em aberto · Total R$ 189,40')).toBeInTheDocument();
+    expect(within(faturas).getByText('2 segundas vias')).toBeInTheDocument();
+    expect(screen.queryByText(/Total/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/R\$\s189,40/)).not.toBeInTheDocument();
   });
 
-  test('abrir mostra todas as faturas devolvidas', async () => {
+  test('abrir mostra todas as 2ª vias liberadas', async () => {
     abrir({ client: CLIENTE, contracts: [CONTRATO_A], duplicateState: COM_FATURAS });
     await userEvent.click(screen.getByRole('button', { name: /nº 901/i }));
-    const lista = screen.getByRole('list', { name: 'Faturas em aberto' });
+    const lista = screen.getByRole('list', { name: 'Segundas vias liberadas' });
     expect(within(lista).getAllByRole('button')).toHaveLength(2);
     expect(within(lista).getByText('Nº 902')).toBeInTheDocument();
   });
 
-  test('trocar a fatura troca o que vai no envio', async () => {
+  test('trocar a 2ª via troca o que vai no envio', async () => {
     const { onSendPix } = abrir({ client: CLIENTE, contracts: [CONTRATO_A], duplicateState: COM_FATURAS }, { podeEnviar: true });
     await userEvent.click(screen.getByRole('button', { name: /nº 901/i }));
-    await userEvent.click(within(screen.getByRole('list', { name: 'Faturas em aberto' })).getByRole('button', { name: /902/ }));
-    expect(screen.getByText('Enviar ao cliente (Fatura de 20 out)')).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('list', { name: 'Segundas vias liberadas' })).getByRole('button', { name: /902/ }));
+    // A escolhida aparece fechada no seletor, logo acima do "Enviar esta 2ª via".
+    expect(screen.getByRole('button', { name: /nº 902/i })).toHaveTextContent('2ª via válida até 20 out');
     await userEvent.click(screen.getByRole('button', { name: 'Código Pix' }));
     expect(onSendPix).toHaveBeenCalledWith(17402, expect.objectContaining({ id: '902', pixCode: 'PIX-902' }));
+  });
+});
+
+// Bug de 28/09/2026: o contrato tinha duas faturas vencidas de R$ 100,00 no mesmo dia, e o painel
+// mostrava "2 faturas em aberto · Total R$ 100,00" antes e "1 fatura em aberto · Vence 28 set"
+// depois. A conferência dos títulos (vencimento original, valores, total) e as 2ª vias liberadas
+// (data da reemissão, meios de pagamento) agora aparecem separadas — nada casa uma com a outra.
+describe('conferência das faturas (bug de 28/09/2026)', () => {
+  const CONTRATO_DO_BUG = { id: 17402, status: 'Ativo', plan: 'Plano Teste 300', openInvoicesCount: 2, openAmount: 100 };
+  const SEGUNDA_VIA = { id: '900', dueDate: '2026-09-28', value: 100, barCode: 'LINHA-900', pixCode: 'PIX-900', boletoLink: 'https://exemplo.test/900' };
+  const OUTRA_SEGUNDA_VIA = { id: '901', dueDate: '2026-10-20', value: 100, barCode: 'LINHA-901', pixCode: 'PIX-901-B', boletoLink: 'https://exemplo.test/901-b' };
+  const pendencia = (faturaId, campos = {}) => ({
+    faturaId, vencimentoOriginal: '2026-09-15', vencimentoAtualizado: '2026-09-28', valorOriginal: 100, valorCorrigido: 100, valor: 100, ...campos,
+  });
+  const doDia = (faturaId) => pendencia(faturaId, { vencimentoOriginal: '2026-09-28' });
+  const conferida = (vencidas, venceHoje, totalVencidas) => ({ estado: 'completa', vencidas, venceHoje, totalVencidas });
+  const DUAS_VENCIDAS = conferida([pendencia(101), pendencia(102)], [], 200);
+  const respostaDaSegundaVia = (duplicates, conferencia) => ({
+    17402: { loading: false, error: null, hasOpenInvoice: duplicates.length > 0, duplicates, ...(conferencia ? { conferencia } : {}) },
+  });
+  const doBug = (duplicateState = {}, props) => abrir({ client: CLIENTE, contracts: [CONTRATO_DO_BUG], duplicateState }, props);
+
+  test('antes da consulta: só o que o SGP informou, sem chamar de "Total"', () => {
+    doBug();
+    expect(screen.getByText('2 títulos informados pelo SGP · Valor informado R$ 100,00')).toBeInTheDocument();
+    expect(screen.queryByText(/total/i)).not.toBeInTheDocument();
+  });
+
+  test('um título informado: singular', () => {
+    abrir({ client: CLIENTE, contracts: [{ ...CONTRATO_DO_BUG, openInvoicesCount: 1 }] });
+    expect(screen.getByText('1 título informado pelo SGP · Valor informado R$ 100,00')).toBeInTheDocument();
+  });
+
+  test('conferida: as duas vencidas, cada uma pelo vencimento original e com o valor, e o total R$ 200,00', () => {
+    doBug(respostaDaSegundaVia([SEGUNDA_VIA], DUAS_VENCIDAS));
+    expect(screen.getByText('2 faturas vencidas · Total R$ 200,00')).toBeInTheDocument();
+    const linhas = within(screen.getByRole('list', { name: 'Pendências no SGP' })).getAllByRole('listitem');
+    expect(linhas).toHaveLength(2);
+    linhas.forEach((linha, i) => {
+      expect(within(linha).getByText('Venceu 15 set')).toBeInTheDocument();
+      expect(within(linha).getByText('R$ 100,00')).toBeInTheDocument();
+      expect(within(linha).getByText(`Nº ${101 + i}`)).toBeInTheDocument();
+    });
+    // Com a conferência, o que a consulta do contrato "informou" sai de cena.
+    expect(screen.queryByText(/informado/)).not.toBeInTheDocument();
+  });
+
+  test('a 2ª via fica à parte: só a que o SGP liberou, com a data da reemissão como validade', () => {
+    doBug(respostaDaSegundaVia([SEGUNDA_VIA], DUAS_VENCIDAS));
+    expect(screen.queryByText('Fatura selecionada')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '2ª via selecionada' })).toBeInTheDocument();
+    expect(screen.getByText('2ª via válida até 28 set')).toBeInTheDocument();
+    expect(screen.queryByText(/Venc(e|eu) 28 set/)).not.toBeInTheDocument();
+    expect(screen.getByText('Nº 900')).toBeInTheDocument();
+    // A validade já está no cartão logo acima: o título das ações não repete a data.
+    expect(screen.getByRole('heading', { name: 'Enviar esta 2ª via' })).toBeInTheDocument();
+    expect(screen.queryByText(/Enviar ao cliente/)).not.toBeInTheDocument();
+    // Uma só: não há lista de 2ª vias para abrir.
+    expect(screen.queryByRole('button', { name: /nº 900/i })).not.toBeInTheDocument();
+  });
+
+  test('2 vencidas e 1 segunda via: o aviso diz as duas coisas', () => {
+    doBug(respostaDaSegundaVia([SEGUNDA_VIA], DUAS_VENCIDAS));
+    expect(screen.getByText('O SGP informou 2 faturas vencidas, mas liberou 1 segunda via. Confira no SGP antes de enviar.')).toBeInTheDocument();
+  });
+
+  test.each([
+    ['1 vencida e 2 segundas vias', conferida([pendencia(101)], [], 100), [SEGUNDA_VIA, OUTRA_SEGUNDA_VIA],
+      'O SGP informou 1 fatura vencida, mas liberou 2 segundas vias. Confira no SGP antes de enviar.'],
+    ['2 vencidas e nenhuma segunda via', DUAS_VENCIDAS, [],
+      'O SGP informou 2 faturas vencidas, mas não liberou segunda via. Confira no SGP antes de enviar.'],
+    ['1 vencida, 1 do dia e 1 segunda via', conferida([pendencia(101)], [doDia(102)], 100), [SEGUNDA_VIA],
+      'O SGP informou 1 fatura vencida e 1 que vence hoje, mas liberou 1 segunda via. Confira no SGP antes de enviar.'],
+    ['2 do dia e 1 segunda via', conferida([], [doDia(101), doDia(102)], 0), [SEGUNDA_VIA],
+      'O SGP informou 2 faturas que vencem hoje, mas liberou 1 segunda via. Confira no SGP antes de enviar.'],
+  ])('aviso com %s', (_, conferencia, duplicates, aviso) => {
+    doBug(respostaDaSegundaVia(duplicates, conferencia));
+    expect(screen.getByText(aviso)).toBeInTheDocument();
+  });
+
+  test('pendências e 2ª vias na mesma quantidade: sem aviso', () => {
+    doBug(respostaDaSegundaVia([SEGUNDA_VIA, OUTRA_SEGUNDA_VIA], DUAS_VENCIDAS));
+    expect(screen.queryByText(/Confira no SGP/)).not.toBeInTheDocument();
+  });
+
+  test('nada vencido: diz isso, sem total, e a 2ª via adiantada segue sem aviso', () => {
+    doBug(respostaDaSegundaVia([OUTRA_SEGUNDA_VIA], conferida([], [], 0)));
+    expect(screen.getByText('Nenhuma fatura vencida.')).toBeInTheDocument();
+    expect(screen.queryByText(/Total/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confira no SGP/)).not.toBeInTheDocument();
+    expect(screen.getByText('2ª via válida até 20 out')).toBeInTheDocument();
+  });
+
+  test('vencida e do dia: o total é só das vencidas; a do dia aparece como "Vence hoje"', () => {
+    doBug(respostaDaSegundaVia([SEGUNDA_VIA, OUTRA_SEGUNDA_VIA], conferida([pendencia(101)], [doDia(102)], 100)));
+    expect(screen.getByText('1 fatura vencida · Total R$ 100,00 · 1 vence hoje')).toBeInTheDocument();
+    const linhas = within(screen.getByRole('list', { name: 'Pendências no SGP' })).getAllByRole('listitem');
+    expect(within(linhas[0]).getByText('Venceu 15 set')).toBeInTheDocument();
+    expect(within(linhas[1]).getByText('Vence hoje')).toBeInTheDocument();
+  });
+
+  test('só do dia: o resumo diz quantas vencem hoje', () => {
+    doBug(respostaDaSegundaVia([SEGUNDA_VIA, OUTRA_SEGUNDA_VIA], conferida([], [doDia(101), doDia(102)], 0)));
+    expect(screen.getByText('2 faturas vencem hoje')).toBeInTheDocument();
+    expect(screen.queryByText(/Total/)).not.toBeInTheDocument();
+  });
+
+  test.each([
+    ['incompleta', { estado: 'incompleta' }],
+    ['indisponível', { estado: 'indisponivel' }],
+    ['ausente (backend anterior)', undefined],
+  ])('conferência %s: 2ª vias disponíveis, aviso claro e nenhuma soma como total', (_, conferencia) => {
+    doBug(respostaDaSegundaVia([SEGUNDA_VIA, { ...OUTRA_SEGUNDA_VIA, dueDate: '2026-09-28' }], conferencia), { podeEnviar: true });
+    expect(screen.getByText('Não foi possível conferir todas as pendências. Confira no SGP antes de enviar.')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Pendências no SGP' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Total/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/R\$\s200,00/)).not.toBeInTheDocument();
+    // O que o SGP informou continua à vista, como informado.
+    expect(screen.getByText('2 títulos informados pelo SGP · Valor informado R$ 100,00')).toBeInTheDocument();
+    expect(screen.getByText('2ª via válida até 28 set')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Código Pix' })).not.toBeDisabled();
+  });
+
+  test('os cinco meios saem só da 2ª via escolhida, como ela veio — nunca de uma pendência', async () => {
+    const h = doBug(respostaDaSegundaVia([SEGUNDA_VIA, OUTRA_SEGUNDA_VIA], DUAS_VENCIDAS), { podeEnviar: true });
+    await userEvent.click(screen.getByRole('button', { name: /nº 900/i }));
+    await userEvent.click(within(screen.getByRole('list', { name: 'Segundas vias liberadas' })).getByRole('button', { name: /901/ }));
+    expect(screen.getByRole('button', { name: /nº 901/i })).toHaveTextContent('2ª via válida até 20 out');
+    expect(screen.getByRole('heading', { name: 'Enviar esta 2ª via' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Código Pix' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Código de barras' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Link' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    await userEvent.click(screen.getByRole('button', { name: 'QR Pix' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar QR Pix' }));
+
+    expect(h.onSendPix).toHaveBeenCalledWith(17402, OUTRA_SEGUNDA_VIA);
+    expect(h.onSendBarcode).toHaveBeenCalledWith(17402, OUTRA_SEGUNDA_VIA);
+    expect(h.onSendMessage).toHaveBeenCalledWith('https://exemplo.test/901-b');
+    expect(h.onSendPdf).toHaveBeenCalledWith(17402, 'https://exemplo.test/901-b');
+    expect(h.onSendPixQr).toHaveBeenCalledWith(17402, OUTRA_SEGUNDA_VIA);
+    expect(QRCode.toDataURL).toHaveBeenCalledWith('PIX-901-B');
+  });
+
+  test('troca de contrato: o outro contrato não herda as pendências, o total nem o aviso do primeiro', async () => {
+    const CONTRATO_OUTRO = { id: 25439, status: 'Suspenso', statusReason: 'Inadimplência', plan: 'Plano Teste 100', openInvoicesCount: 1, openAmount: 50 };
+    abrir({ client: CLIENTE, contracts: [CONTRATO_DO_BUG, CONTRATO_OUTRO], duplicateState: respostaDaSegundaVia([SEGUNDA_VIA], DUAS_VENCIDAS) });
+    expect(screen.getByText('2 faturas vencidas · Total R$ 200,00')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /contrato ••402/i }));
+    await userEvent.click(within(screen.getByRole('list', { name: 'Contratos' })).getByRole('button', { name: /••439/ }));
+
+    expect(screen.getByText('1 título informado pelo SGP · Valor informado R$ 50,00')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Pendências no SGP' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Total/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confira no SGP/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Consultar 2ª via' })).toBeInTheDocument();
   });
 });
 
@@ -357,7 +525,7 @@ describe('prévia do QR Pix', () => {
     await userEvent.click(screen.getByRole('button', { name: 'QR Pix' }));
     await screen.findByAltText('QR code do Pix');
     await userEvent.click(screen.getByRole('button', { name: /nº 901/i }));
-    await userEvent.click(within(screen.getByRole('list', { name: 'Faturas em aberto' })).getByRole('button', { name: /902/ }));
+    await userEvent.click(within(screen.getByRole('list', { name: 'Segundas vias liberadas' })).getByRole('button', { name: /902/ }));
     expect(screen.queryByAltText('QR code do Pix')).not.toBeInTheDocument();
   });
 });

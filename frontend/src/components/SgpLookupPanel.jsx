@@ -10,8 +10,8 @@ import './sgp-painel.css';
 // Painel "Verificação SGP". Só é carregado quando o atendente abre a consulta
 // (ConversationView faz o import sob demanda), e a biblioteca de QR só chega
 // quando a prévia é pedida. Tudo o que aparece aqui vem do SGP pela consulta
-// já existente; o painel não inventa, não guarda e não recalcula nada além de
-// somar as faturas que o próprio SGP devolveu.
+// já existente; o painel não inventa, não guarda e não recalcula nada: as
+// pendências e o total vêm prontos da conferência dos títulos, no backend.
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const PARA_A_ESQUERDA = { transform: 'rotate(90deg)' };
@@ -45,15 +45,30 @@ function dataCurta(iso) {
   return `${Number(dia)} ${MESES[Number(mes) - 1]}${outroAno}`;
 }
 
-function hojeIso() {
-  const hoje = new Date();
-  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
-}
-
-// "Venceu" ou "Vence", pela data que o SGP informou.
-const vencimento = (iso) => `${String(iso) < hojeIso() ? 'Venceu' : 'Vence'} ${dataCurta(iso)}`;
+// A data da 2ª via é a da reemissão (num título atrasado, o dia em que ela foi
+// gerada), nunca o vencimento original: por isso "válida até", e não "Vence".
+const validade = (iso) => `2ª via válida até ${dataCurta(iso)}`;
 
 const contar = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
+// Resumo da conferência: o total é só das vencidas; as do dia vêm à parte.
+function resumoConferido(vencidas, total, doDia) {
+  const partes = [];
+  if (vencidas > 0) partes.push(`${contar(vencidas, 'fatura vencida', 'faturas vencidas')} · Total ${moeda(total)}`);
+  if (doDia > 0) partes.push(vencidas > 0 ? `${doDia} ${doDia === 1 ? 'vence' : 'vencem'} hoje` : `${contar(doDia, 'fatura vence', 'faturas vencem')} hoje`);
+  return partes.join(' · ');
+}
+
+// "O SGP informou 2 faturas vencidas, mas liberou 1 segunda via."
+function avisoDeDivergencia(vencidas, doDia, segundasVias) {
+  const hoje = doDia === 1 ? '1 que vence hoje' : `${doDia} que vencem hoje`;
+  let informou;
+  if (vencidas > 0 && doDia > 0) informou = `${contar(vencidas, 'fatura vencida', 'faturas vencidas')} e ${hoje}`;
+  else if (vencidas > 0) informou = contar(vencidas, 'fatura vencida', 'faturas vencidas');
+  else informou = contar(doDia, 'fatura que vence hoje', 'faturas que vencem hoje');
+  const liberou = segundasVias === 0 ? 'não liberou segunda via' : `liberou ${contar(segundasVias, 'segunda via', 'segundas vias')}`;
+  return `O SGP informou ${informou}, mas ${liberou}. Confira no SGP antes de enviar.`;
+}
 const estaAtivo = (contrato) => contrato.status === 'Ativo';
 
 // Falha de envio: diz o que aconteceu (traduzido quando o backend responde),
@@ -180,14 +195,22 @@ function Financeiro({ contrato, estado, onConsultar, podeEnviar, idMotivo, envio
     if (qr.url && qrRef.current && qrRef.current.scrollIntoView) qrRef.current.scrollIntoView({ block: 'nearest' });
   }, [qr.url]);
 
-  // Antes da 2ª via, o resumo vem da própria consulta do contrato; depois,
-  // da soma das faturas que a 2ª via devolveu. Sem dado, sem resumo.
-  let resumo = null;
-  if (faturas.length > 0) {
-    resumo = { quantidade: faturas.length, total: faturas.reduce((soma, item) => soma + (Number(item.value) || 0), 0) };
-  } else if (!estado && Number(contrato.openInvoicesCount) > 0 && contrato.openAmount !== undefined && contrato.openAmount !== null) {
-    resumo = { quantidade: Number(contrato.openInvoicesCount), total: contrato.openAmount };
-  }
+  // Duas fontes, sem casar uma com a outra: a conferência dos títulos (as
+  // pendências reais, pelo vencimento original, e o total) e as 2ª vias que o
+  // SGP liberou (data da reemissão e meios de pagamento). Enquanto a
+  // conferência não estiver completa, o que aparece é o que a consulta do
+  // contrato informou — nunca como total.
+  const respondeu = Boolean(estado && !estado.loading && !estado.error);
+  const conferencia = respondeu && estado.conferencia && estado.conferencia.estado === 'completa' ? estado.conferencia : null;
+  const vencidas = (conferencia && conferencia.vencidas) || [];
+  const doDia = (conferencia && conferencia.venceHoje) || [];
+  const pendencias = [...vencidas, ...doDia];
+  const divergente = Boolean(conferencia) && pendencias.length > 0 && pendencias.length !== faturas.length;
+  const informado =
+    !conferencia && Number(contrato.openInvoicesCount) > 0 && contrato.openAmount !== undefined && contrato.openAmount !== null
+      ? `${contar(Number(contrato.openInvoicesCount), 'título informado pelo SGP', 'títulos informados pelo SGP')} · Valor informado ${moeda(contrato.openAmount)}`
+      : null;
+  const resumo = conferencia && pendencias.length > 0 ? resumoConferido(vencidas.length, conferencia.totalVencidas, doDia.length) : informado;
 
   async function enviar(chave, nome, acao) {
     if (enviandoRef.current.has(chave)) return;
@@ -236,10 +259,24 @@ function Financeiro({ contrato, estado, onConsultar, podeEnviar, idMotivo, envio
       {resumo && (
         <p className="sgp-resumo">
           <IconeInformacoes tamanho={18} />
-          <span>
-            {contar(resumo.quantidade, 'fatura em aberto', 'faturas em aberto')} · Total {moeda(resumo.total)}
-          </span>
+          <span>{resumo}</span>
         </p>
+      )}
+      {conferencia && pendencias.length === 0 && <p className="sgp-estado">Nenhuma fatura vencida.</p>}
+      {pendencias.length > 0 && (
+        <ul className="sgp-pendencias" aria-label="Pendências no SGP">
+          {pendencias.map((item, indice) => (
+            <li key={`${item.faturaId}-${indice}`} className="sgp-linha">
+              <span className="sgp-linha-conteudo">
+                <span className="sgp-linha-titulo is-entre">
+                  <span>{indice < vencidas.length ? `Venceu ${dataCurta(item.vencimentoOriginal)}` : 'Vence hoje'}</span>
+                  <span className="sgp-valor">{moeda(item.valor)}</span>
+                </span>
+                <span className="sgp-linha-sub">Nº {item.faturaId}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
 
       {estado && estado.loading && (
@@ -253,22 +290,32 @@ function Financeiro({ contrato, estado, onConsultar, podeEnviar, idMotivo, envio
           {descreverErro(estado.errorMessage, 'Não foi possível consultar a 2ª via agora.')}
         </p>
       )}
-      {estado && !estado.loading && !estado.error && !estado.hasOpenInvoice && (
-        <p className="sgp-estado">Nenhuma fatura em aberto para este contrato.</p>
+      {divergente && (
+        <p role="status" className="sgp-aviso">
+          {avisoDeDivergencia(vencidas.length, doDia.length, faturas.length)}
+        </p>
+      )}
+      {respondeu && !conferencia && (
+        <p role="status" className="sgp-aviso">
+          Não foi possível conferir todas as pendências. Confira no SGP antes de enviar.
+        </p>
+      )}
+      {respondeu && !estado.hasOpenInvoice && !divergente && (
+        <p className="sgp-estado">O SGP não liberou segunda via para este contrato.</p>
       )}
 
       {fatura && (
         <>
-          <h3 className="sgp-rotulo">Fatura selecionada</h3>
+          <h3 className="sgp-rotulo">2ª via selecionada</h3>
           <Seletor
-            rotulo="Faturas em aberto"
+            rotulo="Segundas vias liberadas"
             itens={faturas}
             escolhidoId={fatura.id}
             onEscolher={setFaturaId}
-            contagem={contar(faturas.length, 'fatura', 'faturas')}
+            contagem={contar(faturas.length, 'segunda via', 'segundas vias')}
             titulo={
               <span className="sgp-linha-titulo is-entre">
-                <span>{vencimento(fatura.dueDate)}</span>
+                <span>{validade(fatura.dueDate)}</span>
                 <span className="sgp-valor">{moeda(fatura.value)}</span>
               </span>
             }
@@ -281,7 +328,7 @@ function Financeiro({ contrato, estado, onConsultar, podeEnviar, idMotivo, envio
             opcao={(item) => (
               <>
                 <span className="sgp-linha-titulo is-entre">
-                  <span>{vencimento(item.dueDate)}</span>
+                  <span>{validade(item.dueDate)}</span>
                   <span className="sgp-valor">{moeda(item.value)}</span>
                 </span>
                 <span className="sgp-linha-sub">Nº {item.id}</span>
@@ -303,7 +350,7 @@ function Financeiro({ contrato, estado, onConsultar, podeEnviar, idMotivo, envio
 
       {fatura && (
         <>
-          <h3 className="sgp-rotulo">Enviar ao cliente (Fatura de {dataCurta(fatura.dueDate)})</h3>
+          <h3 className="sgp-rotulo">Enviar esta 2ª via</h3>
           <div className="sgp-acoes">
             {acoes.map(({ chave, rotulo, nome, Icone, tem, falta, acao, previa }) => {
               const semDado = !tem;

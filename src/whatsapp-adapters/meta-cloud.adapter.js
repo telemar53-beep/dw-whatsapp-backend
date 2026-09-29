@@ -305,8 +305,11 @@ function buildPixOrderDetailsBody(to, card) {
   const centavos = Math.round(Number(card.value) * 100);
   const referenceId = String(card.faturaId || `PIX${Date.now()}`);
   // Hífen simples, e não o ponto do meio do cartão do Baileys: aqui o texto
-  // passa pela validação da Meta, e o ASCII puro é o que não dá margem a recusa.
-  const titulo = `Fatura - vence ${formatarData(card.dueDate)}`;
+  // passa pela validação da Meta, e o ASCII puro é o que não dá margem a recusa
+  // (por isso "2a via", sem o "ª"). A data é a da 2ª via (fatura2via): num
+  // título atrasado, o dia da reemissão, e não o vencimento original.
+  const validade = `validade da 2a via: ${formatarData(card.dueDate)}`;
+  const titulo = `Fatura - ${validade}`;
   const valor = { value: centavos, offset: 100 };
   return {
     messaging_product: 'whatsapp',
@@ -315,7 +318,7 @@ function buildPixOrderDetailsBody(to, card) {
     type: 'interactive',
     interactive: {
       type: 'order_details',
-      body: { text: `Pix da fatura - vence ${formatarData(card.dueDate)}` },
+      body: { text: `Pix da fatura - ${validade}` },
       action: {
         name: 'review_and_pay',
         parameters: {

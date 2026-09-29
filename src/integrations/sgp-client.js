@@ -1,5 +1,7 @@
 const axios = require('axios');
 const { getSgpQueryConfig } = require('./sgp-query-config.repository');
+const { normalizeInvoices } = require('../ai/sgp-normalizer');
+const { hojeEmSaoPaulo, diaISO, analisarSituacaoFinanceiraContrato } = require('../ai/situacao-financeira');
 
 class SgpNotConfiguredError extends Error {}
 class SgpDisabledError extends Error {}
@@ -92,22 +94,90 @@ async function lookupClientByCpf(cpf) {
   };
 }
 
+const numeroOuNull = (valor) => {
+  if (valor === undefined || valor === null || String(valor).trim() === '') return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+};
+
+// Uma pendência como o painel a mostra: só identificador, datas e valores. Linha digitável, Pix,
+// link e o resto do título ficam de fora — meio de pagamento é o que a 2ª via liberou, e nada
+// aqui é casado com ela. `valor` é o que entra no total: o corrigido válido, senão o original.
+function pendencia(titulo) {
+  const valorOriginal = numeroOuNull(titulo.valorOriginal);
+  const valorCorrigido = numeroOuNull(titulo.valorAtualizado);
+  let valor = null;
+  if (valorCorrigido > 0) valor = valorCorrigido;
+  else if (valorOriginal > 0) valor = valorOriginal;
+  return {
+    faturaId: titulo.faturaId,
+    vencimentoOriginal: diaISO(titulo.vencimentoOriginal),
+    vencimentoAtualizado: diaISO(titulo.vencimentoAtualizado),
+    valorOriginal,
+    valorCorrigido,
+    valor,
+  };
+}
+
+/**
+ * Conferência financeira do contrato para o painel, pela listagem de títulos (a fonte que tem o
+ * vencimento ORIGINAL), com a mesma classificação da regra 0/1/2+ da IA. Só sai 'completa' quando
+ * a paginação provou que leu tudo e cada título foi reconhecido; fora disso, nem lista nem total —
+ * uma soma parcial não pode aparecer como total.
+ */
+function montarConferencia(leitura, contratoId) {
+  const analise = analisarSituacaoFinanceiraContrato({
+    contrato: { id: contratoId },
+    titulos: normalizeInvoices(leitura.faturas),
+    hoje: hojeEmSaoPaulo(),
+    leituraCompleta: leitura.completo === true,
+  });
+  if (analise.indeterminado) {
+    console.warn(`Conferência dos títulos do contrato ${contratoId} incompleta (${leitura.motivo || analise.motivoIndeterminado})`);
+    return { estado: 'incompleta' };
+  }
+  const vencidas = analise.vencidas.map(pendencia);
+  const venceHoje = analise.doDia.map(pendencia);
+  if ([...vencidas, ...venceHoje].some((p) => p.valor === null)) {
+    console.warn(`Conferência dos títulos do contrato ${contratoId} incompleta (valor_ilegivel)`);
+    return { estado: 'incompleta' };
+  }
+  const centavos = vencidas.reduce((soma, p) => soma + Math.round(p.valor * 100), 0);
+  return { estado: 'completa', vencidas, venceHoje, totalVencidas: centavos / 100 };
+}
+
+// A listagem vem ANTES da 2ª via (a ordem do fluxo real do Chat Mix) e aproveita a mesma 1ª
+// chamada que antes era descartada: página seguinte só quando a paginação exige. Falha aqui nunca
+// bloqueia a 2ª via — a conferência sai 'indisponivel' (nada lido) ou 'incompleta' (lido em parte).
+async function conferirTitulos(config, contratoId) {
+  let primeira;
+  try {
+    primeira = await postSgp(config, '/api/central/titulos', { contrato: contratoId, nao_gerar_os: 1 });
+  } catch (err) {
+    return { estado: 'indisponivel' };
+  }
+  if (!primeira.data || typeof primeira.data !== 'object') {
+    console.warn(`Conferência dos títulos do contrato ${contratoId} indisponível (resposta inesperada)`);
+    return { estado: 'indisponivel' };
+  }
+  let leitura;
+  try {
+    leitura = await continuarTitulos(config, contratoId, primeira.data);
+  } catch (err) {
+    console.warn(`Conferência dos títulos do contrato ${contratoId} incompleta (pagina_seguinte_falhou)`);
+    return { estado: 'incompleta' };
+  }
+  return montarConferencia(leitura, contratoId);
+}
+
 async function getDuplicateInvoice(contratoId) {
   const config = await requireConfig();
-  // Mirrors the exact call chain observed in the user's real Chat Mix test
-  // captures. This first call's response is unused — it exists only to
-  // replicate the real flow.
-  try {
-    await postSgp(config, '/api/central/titulos', { contrato: contratoId, nao_gerar_os: 1 });
-  } catch (err) {
-    // Mirrors the real Chat Mix call sequence for parity only — its response was already
-    // unused, and a failure here must never block generating the duplicate invoice itself.
-  }
+  const conferencia = await conferirTitulos(config, contratoId);
 
   const generated = await postSgp(config, '/api/ura/fatura2via', { contrato: contratoId, nao_gerar_os: 1 });
   const links = generated.data.links;
   if (!generated.data.status || !Array.isArray(links) || links.length === 0) {
-    return { hasOpenInvoice: false, duplicates: [] };
+    return { hasOpenInvoice: false, duplicates: [], conferencia };
   }
 
   const duplicates = await Promise.all(
@@ -136,7 +206,7 @@ async function getDuplicateInvoice(contratoId) {
     })
   );
 
-  return { hasOpenInvoice: true, duplicates };
+  return { hasOpenInvoice: true, duplicates, conferencia };
 }
 
 async function downloadBoletoPdf(link) {
@@ -184,22 +254,31 @@ async function listInvoices(contratoId) {
  * INCOMPLETA e quem conta vencidas trata como indeterminado. Na DW os contratos auditados vieram
  * inteiros numa página só (até 108 títulos) — a paginação existe para não depender disso.
  */
-async function listAllInvoices(contratoId, { maxPaginas = 20 } = {}) {
+async function listAllInvoices(contratoId, opcoes) {
   const config = await requireConfig();
+  const response = await postSgp(config, '/api/central/titulos', { contrato: contratoId, nao_gerar_os: 1 });
+  return continuarTitulos(config, contratoId, response.data, opcoes);
+}
+
+/**
+ * A leitura de listAllInvoices a partir de uma 1ª resposta JÁ recebida (o `data` dela): a página
+ * inicial nunca é pedida de novo, e as seguintes só saem quando a paginação exige.
+ */
+async function continuarTitulos(config, contratoId, primeiraPagina, { maxPaginas = 20 } = {}) {
   const faturas = [];
   const vistos = new Set();
   let offset = 0;
   let limit = null;
   let total = null;
   let motivo = null;
+  let data = primeiraPagina;
   for (let n = 1; n <= maxPaginas; n += 1) {
-    const params = { contrato: contratoId, nao_gerar_os: 1 };
     if (n > 1) {
-      params.offset = offset;
+      const params = { contrato: contratoId, nao_gerar_os: 1, offset };
       if (limit) params.limit = limit;
+      const response = await postSgp(config, '/api/central/titulos', params);
+      data = response.data;
     }
-    const response = await postSgp(config, '/api/central/titulos', params);
-    const data = response.data;
     if (!data || typeof data !== 'object') throw new SgpRequestError('Unexpected response from SGP');
     const pagina = Array.isArray(data.faturas) ? data.faturas : [];
     const paginacao = data.paginacao || {};

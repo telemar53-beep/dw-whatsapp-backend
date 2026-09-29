@@ -157,7 +157,8 @@ describe('sgp-client', () => {
 
       const result = await getDuplicateInvoice(17402);
 
-      expect(result).toEqual({ hasOpenInvoice: false, duplicates: [] });
+      // Sem o total na paginação, a listagem não prova que leu tudo: a conferência sai incompleta.
+      expect(result).toEqual({ hasOpenInvoice: false, duplicates: [], conferencia: { estado: 'incompleta' } });
     });
 
     test('uses the codigopix from fatura2via and skips pagamento/pix when it is present', async () => {
@@ -198,6 +199,7 @@ describe('sgp-client', () => {
             boletoLink: 'https://dwtelecom.sgp.tsmx.com.br/boleto/999',
           },
         ],
+        conferencia: { estado: 'incompleta' },
       });
     });
 
@@ -242,7 +244,7 @@ describe('sgp-client', () => {
 
       const result = await getDuplicateInvoice(17402);
 
-      expect(result).toEqual({ hasOpenInvoice: false, duplicates: [] });
+      expect(result).toEqual({ hasOpenInvoice: false, duplicates: [], conferencia: { estado: 'indisponivel' } });
     });
 
     test('returns a null pixCode when there is no codigopix and pagamento/pix fails', async () => {
@@ -257,6 +259,226 @@ describe('sgp-client', () => {
       const result = await getDuplicateInvoice(17402);
 
       expect(result.duplicates[0].pixCode).toBeNull();
+    });
+  });
+
+  // Bug de 28/09/2026 (painel "Verificação SGP"): o contrato tinha DUAS faturas vencidas de
+  // R$ 100,00 com o mesmo vencimento, e a 2ª via do SGP liberou UMA, com a data da reemissão. A
+  // 1ª chamada à listagem de títulos, que era descartada, passa a dar a conferência: vencimento
+  // ORIGINAL, valores e total. As duas fontes ficam separadas — nada casa 2ª via com título.
+  describe('getDuplicateInvoice — conferência dos títulos', () => {
+    beforeEach(() => {
+      // Meio-dia de 28/09/2026 em São Paulo.
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-28T12:00:00-03:00'));
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+      // Resposta enfileirada e não consumida não pode vazar para o teste seguinte.
+      axios.post.mockReset();
+    });
+
+    // Um título como o central/titulos devolve (os campos da sonda de 11/09).
+    const titulo = (id, campos = {}) => ({
+      id, status: 'Gerado', statusid: 1, numero_documento: 5000 + id, valor: 100, valorcorrigido: 100,
+      vencimento: '2026-09-15', vencimento_atualizado: '2026-09-28', data_pagamento: null,
+      linhadigitavel: `LINHA-TITULO-${id}`, codigopix: `PIX-TITULO-${id}`, gerapix: true,
+      link: `https://sgp.exemplo/boleto/${id}`, link_completo: `https://sgp.exemplo/boleto/${id}/completo`,
+      idtransacao: null, recibo: null, pagarcartao: false, pagarcartaodebito: false, pagarcartaocheckout: false,
+      ...campos,
+    });
+    const paga = (id) => titulo(id, { status: 'Pago', statusid: 2, vencimento: '2026-08-15', vencimento_atualizado: '2026-08-15', data_pagamento: '2026-08-14' });
+    const futura = (id) => titulo(id, { vencimento: '2026-10-15', vencimento_atualizado: '2026-10-15' });
+    const paginaDeTitulos = (faturas, { offset = 0, limit = 50, total = faturas.length } = {}) => ({
+      data: { paginacao: { offset, limit, parcial: faturas.length, total }, faturas },
+    });
+    // A 2ª via como o fatura2via devolve: a data é a da REEMISSÃO, não a original.
+    const segundaVia = (id, campos = {}) => ({
+      id, fatura: '1', vencimento: '2026-09-28', valor: 100, linhadigitavel: `LINHA-2VIA-${id}`,
+      codigopix: `PIX-2VIA-${id}`, link: `https://sgp.exemplo/2via/${id}`, ...campos,
+    });
+    const fatura2via = (links) => ({ data: { status: links.length > 0 ? 1 : 0, links } });
+    const caminhos = () => axios.post.mock.calls.map((chamada) => chamada[0].replace(CONFIG.baseUrl, ''));
+    const corpo = (i) => new URLSearchParams(axios.post.mock.calls[i][1]);
+    const vencida101 = { faturaId: 101, vencimentoOriginal: '2026-09-15', vencimentoAtualizado: '2026-09-28', valorOriginal: 100, valorCorrigido: 100, valor: 100 };
+    const vencida102 = { ...vencida101, faturaId: 102 };
+
+    test('duas vencidas de R$ 100,00 no mesmo dia e UMA 2ª via: a conferência traz as duas, pelo vencimento original, e o total R$ 200,00', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([paga(100), titulo(101), titulo(102), futura(103)]))
+        .mockResolvedValueOnce(fatura2via([segundaVia('900')]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r.conferencia).toEqual({ estado: 'completa', vencidas: [vencida101, vencida102], venceHoje: [], totalVencidas: 200 });
+      // A 2ª via continua sendo só o que o SGP liberou: uma, com a data da reemissão, no formato de sempre.
+      expect(r.hasOpenInvoice).toBe(true);
+      expect(r.duplicates).toEqual([
+        { id: '900', dueDate: '2026-09-28', value: 100, barCode: 'LINHA-2VIA-900', pixCode: 'PIX-2VIA-900', boletoLink: 'https://sgp.exemplo/2via/900' },
+      ]);
+    });
+
+    test('mesmo id no título e na 2ª via: nada é associado — a 2ª via não ganha vencimento original, o título não ganha meio de pagamento', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101)]))
+        .mockResolvedValueOnce(fatura2via([segundaVia(101)]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r.duplicates).toEqual([
+        { id: 101, dueDate: '2026-09-28', value: 100, barCode: 'LINHA-2VIA-101', pixCode: 'PIX-2VIA-101', boletoLink: 'https://sgp.exemplo/2via/101' },
+      ]);
+      expect(r.conferencia.vencidas).toEqual([vencida101]);
+    });
+
+    test('a conferência não carrega linha digitável, Pix, link nem campos crus do título', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101), titulo(102, { vencimento: '2026-09-28' })]))
+        .mockResolvedValueOnce(fatura2via([]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      const texto = JSON.stringify(r.conferencia);
+      for (const proibido of ['LINHA-TITULO', 'PIX-TITULO', 'sgp.exemplo', 'numero_documento', '5101', 'statusid', 'gerapix', 'Gerado']) {
+        expect(texto).not.toContain(proibido);
+      }
+    });
+
+    test('o total usa o valor corrigido válido e cai para o original só quando ele falta', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([
+          titulo(101, { valor: '100.00', valorcorrigido: '102.35' }),
+          titulo(102, { valorcorrigido: null }),
+          titulo(103, { vencimento: '2026-09-10', valorcorrigido: '0' }),
+        ]))
+        .mockResolvedValueOnce(fatura2via([]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      // Mais antiga primeiro (vencimento original; empate, menor id).
+      expect(r.conferencia.vencidas.map((p) => [p.faturaId, p.valorOriginal, p.valorCorrigido, p.valor])).toEqual([
+        [103, 100, 0, 100],
+        [101, 100, 102.35, 102.35],
+        [102, 100, null, 100],
+      ]);
+      expect(r.conferencia.totalVencidas).toBe(302.35);
+    });
+
+    test('a que vence hoje fica separada das vencidas e fora do total; a futura e a paga não entram', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([paga(100), titulo(101), titulo(102, { vencimento: '2026-09-28' }), futura(103)]))
+        .mockResolvedValueOnce(fatura2via([]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r.conferencia).toEqual({
+        estado: 'completa',
+        vencidas: [vencida101],
+        venceHoje: [{ ...vencida101, faturaId: 102, vencimentoOriginal: '2026-09-28' }],
+        totalVencidas: 100,
+      });
+    });
+
+    test('vencimento no formato brasileiro sai como AAAA-MM-DD; sem vencimento atualizado, null', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101, { vencimento: '15/09/2026', vencimento_atualizado: null })]))
+        .mockResolvedValueOnce(fatura2via([]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r.conferencia.vencidas).toEqual([{ ...vencida101, vencimentoAtualizado: null }]);
+    });
+
+    test('1ª página completa: a mesma chamada à listagem de antes, uma só e antes da 2ª via, que sai uma vez', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101), titulo(102)]))
+        .mockResolvedValueOnce(fatura2via([segundaVia('900')]));
+
+      await getDuplicateInvoice(17402);
+
+      expect(caminhos()).toEqual(['/api/central/titulos', '/api/ura/fatura2via']);
+      expect([corpo(0).get('contrato'), corpo(0).get('nao_gerar_os'), corpo(0).get('offset')]).toEqual(['17402', '1', null]);
+    });
+
+    test('paginação: continua da 2ª página sem repetir a 1ª, e só então pede a 2ª via', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101), titulo(102)], { limit: 2, total: 3 }))
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(103)], { offset: 2, limit: 2, total: 3 }))
+        .mockResolvedValueOnce(fatura2via([segundaVia('900')]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(caminhos()).toEqual(['/api/central/titulos', '/api/central/titulos', '/api/ura/fatura2via']);
+      expect(corpo(0).get('offset')).toBeNull();
+      expect([corpo(1).get('offset'), corpo(1).get('limit')]).toEqual(['2', '2']);
+      expect(r.conferencia.estado).toBe('completa');
+      expect(r.conferencia.vencidas.map((p) => p.faturaId)).toEqual([101, 102, 103]);
+      expect(r.conferencia.totalVencidas).toBe(300);
+    });
+
+    test('sem o total na paginação a leitura não se prova completa: "incompleta", sem lista nem total — e a 2ª via sai', async () => {
+      axios.post
+        .mockResolvedValueOnce({ data: { faturas: [titulo(101), titulo(102)] } })
+        .mockResolvedValueOnce(fatura2via([segundaVia('900')]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r.conferencia).toEqual({ estado: 'incompleta' });
+      expect(r.duplicates).toHaveLength(1);
+      expect(caminhos()).toEqual(['/api/central/titulos', '/api/ura/fatura2via']);
+    });
+
+    test('uma página seguinte falha: "incompleta" — e a 2ª via sai', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101), titulo(102)], { limit: 2, total: 3 }))
+        .mockRejectedValueOnce(new Error('timeout'))
+        .mockResolvedValueOnce(fatura2via([segundaVia('900')]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r.conferencia).toEqual({ estado: 'incompleta' });
+      expect(r.duplicates).toHaveLength(1);
+      expect(caminhos()).toEqual(['/api/central/titulos', '/api/central/titulos', '/api/ura/fatura2via']);
+    });
+
+    test('título com status fora do provado: "incompleta" — nada de adivinhar', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101), titulo(102, { status: 'Cancelado', statusid: 3 })]))
+        .mockResolvedValueOnce(fatura2via([segundaVia('900')]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r.conferencia).toEqual({ estado: 'incompleta' });
+    });
+
+    test('listagem fora do ar ou ilegível: "indisponivel" — e a 2ª via sai', async () => {
+      axios.post
+        .mockRejectedValueOnce(new Error('timeout'))
+        .mockResolvedValueOnce(fatura2via([segundaVia('900')]))
+        .mockResolvedValueOnce({ data: '<html>login</html>' })
+        .mockResolvedValueOnce(fatura2via([segundaVia('901')]));
+
+      const foraDoAr = await getDuplicateInvoice(17402);
+      const ilegivel = await getDuplicateInvoice(17402);
+
+      expect(foraDoAr.conferencia).toEqual({ estado: 'indisponivel' });
+      expect(foraDoAr.duplicates.map((d) => d.id)).toEqual(['900']);
+      expect(ilegivel.conferencia).toEqual({ estado: 'indisponivel' });
+      expect(ilegivel.duplicates.map((d) => d.id)).toEqual(['901']);
+    });
+
+    test('sem 2ª via liberada, a conferência vem do mesmo jeito', async () => {
+      axios.post
+        .mockResolvedValueOnce(paginaDeTitulos([titulo(101), titulo(102)]))
+        .mockResolvedValueOnce(fatura2via([]));
+
+      const r = await getDuplicateInvoice(17402);
+
+      expect(r).toEqual({
+        hasOpenInvoice: false,
+        duplicates: [],
+        conferencia: { estado: 'completa', vencidas: [vencida101, vencida102], venceHoje: [], totalVencidas: 200 },
+      });
     });
   });
 

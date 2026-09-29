@@ -1,10 +1,8 @@
-import { SettingsTitle, SettingsIcon } from '../SettingsVisuals';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { Button, AsyncState, PageHeader } from '../../../components/ui';
 import CreateChannelModal from '../../../components/CreateChannelModal';
-import { IconNewChat } from '../../../components/icons/WaIcons';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useChannels } from '../../../hooks/useChannels';
 import { useTriage } from '../../../hooks/useTriage';
@@ -12,7 +10,7 @@ import { useAiConfig } from '../../../hooks/useAiConfig';
 import { hasLevel } from '../../../navigation/navItems';
 import { computeStatus } from '../../../components/OpenAiConfigCard';
 import { useChannelActions } from './useChannelActions';
-import { ChannelsTable } from './ChannelsTable';
+import { CartoesDeCanais } from './CartoesDeCanais';
 import SettingsShell from '../SettingsShell';
 
 export function useChannelSummaryContext() {
@@ -47,15 +45,11 @@ function ChannelsListPage() {
       areaLabel="Números conectados"
       title="Números conectados"
       iconName="canais"
-      crumb="WhatsApp e canais"
       description="Gerencie os números e o atendimento de cada canal."
       width="table"
       action={
         canManage && (
-          <Button onClick={() => setCreatingChannel(true)}>
-            <IconNewChat size={18} />
-            Adicionar canal
-          </Button>
+          <Button onClick={() => setCreatingChannel(true)}>Adicionar canal</Button>
         )
       }
     >
@@ -63,19 +57,18 @@ function ChannelsListPage() {
               <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">{actions.errors.action}</p>
             )}
             <AsyncState status={status} onRetry={refresh}>
-              <ChannelsTable
+              <CartoesDeCanais
                 channels={channels}
                 summaryContext={summaryContext}
                 actions={actions}
                 canManage={canManage}
                 extraControls={
-                  <label className="flex h-10 cursor-pointer items-center gap-2 rounded-[12px] border border-wa-border bg-wa-field px-3.5 text-[13.5px] text-wa-text">
+                  <label className="cfg-canais-ocultos">
                     <input
                       id="mostrar-canais-ocultos"
                       type="checkbox"
                       checked={showHidden}
                       onChange={(e) => toggleShowHidden(e.target.checked)}
-                      className="h-4 w-4 accent-accent"
                     />
                     Mostrar ocultos
                   </label>

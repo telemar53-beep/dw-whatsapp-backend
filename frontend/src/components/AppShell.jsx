@@ -13,7 +13,7 @@ import { IconChats } from './icons/WaIcons';
 // Se o trecho não baixar, a casca avisa e o próximo clique tenta de novo.
 const PERFIL = sobDemanda(() => import('./ProfileModal'));
 
-// Na mesa e na Supervisão, a casca não desenha o menu: reserva um encaixe, e a
+// Na mesa, na Supervisão e em Configurações, a casca não desenha o menu: reserva um encaixe, e a
 // página (que já vem sob demanda) desenha ali o trilho, por portal. Assim o
 // trilho, os ícones DW, o botão "Equipe" e o CSS do trilho viajam com essas
 // páginas, e a casca — carregada em toda página — não importa nada disso.
@@ -37,14 +37,18 @@ function AppShell({ dense = false }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
-  // O Atendimento e a Supervisão têm o trilho da mesa, sem os brilhos do fundo
+  // O Atendimento, a Supervisão e Configurações têm o trilho da mesa, sem os brilhos do fundo
   // e sem o respiro em volta: trilho e página encostam na borda da tela.
   const naMesa = Boolean(useMatch({ path: '/', end: true }));
   // Na Supervisão, só para quem tem o nível da rota: para os outros ela vira
   // a página de acesso negado, que não desenha trilho — e o menu sumiria.
   const { agent } = useAuth();
   const naSupervisao = Boolean(useMatch({ path: '/supervisao', end: true })) && hasLevel(agent, 'admin');
-  const comTrilho = naMesa || naSupervisao;
+  // Configurações (Fatia S1, 29/09): como na Supervisão, só para quem tem o
+  // nível da rota — para o atendente ela é a página de acesso negado, que não
+  // desenha trilho, e ele fica com o menu de sempre.
+  const emConfiguracoes = Boolean(useMatch({ path: '/configuracoes/*' })) && hasLevel(agent, 'admin');
+  const comTrilho = naMesa || naSupervisao || emConfiguracoes;
   const [encaixeDoTrilho, setEncaixeDoTrilho] = useState(null);
   const [encaixeDoIcone, setEncaixeDoIcone] = useState(null);
   const { avisar, alertDialog } = useAlert();

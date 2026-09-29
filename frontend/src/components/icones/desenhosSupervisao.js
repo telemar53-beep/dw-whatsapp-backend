@@ -32,13 +32,10 @@ export const espera = [
   ['circle', { cx: 12, cy: 18, r: 0.9 }],
 ];
 
-// Atendimento automático: a moldura de conversa se abre no canto de cima, e
-// ali mora o brilho (a IA). É a conversa entregue à automação — não o brilho
-// sozinho, nem um robô. A cauda sai da interrupção da borda de baixo, a 45°.
-export const automacao = [
-  ['path', { d: 'M7.5 18 H6.5 A3 3 0 0 1 3.5 15 V11 A3 3 0 0 1 6.5 8 H11 M16.5 13 V15 A3 3 0 0 1 13.5 18 H10 L7 21' }],
-  ['path', { d: 'M16.75 3 A3.75 3.75 0 0 0 20.5 6.75 A3.75 3.75 0 0 0 16.75 10.5 A3.75 3.75 0 0 0 13 6.75 A3.75 3.75 0 0 0 16.75 3 Z' }],
-];
+// Automação mora em desenhoAutomacao.js: Configurações também a usa (grupo IA
+// e automações e página Atendimento com IA) e leva só ela. Reexportada aqui:
+// a fonte é uma só.
+export { automacao } from './desenhoAutomacao.js';
 
 // Sem responsável: a vaga do responsável ainda vazia. O contorno do retrato é
 // tracejado (oito arcos, metade traço e metade vão, com os vãos nos eixos e nas

@@ -1,24 +1,71 @@
-import { IconChannel, IconClock, IconChats, IconCheckCircle, IconBrain, IconUser, IconMic, IconRules, IconMegaphone, IconQuickReply, IconFile, IconTeam, IconLock, IconSearch, IconSend, IconPlug, IconTags, IconBuilding, IconSpark } from '../../components/icons/WaIcons';
+import { IconeCanais, IconeEquipe, IconeConsultarSgp, IconeRespostasRapidas } from '../../components/icones';
+import { IconeAutomacao } from '../../components/icones/IconeAutomacao';
+import { IconeMotivoInformacoesComerciais } from '../../components/icones/IconeMotivoInformacoesComerciais';
+import {
+  IconeRegrasEHorarios, IconeHorario, IconeMensagens, IconeBoasVindas, IconeAberturaEncerramento,
+  IconeAvisosPorCidade, IconeTemplates, IconeTriagemPorMenu, IconeIdentificacao, IconeTranscricao,
+  IconeAtendimentoNoturno, IconeAcoesDaIa, IconeIntegracoes, IconePixEBoleto, IconeSetores, IconePerfis,
+  IconeCadastros, IconeMotivos, IconeCidades, IconeEmpresa,
+} from '../../components/icones/configuracoes';
 
-// Ícones funcionais, não reproduções de logotipos de fornecedores.
+// Um ícone da família DW por página e por grupo de Configurações, aprovados
+// nas três pranchas de 29/09. A chave é a mesma de navItems (item.key e
+// group.groupKey). Reaproveitados com o mesmo significado: Canais, Equipe,
+// Automação, Consultar SGP, Respostas rápidas e Informações comerciais.
 //
-// Um glifo, um significado: `IconBrain` é a IA do produto (Triagem, grupo
-// Automação) e `IconSpark` é a OpenAI, o fornecedor — antes os dois eram o
-// mesmo desenho. `IconSearch` em SGP/consultas diz o que a página faz.
-function BranchIcon({ size = 18 }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true"><rect x="8" y="2" width="8" height="5" rx="1"/><path d="M12 7v5M5 17v-5h14v5"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/></svg>;
+// A OpenAI não tem ícone: só o texto, até existir uma marca oficial com
+// origem e autorização documentadas. Chave sem ícone não desenha nada — nunca
+// um genérico no lugar.
+const ICONES = {
+  // Grupos
+  canais: IconeCanais,
+  regras: IconeRegrasEHorarios,
+  mensagens: IconeMensagens,
+  automacao: IconeAutomacao,
+  integracoes: IconeIntegracoes,
+  equipe: IconeEquipe,
+  cadastros: IconeCadastros,
+  empresa: IconeEmpresa,
+  // Páginas
+  horario: IconeHorario,
+  'boas-vindas': IconeBoasVindas,
+  'abertura-encerramento': IconeAberturaEncerramento,
+  'avisos-cidade': IconeAvisosPorCidade,
+  'respostas-rapidas': IconeRespostasRapidas,
+  templates: IconeTemplates,
+  'triagem-menu': IconeTriagemPorMenu,
+  ia: IconeAutomacao,
+  identificacao: IconeIdentificacao,
+  transcricao: IconeTranscricao,
+  noturno: IconeAtendimentoNoturno,
+  ferramentas: IconeAcoesDaIa,
+  usuarios: IconeEquipe,
+  setores: IconeSetores,
+  perfis: IconePerfis,
+  'sgp-consultas': IconeConsultarSgp,
+  'sgp-envios': IconePixEBoleto,
+  motivos: IconeMotivos,
+  cidades: IconeCidades,
+  planos: IconeMotivoInformacoesComerciais,
+};
+
+export function temIcone(name) {
+  return Boolean(ICONES[name]);
 }
-function MoonIcon({ size = 18 }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true"><path d="M20 15A8.5 8.5 0 0 1 9 4a8.5 8.5 0 1 0 11 11Z"/><path d="M17 3v4m-2-2h4"/></svg>;
-}
-function PlaceIcon({ size = 18 }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>;
-}
-const ICONS = { canais:IconChannel, horario:IconClock, 'boas-vindas':IconChats, 'abertura-encerramento':IconCheckCircle, 'triagem-menu':BranchIcon, ia:IconBrain, identificacao:IconUser, transcricao:IconMic, noturno:MoonIcon, ferramentas:IconRules, 'avisos-cidade':IconMegaphone, 'respostas-rapidas':IconQuickReply, templates:IconFile, usuarios:IconTeam, setores:BranchIcon, perfis:IconLock, 'sgp-consultas':IconSearch, 'sgp-envios':IconSend, openai:IconSpark, motivos:IconTags, cidades:PlaceIcon, empresa:IconBuilding, atendimento:IconClock, automacao:IconBrain, mensagens:IconChats, equipe:IconTeam, integracoes:IconPlug, cadastros:IconTags };
+
 export function SettingsIcon({ name, size = 18 }) {
-  const Icon = ICONS[name] || IconRules;
-  return <span className="settings-functional-icon" aria-hidden="true"><Icon size={size}/></span>;
+  const Icone = ICONES[name];
+  if (!Icone) return null;
+  return <span className="settings-functional-icon" aria-hidden="true"><Icone tamanho={size} /></span>;
 }
+
+// Título da página: o ladrilho com o ícone (21 px, como no mockup) e o nome.
+// Sem ícone (OpenAI), só o nome.
 export function SettingsTitle({ name, children }) {
-  return <span className="settings-title"><span className="settings-title-mark"><SettingsIcon name={name} size={23}/></span><span>{children}</span></span>;
+  return (
+    <span className="settings-title">
+      {temIcone(name) && <span className="settings-title-mark"><SettingsIcon name={name} size={21} /></span>}
+      <span>{children}</span>
+    </span>
+  );
 }

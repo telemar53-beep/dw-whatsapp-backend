@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { hasLevel, NAV_ITEMS, SETTINGS_SECTIONS, LEGACY_REDIRECTS, firstAllowedSettingsPath } from './navItems';
+import { hasLevel, NAV_ITEMS, SETTINGS_SECTIONS, SETTINGS_AREAS, LEGACY_REDIRECTS, firstAllowedSettingsPath, findSettingsItem } from './navItems';
 
 const agent = { role: 'agent' };
 const manager = { role: 'manager', canManageIntegrations: false };
@@ -58,6 +58,44 @@ describe('SETTINGS_SECTIONS', () => {
   test('as três páginas de Integrações exigem credenciais', () => {
     const integracoes = SETTINGS_SECTIONS.find((g) => g.groupKey === 'integracoes');
     expect(integracoes.items.every((i) => i.level === 'integrations')).toBe(true);
+  });
+});
+
+// Fatia S1: o diretório do mockup aprovado. Mudar de grupo não muda rota nem
+// nível — os testes acima continuam os mesmos.
+describe('grupos do diretório (S1)', () => {
+  test('três áreas, oito grupos, na ordem do mockup', () => {
+    expect(SETTINGS_AREAS).toEqual(['Atendimento', 'Automação', 'Administração']);
+    expect(SETTINGS_SECTIONS.map((g) => [g.area, g.group])).toEqual([
+      ['Atendimento', 'Números conectados'],
+      ['Atendimento', 'Regras e horários'],
+      ['Atendimento', 'Mensagens'],
+      ['Automação', 'IA e automações'],
+      ['Automação', 'Integrações'],
+      ['Administração', 'Equipe e permissões'],
+      ['Administração', 'Cadastros auxiliares'],
+      ['Administração', 'Empresa'],
+    ]);
+  });
+  test('Boas-vindas e Abertura e encerramento são de Mensagens; Horário, de Regras e horários', () => {
+    expect(findSettingsItem('/configuracoes/mensagens/boas-vindas').group.group).toBe('Mensagens');
+    expect(findSettingsItem('/configuracoes/mensagens/abertura-encerramento').group.group).toBe('Mensagens');
+    expect(findSettingsItem('/configuracoes/regras/horario').group.group).toBe('Regras e horários');
+    expect(findSettingsItem('/configuracoes/canais/abc/conexao').group.group).toBe('Números conectados');
+  });
+  test('a mesma lista de páginas, rotas e níveis de antes', () => {
+    const pares = SETTINGS_SECTIONS.flatMap((g) => g.items).map((i) => `${i.key} ${i.to} ${i.level}`).sort();
+    expect(pares).toEqual([
+      'abertura-encerramento /configuracoes/mensagens/abertura-encerramento admin', 'avisos-cidade /configuracoes/mensagens/avisos-cidade admin',
+      'boas-vindas /configuracoes/mensagens/boas-vindas admin', 'canais /configuracoes/canais admin', 'cidades /configuracoes/cadastros/cidades admin',
+      'empresa /configuracoes/empresa admin', 'ferramentas /configuracoes/automacao/ferramentas admin', 'horario /configuracoes/regras/horario admin',
+      'ia /configuracoes/automacao/ia admin', 'identificacao /configuracoes/automacao/identificacao admin', 'motivos /configuracoes/cadastros/motivos admin',
+      'noturno /configuracoes/automacao/noturno admin', 'openai /configuracoes/integracoes/openai integrations', 'perfis /configuracoes/equipe/perfis admin',
+      'planos /configuracoes/cadastros/planos admin', 'respostas-rapidas /configuracoes/mensagens/respostas-rapidas admin', 'setores /configuracoes/equipe/setores admin',
+      'sgp-consultas /configuracoes/integracoes/sgp/consultas integrations', 'sgp-envios /configuracoes/integracoes/sgp/envios integrations',
+      'templates /configuracoes/mensagens/templates admin', 'transcricao /configuracoes/automacao/transcricao admin', 'triagem-menu /configuracoes/automacao/triagem-menu admin',
+      'usuarios /configuracoes/equipe/usuarios admin',
+    ].sort());
   });
 });
 

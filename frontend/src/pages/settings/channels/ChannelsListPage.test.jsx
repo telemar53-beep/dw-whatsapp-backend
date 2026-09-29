@@ -52,6 +52,18 @@ describe('ChannelsListPage', () => {
     renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /adicionar canal/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mais ações/i })).not.toBeInTheDocument();
+  });
+
+  // Fatia S1: as ações do canal (Reconectar, Ocultar, Excluir) saíram da
+  // tabela para o "⋯" do cartão; a página continua entregando as ações.
+  test('admin tem o "⋯" de cada canal, com as ações de antes', async () => {
+    useChannels.mockReturnValue({ channels: [baileys], status: 'ready', refresh: vi.fn() });
+    renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
+    await userEvent.click(screen.getByRole('button', { name: 'Mais ações para Berg' }));
+    expect(screen.getByRole('button', { name: 'Reconectar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ocultar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
   });
 
   test('"Mostrar canais ocultos" vai para a URL e pede os ocultos ao hook', async () => {

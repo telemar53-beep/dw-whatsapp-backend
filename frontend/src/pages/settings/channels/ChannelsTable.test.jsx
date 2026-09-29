@@ -1,8 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { ConnectionStatus, ChannelsTable } from './ChannelsTable';
-import { IconBrain, IconSpark } from '../../../components/icons/WaIcons';
+import { ConnectionStatus } from './ChannelsTable';
 
 // A coluna Conexão do canal oficial era um "Não verificada" fixo, porque
 // ninguém perguntava nada para a Meta. Agora o backend manda `connection`; o
@@ -78,33 +76,6 @@ describe('ConnectionStatus para canal Baileys', () => {
   });
 });
 
-// `IconBrain` e a IA DO PRODUTO (Triagem, Automacao) e `IconSpark` e a OpenAI, o
-// FORNECEDOR — a Etapa 7.7 separou os dois de proposito. O chip de atendimento
-// dizia "IA ativa" com o glifo do fornecedor, o que confundia as duas coisas.
-describe('chip de atendimento: IA do produto, nao o fornecedor', () => {
-  function caminhoDoGlifo(elemento) {
-    const svg = elemento.querySelector('svg');
-    return svg ? svg.querySelector('path').getAttribute('d') : null;
-  }
-
-  function chipDeIa() {
-    const { container } = render(
-      <MemoryRouter>
-        <ChannelsTable channels={[{ id: 'ch1', name: 'Canal', type: 'baileys', status: 'connected', aiEnabled: true }]} />
-      </MemoryRouter>
-    );
-    return container.querySelector('[data-attendance="IA ativa"] .channel-attendance-icon');
-  }
-
-  test('usa o cerebro (IA do produto), nao a faisca (OpenAI)', () => {
-    const icone = chipDeIa();
-    expect(icone).not.toBeNull();
-
-    const cerebro = caminhoDoGlifo(render(<IconBrain size={13} />).container);
-    const faisca = caminhoDoGlifo(render(<IconSpark size={13} />).container);
-    expect(cerebro).not.toBe(faisca);
-
-    expect(caminhoDoGlifo(icone)).toBe(cerebro);
-    expect(caminhoDoGlifo(icone)).not.toBe(faisca);
-  });
-});
+// O chip de atendimento ("IA ativa") saiu desta lista com a tabela: os cartões
+// da Fatia S1 o mostram só em texto, sem o glifo do produto nem o do
+// fornecedor. Ver CartoesDeCanais.test.jsx.

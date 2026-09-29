@@ -475,7 +475,9 @@ describe('ícones dos motivos: módulo à parte', () => {
     expect(FONTES['./desenhosMotivos.js']).toBeDefined();
     expect(FONTES['./desenhosMotivos.js']).not.toMatch(/^\s*import\s/m);
     const origens = [...FONTES['./motivos.jsx'].matchAll(/(?:from|import)\s*['"]([^'"]+)['"]/g)].map((a) => a[1]);
-    expect(origens.sort()).toEqual(['./Icone', './desenhosMotivos'].sort());
+    // Informações comerciais mora em arquivo próprio (Configurações também a usa em
+    // Planos); o módulo a reexporta e a usa no resolvedor.
+    expect(origens.sort()).toEqual(['./Icone', './desenhosMotivos', './IconeMotivoInformacoesComerciais'].sort());
   });
 
   test('o índice da família não leva os desenhos dos motivos', () => {

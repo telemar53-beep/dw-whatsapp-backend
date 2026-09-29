@@ -1,0 +1,165 @@
+/* Números conectados em cartões (Fatia S1, mockup aprovado). Cores do escopo
+   claro da área (settings.css: --cfg-*). Duas colunas quando o conteúdo tem
+   espaço (consulta de contêiner: a largura é a do corpo da página,
+   .settings-shell-body, e não a da janela), uma no celular. Sem contêiner
+   próprio: um segundo contêiner aninhado, da mesma largura, só custava layout.
+   Sem sombra pesada, sem gradiente, sem animação. */
+
+.cfg-canais { display: flex; flex-direction: column; gap: 14px; }
+
+/* Resumo do parque */
+.cfg-canais-resumo { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cfg-canais-resumo li {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 11px;
+  border-radius: 9px; background: var(--cfg-fundo); color: #505666; font-size: 12.5px;
+}
+.cfg-canais-resumo strong { color: var(--cfg-tinta); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cfg-canais-resumo li.is-atencao { background: var(--cfg-ambar-suave); color: var(--cfg-ambar); }
+.cfg-canais-resumo li.is-atencao strong { color: var(--cfg-ambar); }
+
+/* Ferramentas: busca, tipo e ocultos */
+.cfg-canais-ferramentas { display: grid; grid-template-columns: minmax(190px, 1fr) 168px auto; gap: 10px; align-items: center; }
+.settings-workspace .cfg-canais label.cfg-canais-busca {
+  display: flex; height: auto; max-width: none; align-items: center; gap: 9px; min-height: 42px; padding: 0 13px;
+  border: 1px solid var(--cfg-linha); border-radius: 10px; background: var(--cfg-papel); color: var(--cfg-icone);
+}
+.settings-workspace .cfg-canais label.cfg-canais-busca:focus-within { border-color: var(--cfg-indigo); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.13); }
+.settings-workspace .cfg-canais .cfg-canais-ferramentas .cfg-canais-busca input[type=search] {
+  flex: 1; min-width: 0; min-height: 40px; padding: 0; border: 0; background: transparent; outline: none;
+  color: var(--cfg-tinta); font-size: 13.5px;
+}
+.settings-workspace .cfg-canais .cfg-canais-ferramentas .cfg-canais-busca input[type=search]:focus-visible { box-shadow: none; }
+.settings-workspace .cfg-canais .cfg-canais-busca input::placeholder { color: #7a8090; }
+.settings-workspace .cfg-canais .cfg-canais-ferramentas select.cfg-canais-tipo[aria-label] {
+  min-height: 42px; padding: 0 12px; border: 1px solid var(--cfg-linha); border-radius: 10px;
+  background-color: var(--cfg-papel); color: #373b49; font-size: 13.5px;
+}
+.settings-workspace .cfg-canais .cfg-canais-ocultos {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 8px;
+  color: #555b6b; font-size: 13.5px; white-space: nowrap; cursor: pointer;
+}
+.cfg-canais-ocultos input { width: 16px; height: 16px; accent-color: var(--cfg-indigo); }
+
+.cfg-canais-contagem { margin: 0; color: var(--cfg-apoio); font-size: 12.5px; }
+.cfg-canais-vazio {
+  margin: 0; padding: 32px 16px; border: 1px dashed var(--cfg-linha); border-radius: 14px;
+  color: var(--cfg-apoio); font-size: 13.5px; text-align: center;
+}
+
+/* Grade de cartões */
+.cfg-canais-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; padding: 0; list-style: none; }
+@container (min-width: 700px) {
+  .cfg-canais-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.cfg-canal {
+  display: flex; flex-direction: column; min-width: 0; padding: 16px;
+  border: 1px solid var(--cfg-linha); border-radius: 14px; background: var(--cfg-papel);
+}
+.cfg-canal.precisa-atencao { border-color: var(--cfg-ambar-linha); background: #fffdfa; }
+.cfg-canal.is-oculto { background: var(--cfg-diretorio); }
+
+.cfg-canal-topo { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 11px; }
+
+/* O emblema: o tipo em letras. Oficial (API, BSP) em índigo cheio; o
+   Baileys (BL), não oficial, em índigo claro. */
+.cfg-emblema {
+  display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
+  background: var(--cfg-indigo-texto); color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
+}
+.cfg-emblema.is-nao-oficial { background: var(--cfg-indigo-suave); color: var(--cfg-indigo-texto); }
+
+.cfg-canal-id { min-width: 0; }
+.cfg-canal-nome {
+  display: block; overflow: hidden; color: var(--cfg-tinta); font-size: 14.5px; font-weight: 700; line-height: 20px;
+  text-overflow: ellipsis; white-space: nowrap; text-decoration: none;
+}
+.cfg-canal-nome:hover { text-decoration: underline; }
+.cfg-canal-numero { margin: 2px 0 0; color: var(--cfg-apoio); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* Estado: ponto colorido e texto. Os ícones do ConnectionStatus ficam
+   escondidos aqui (a folha de canais já os esconde) e o selo de qualidade vira
+   fato do cartão. */
+.cfg-canal-estado { justify-self: end; max-width: 150px; min-width: 0; }
+.cfg-canal-estado .channel-connection { gap: 6px; color: var(--cfg-tinta); font-size: 12px; font-weight: 650; line-height: 16px; }
+.cfg-canal-estado .channel-status-dot { width: 7px; height: 7px; }
+.cfg-canal-estado .channel-quality-chip { display: none; }
+.cfg-canal-estado .channel-connection[data-connection=connected] { color: var(--cfg-verde); }
+.cfg-canal-estado .channel-connection[data-connection=connected] .channel-status-dot { background: var(--cfg-verde); }
+.cfg-canal-estado .channel-connection[data-connection=awaiting_qr] { color: var(--cfg-ambar); }
+.cfg-canal-estado .channel-connection[data-connection=awaiting_qr] .channel-status-dot { background: var(--cfg-ambar); }
+.cfg-canal-estado .channel-connection:is([data-connection=error], [data-connection=disconnected]) { color: var(--cfg-vermelho); }
+.cfg-canal-estado .channel-connection:is([data-connection=error], [data-connection=disconnected]) .channel-status-dot { background: var(--cfg-vermelho); }
+.cfg-canal-estado .channel-connection-reason { max-width: 18ch; }
+/* "Não verificada": o relógio sai e entra o ponto cinza — estado neutro. */
+.cfg-canal-estado .channel-connection[data-connection=unknown] { color: var(--cfg-apoio); }
+.cfg-canal-estado .channel-connection[data-connection=unknown] svg { display: none; }
+.cfg-canal-estado .channel-connection[data-connection=unknown]::before {
+  content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: #9aa0ad;
+}
+
+/* Fatos */
+.cfg-canal-fatos {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 15px 0 0; padding: 13px 0;
+  border-top: 1px solid var(--cfg-linha-suave); border-bottom: 1px solid var(--cfg-linha-suave);
+}
+.cfg-canal-fatos > div { min-width: 0; }
+.cfg-canal-fatos dt { margin-bottom: 4px; color: #8a8f9d; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
+.cfg-canal-fatos dd { margin: 0; overflow: hidden; color: #3d4251; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.cfg-canal-fatos dd[data-qualidade=YELLOW] { color: var(--cfg-ambar); font-weight: 600; }
+.cfg-canal-fatos dd[data-qualidade=RED] { color: var(--cfg-vermelho); font-weight: 600; }
+
+/* Atenção: os avisos do resumo, em âmbar, dentro do cartão */
+.cfg-canal-avisos { display: flex; flex-direction: column; gap: 4px; margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--cfg-ambar-suave); list-style: none; }
+.cfg-canal-avisos li { color: var(--cfg-ambar); font-size: 12.5px; line-height: 17px; }
+
+/* Rodapé: recursos ativos e ação */
+.cfg-canal-rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.cfg-recursos { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.cfg-recursos li {
+  display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 7px;
+  background: var(--cfg-indigo-fundo); color: #534aa2; font-size: 11.5px; font-weight: 650;
+}
+.cfg-recursos li[data-attendance=Humano] { background: var(--cfg-fundo); color: var(--cfg-apoio); }
+.cfg-canal-acoes { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.cfg-canal-acao {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid #dfe1e8; border-radius: 9px;
+  background: var(--cfg-papel); color: #373b49; font-size: 12.5px; font-weight: 650; text-decoration: none; white-space: nowrap;
+}
+.cfg-canal-acao:hover { border-color: #c9ccd6; background: var(--cfg-fundo); }
+.cfg-canal.precisa-atencao .cfg-canal-acao { border-color: var(--cfg-ambar-linha); color: var(--cfg-ambar); }
+
+/* Menu de mais ações. Os seletores são longos de propósito: a folha da área
+   fixa botões e campos do conteúdo em 30 px (R7, congelado) com especificidade
+   (0,3,1) a (0,4,1); aqui cada regra passa disso sem mexer no R7. */
+.cfg-canal-menu { position: relative; }
+.settings-workspace .cfg-canal .cfg-canal-menu button.cfg-canal-mais {
+  display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0;
+  border: 1px solid #e0e2e9; border-radius: 9px; background: var(--cfg-papel); color: #666c7b; font-size: 16px; line-height: 1;
+}
+.settings-workspace .cfg-canal .cfg-canal-menu button.cfg-canal-mais:hover,
+.settings-workspace .cfg-canal .cfg-canal-menu button.cfg-canal-mais[aria-expanded=true] { background: var(--cfg-fundo); color: var(--cfg-tinta); }
+.cfg-canal-menu-lista {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: var(--z-popover); min-width: 172px; padding: 4px;
+  border: 1px solid var(--cfg-linha); border-radius: 10px; background: var(--cfg-papel); box-shadow: 0 12px 28px -12px rgba(23, 25, 39, 0.28);
+}
+.settings-workspace .cfg-canal .cfg-canal-menu .cfg-canal-menu-lista button {
+  display: flex; width: 100%; align-items: center; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--cfg-tinta); font-size: 13px; text-align: left;
+}
+.settings-workspace .cfg-canal .cfg-canal-menu .cfg-canal-menu-lista button:hover { background: var(--cfg-fundo); }
+.settings-workspace .cfg-canal .cfg-canal-menu .cfg-canal-menu-lista button.dw-menu-item-danger { margin-top: 3px; border-top: 1px solid var(--cfg-linha-suave); border-radius: 0 0 7px 7px; color: var(--cfg-vermelho); }
+
+/* Celular e palco estreito */
+@container (max-width: 560px) {
+  /* A busca ocupa a linha; o tipo e os ocultos dividem a de baixo, sem cortar. */
+  .cfg-canais-ferramentas { grid-template-columns: minmax(0, 1fr) auto; }
+  .cfg-canais-busca { grid-column: 1 / -1; }
+}
+@media (max-width: 1023px) {
+  /* Alvos de toque de 44 px no celular. */
+  .cfg-canal-acao { min-height: 44px; }
+  .settings-workspace .cfg-canal .cfg-canal-menu button.cfg-canal-mais { width: 44px; height: 44px; min-height: 44px; }
+  .settings-workspace .cfg-canal .cfg-canal-menu .cfg-canal-menu-lista button { min-height: 44px; }
+  .cfg-canal-nome { line-height: 22px; }
+}

@@ -103,6 +103,23 @@ describe('trilho da mesa', () => {
     }
   });
 
+  // Configurações desenha o trilho sem o botão Equipe: o painel pediria a lista
+  // de atendentes (GET /api/agents) só por entrar na área.
+  test('semEquipe: sem o botão Equipe e sem pedir a lista de atendentes; o resto igual', () => {
+    renderTrilho(ADMIN, { semEquipe: true }, '/configuracoes/canais');
+    expect(screen.queryByRole('button', { name: /^equipe/i })).not.toBeInTheDocument();
+    expect(useAgents).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'Atendimento' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Filas (Supervisão)' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Configurações' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('sem semEquipe, o botão Equipe continua lá (mesa, Supervisão)', () => {
+    renderTrilho(ADMIN);
+    expect(screen.getByRole('button', { name: /^equipe/i })).toBeInTheDocument();
+    expect(useAgents).toHaveBeenCalled();
+  });
+
   test('na mesa, Atendimento é a página atual', () => {
     renderTrilho(ADMIN);
     expect(screen.getByRole('link', { name: 'Atendimento' })).toHaveAttribute('aria-current', 'page');

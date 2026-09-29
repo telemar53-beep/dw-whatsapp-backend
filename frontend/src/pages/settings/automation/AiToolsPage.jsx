@@ -4,7 +4,10 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useAiConfig } from '../../../hooks/useAiConfig';
 import { useAiTools } from '../../../hooks/useAiTools';
 import { setAiToolEnabled } from '../../../services/api';
+import { useConfirm } from '../../../hooks/useConfirm';
 import { toolLabel } from './aiToolLabels';
+import { useInterruptores } from './useInterruptores';
+import EstadoDoInterruptor from './EstadoDoInterruptor';
 
 // Agrupamento apenas de apresentação. A categoria e as permissões recebidas da API
 // continuam intactas; ferramentas futuras aparecem em "Outras ações".
@@ -35,14 +38,49 @@ const DISPLAY_GROUPS = [
 ];
 const DISPLAY_NAMES = new Set(DISPLAY_GROUPS.flatMap((group) => group.names));
 
+// Fatia S0 (29/09): só ATIVAR estas três pede confirmação — são as que mexem
+// com a conexão do cliente ou mandam cobrança sozinhas. Desativar continua
+// imediato, e as outras 15 também. O efeito vem da descrição da ferramenta.
+const ATIVACAO_CONFIRMADA = {
+  desbloqueio_confianca: {
+    efeito: 'A IA poderá religar a internet de um contrato suspenso por inadimplência, por alguns dias, com a promessa de pagamento do cliente, dentro das regras da casa.',
+    confirmar: 'Ativar liberação em confiança',
+  },
+  gerar_pix: {
+    efeito: 'A IA poderá gerar o código PIX da fatura em aberto e enviá-lo ao cliente na conversa, com valor e vencimento.',
+    confirmar: 'Ativar geração de PIX',
+  },
+  enviar_boleto: {
+    efeito: 'A IA poderá enviar ao cliente, na conversa, a segunda via do boleto em PDF da fatura em aberto, só para cliente com identidade confirmada.',
+    confirmar: 'Ativar envio de boleto',
+  },
+};
+
 function AiToolsPage() {
   const { token } = useAuth();
   const { config } = useAiConfig();
-  const { tools, status, refresh } = useAiTools();
+  const { tools: doServidor, status, refresh } = useAiTools();
+  const { confirm, confirmDialog } = useConfirm();
+  const interruptores = useInterruptores();
+  // O que a tela mostra: o valor pedido enquanto grava, o confirmado depois, e o
+  // da lista só para o que não foi mexido nesta visita (ver useInterruptores).
+  const tools = doServidor.map((tool) => ({ ...tool, enabled: interruptores.valor(tool.nome, tool.enabled) }));
+  const gravar = (nome) => (valor) => setAiToolEnabled(nome, valor, token);
 
   async function handleToggle(nome, enabled) {
-    await setAiToolEnabled(nome, enabled, token);
-    refresh();
+    if (interruptores.salvando(nome)) return;
+    const sensivel = ATIVACAO_CONFIRMADA[nome];
+    if (enabled && sensivel) {
+      const confirmou = await confirm(sensivel.efeito, { title: `Ativar “${toolLabel(nome)}”?`, confirmLabel: sensivel.confirmar });
+      if (!confirmou) return;
+    }
+    if (await interruptores.alternar(nome, enabled, gravar(nome))) refresh();
+  }
+
+  // Tentar de novo repete o mesmo valor, sem perguntar de novo: a confirmação
+  // da ativação já foi dada.
+  async function handleRetry(nome) {
+    if (await interruptores.alternar(nome, interruptores.tentado(nome), gravar(nome))) refresh();
   }
 
   const groups = DISPLAY_GROUPS.map((group) => ({
@@ -105,6 +143,12 @@ function AiToolsPage() {
                                 </span>
                               }
                             />
+                            <EstadoDoInterruptor
+                              recuo
+                              salvando={interruptores.salvando(tool.nome)}
+                              erro={interruptores.erro(tool.nome)}
+                              onTentarDeNovo={() => handleRetry(tool.nome)}
+                            />
                             <details className="text-[12px] leading-[17px] text-wa-muted">
                               <summary className="absolute right-1 top-[9px] cursor-pointer list-none text-[11.5px] font-medium text-chat-copper hover:text-chat-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring [&::-webkit-details-marker]:hidden">Quando usar</summary>
                               <div className="mt-2 border-l-2 border-chat-copper/50 pl-2.5">
@@ -123,6 +167,7 @@ function AiToolsPage() {
           </div>
         </div>
       </AsyncState>
+      {confirmDialog}
     </SettingsPage>
   );
 }

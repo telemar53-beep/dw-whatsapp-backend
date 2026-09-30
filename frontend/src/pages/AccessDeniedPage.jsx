@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { IconLock } from '../components/icons/WaIcons';
 
-const LEVEL_TEXT = {
+// Exportado para a página de acesso negado de Configurações dizer o mesmo.
+export const LEVEL_TEXT = {
   admin: 'Esta área é liberada para administradores e gerentes.',
   integrations:
     'Esta área é liberada para administradores e para gerentes com a permissão "Pode gerenciar Canais e Integrações", marcada na conta pelo administrador.',

@@ -1,0 +1,45 @@
+/* ---------- Confirmação das ações de canal (Fatia S2) ----------
+   Moldura clara do Bloco 1 (ui/dialogo-claro.css, tokens --mc-*). Cabeçalho
+   com título e consequência, o canal identificado, a observação que muda a
+   decisão e, no fim, as saídas. No celular, sobe como folha do rodapé.
+   Sem blur, gradiente, animação ou sombra pesada. */
+
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar { --mc-largura: 540px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-conf-cab { flex: none; padding: 20px 22px 14px; border-bottom: 1px solid var(--mc-linha); }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-conf-cab h2 {
+  margin: 0 0 4px; font-size: 19px; line-height: 25px; font-weight: 650; letter-spacing: -0.01em; color: var(--mc-texto);
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-conf-cab p { margin: 0; font-size: 13.5px; line-height: 19px; color: var(--mc-texto-2); }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .mc-corpo { padding: 16px 22px 18px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .mc-erro { margin: 0 22px 12px; }
+
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-dlg-canal-resumo {
+  display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; background: var(--mc-suave);
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-dlg-canal-resumo > div > strong { display: block; font-size: 14px; line-height: 19px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-dlg-canal-resumo > div > span { display: block; color: var(--mc-texto-2); font-size: 12.5px; line-height: 17px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-conf-aviso { margin: 14px 0 0; color: var(--mc-ambar-texto); font-size: 13px; line-height: 19px; }
+
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-dlg-rodape { background: #fafafd; }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-dlg-rodape.is-com-alternativa { justify-content: space-between; }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar button.cfg-conf-alternativa {
+  height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: none;
+  color: var(--mc-indigo-texto); font-size: 14px; font-weight: 600; cursor: pointer;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar button.cfg-conf-alternativa:hover:not([aria-disabled=true]) { background: var(--mc-indigo-claro); }
+[data-dialog].dw-dialog.mc.cfg-dlg-confirmar button.cfg-conf-alternativa[aria-disabled=true] { opacity: 0.6; cursor: default; }
+
+/* Celular: folha que sobe do rodapé, botões um embaixo do outro, 44 px. */
+@media (max-width: 767px) {
+  .chat-theme.mc-fundo:has(> .cfg-dlg-confirmar) { align-items: flex-end; padding: 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar { max-width: none; border: 0; border-radius: 20px 20px 0 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-conf-cab { padding: 18px 18px 12px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar .mc-corpo { padding: 14px 18px 16px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar .mc-erro { margin: 0 18px 10px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-dlg-rodape {
+    flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar .cfg-dlg-rodape .mc-acoes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-left: 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar .mc-botao,
+  [data-dialog].dw-dialog.mc.cfg-dlg-confirmar button.cfg-conf-alternativa { height: 44px; }
+}

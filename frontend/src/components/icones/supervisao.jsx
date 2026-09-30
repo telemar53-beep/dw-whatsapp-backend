@@ -7,5 +7,5 @@ import * as desenhos from './desenhosSupervisao';
 export function IconeFiltros(props) { return <Icone desenho={desenhos.filtros} {...props} />; }
 export function IconeRemoverFiltro(props) { return <Icone desenho={desenhos.removerFiltro} {...props} />; }
 export function IconeEspera(props) { return <Icone desenho={desenhos.espera} {...props} />; }
-export function IconeAutomacao(props) { return <Icone desenho={desenhos.automacao} {...props} />; }
+export { IconeAutomacao } from './IconeAutomacao';
 export function IconeSemResponsavel(props) { return <Icone desenho={desenhos.semResponsavel} {...props} />; }

@@ -2,7 +2,8 @@ import { SettingsIcon } from '../SettingsVisuals';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import SettingsShell from '../SettingsShell';
 import { IconInfo } from '../../../components/icons/WaIcons';
-import { findSettingsItem } from '../../../navigation/navItems';
+import { findSettingsItem, hasLevel } from '../../../navigation/navItems';
+import { useAuth } from '../../../contexts/AuthContext';
 import { useSgpQueryConfig } from '../../../hooks/useSgpQueryConfig';
 import { useSgpIntegrations } from '../../../hooks/useSgpIntegrations';
 import { useAiConfig } from '../../../hooks/useAiConfig';
@@ -24,7 +25,18 @@ function StatusBadge({ label, tone }) {
   );
 }
 
+// Sem a permissão de integrações, nada daqui monta: os três hooks dos selos
+// (SGP, envios, OpenAI) e as páginas filhas fariam GET com 403 antes da guarda
+// da casca. A casca mostra o motivo e o caminho de volta, sem pedir nada.
 function IntegrationsLayout() {
+  const { agent } = useAuth();
+  if (!hasLevel(agent, 'integrations')) {
+    return <SettingsShell level="integrations" areaLabel="Integrações" crumb="Integrações" />;
+  }
+  return <IntegracoesPermitidas />;
+}
+
+function IntegracoesPermitidas() {
   const location = useLocation();
   const selected = findSettingsItem(location.pathname)?.item;
   const { config: sgp, status: sgpStatus } = useSgpQueryConfig();

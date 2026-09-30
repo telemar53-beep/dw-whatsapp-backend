@@ -8,6 +8,9 @@ import { useChannels } from '../../../hooks/useChannels';
 import { computeStatus } from '../../../components/OpenAiConfigCard';
 import { useAuth } from '../../../contexts/AuthContext';
 import { setAssistantSuggestionsEnabled } from '../../../services/api';
+import { hasLevel } from '../../../navigation/navItems';
+import { useInterruptores } from './useInterruptores';
+import EstadoDoInterruptor from './EstadoDoInterruptor';
 
 const STATUS_BADGE_CLASS = {
   Desativada: 'bg-wa-surface-soft text-wa-muted',
@@ -18,10 +21,21 @@ const STATUS_BADGE_CLASS = {
 
 function AiTriagePage() {
   const form = useAiTriageForm(CAMPOS_DA_TRIAGEM);
-  const { token } = useAuth();
+  const { token, agent } = useAuth();
+  // Fatia S0 (29/09): a rota das sugestões exige a permissão de credenciais
+  // (requireIntegrationsAccess). Sem ela, o controle fica desligado com o motivo
+  // e nenhum pedido sai — antes, o gerente clicava e nada acontecia.
+  const podeGravarSugestoes = hasLevel(agent, 'integrations');
+  const sugestoes = useInterruptores();
   const { config, refresh: refreshAiConfig } = useAiConfig();
   const { reasons, status: reasonsStatus } = useReasons();
   const { channels, status: channelsStatus } = useChannels(true);
+
+  async function alternarSugestoes(ligar) {
+    if (!podeGravarSugestoes) return;
+    const gravou = await sugestoes.alternar('sugestoes', ligar, (valor) => setAssistantSuggestionsEnabled(valor, token));
+    if (gravou) refreshAiConfig();
+  }
 
   const openAiStatus = computeStatus({ mode: config.mode, configured: config.configured, hasError: false });
   const aiChannels = channels.filter((c) => c.aiEnabled);
@@ -46,13 +60,18 @@ function AiTriagePage() {
             <div className="mt-2.5">
               <Toggle
                 id="assistant-suggestions"
-                checked={Boolean(config.assistantSuggestionsEnabled)}
-                onChange={async (e) => {
-                  await setAssistantSuggestionsEnabled(e.target.checked, token);
-                  refreshAiConfig();
-                }}
+                checked={sugestoes.valor('sugestoes', Boolean(config.assistantSuggestionsEnabled))}
+                onChange={(e) => alternarSugestoes(e.target.checked)}
+                disabled={!podeGravarSugestoes}
+                disabledReason={podeGravarSugestoes ? undefined : 'Requer permissão de Canais e Integrações'}
                 label="Sugerir respostas ao atendente"
                 description="Desmarcado, a IA não escreve sugestões depois que um atendente assume a conversa. A triagem antes do atendimento e a transcrição de áudio continuam funcionando normalmente."
+              />
+              <EstadoDoInterruptor
+                recuo
+                salvando={sugestoes.salvando('sugestoes')}
+                erro={sugestoes.erro('sugestoes')}
+                onTentarDeNovo={() => alternarSugestoes(sugestoes.tentado('sugestoes'))}
               />
             </div>
           </section>

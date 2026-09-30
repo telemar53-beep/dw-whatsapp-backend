@@ -1,13 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { usePlaces } from '../hooks/useCities';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { deleteCity } from '../services/api';
-import CityForm from './CityForm';
-import WaDialog, { WaError } from './WaDialog';
+import { WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable } from './ui';
 import { IconSearch, IconNewChat } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+
+// Nova cidade e Editar cadastro (Fatia S3) só chegam quando são abertos: o formulário, a
+// base de diálogo de Configurações e a folha dela ficam fora do trecho da
+// página. Criar e editar usam o mesmo trecho.
+const FORMULARIO = sobDemanda(() => import('./CityForm'));
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
 const CONTROL =
@@ -109,6 +114,24 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const controlled = creatingProp !== undefined;
   const creating = controlled ? creatingProp : internalCreating;
   const setCreating = controlled ? onCreatingChange : setInternalCreating;
+  const [falhaAoAbrir, setFalhaAoAbrir] = useState(null);
+  const formularioNaoBaixou = useCallback(() => {
+    setCreating(false);
+    setEditing(null);
+    setFalhaAoAbrir('Não foi possível abrir o cadastro de cidade. Verifique a conexão e tente de novo.');
+  }, [setCreating]);
+  // Sem controle, o formulário solto fica à mostra: é preciso desde já.
+  const CityForm = useSobDemanda(FORMULARIO, (controlled ? creating : true) || Boolean(editing), formularioNaoBaixou);
+
+  function abrirCriacao() {
+    setFalhaAoAbrir(null);
+    setCreating(true);
+  }
+
+  function abrirEdicao(city) {
+    setFalhaAoAbrir(null);
+    setEditing(city);
+  }
 
   function setCityError(cityId, message) {
     setErrors((prev) => ({ ...prev, [cityId]: message }));
@@ -149,7 +172,7 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
             </p>
           </div>
           {controlled && (
-            <Button onClick={() => setCreating(true)} className="!py-2">
+            <Button onClick={abrirCriacao} className="!py-2">
               <IconNewChat size={18} />
               Nova cidade
             </Button>
@@ -175,6 +198,7 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         </div>
 
         <div className="settings-register-summary text-wa-muted">{countLabel}</div>
+        {falhaAoAbrir && <WaError className="mb-3">{falhaAoAbrir}</WaError>}
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={places.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
             <DataTable label="Cidades e localidades" className="min-w-[760px]">
@@ -202,7 +226,7 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                       key={city.id}
                       city={city}
                       parentName={city.parentId ? nomePorId[city.parentId] : null}
-                      onEdit={setEditing}
+                      onEdit={abrirEdicao}
                       onDeleted={refresh}
                       onError={setCityError}
                     />
@@ -219,41 +243,33 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         </div>
       </section>
 
-      {controlled && creating && (
-        <WaDialog variant="city" title="Nova cidade ou localidade" onClose={() => setCreating(false)} size="max-w-lg">
-          <div className="px-6 pb-5 pt-2">
-            <CityForm
-              embedded
-              place={null}
-              places={places}
-              onSaved={() => {
-                refresh();
-                setCreating(false);
-              }}
-              onCancel={() => setCreating(false)}
-            />
-          </div>
-        </WaDialog>
-      )}
+      {controlled && creating && (CityForm ? (
+        <CityForm
+          comoDialogo
+          place={null}
+          places={places}
+          onSaved={() => {
+            refresh();
+            setCreating(false);
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o cadastro de cidade…</p>)}
 
-      {editing && (
-        <WaDialog variant="city" title="Editar cadastro" onClose={() => setEditing(null)} size="max-w-lg">
-          <div className="px-6 pb-5 pt-2">
-            <CityForm
-              embedded
-              place={editing}
-              places={places}
-              onSaved={() => {
-                refresh();
-                setEditing(null);
-              }}
-              onCancel={() => setEditing(null)}
-            />
-          </div>
-        </WaDialog>
-      )}
+      {editing && (CityForm ? (
+        <CityForm
+          comoDialogo
+          place={editing}
+          places={places}
+          onSaved={() => {
+            refresh();
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o cadastro de cidade…</p>)}
 
-      {!controlled && !editing && (
+      {!controlled && !editing && CityForm && (
         <CityForm
           place={null}
           places={places}

@@ -32,7 +32,7 @@ function PaginaComEncaixe() {
   </>;
 }
 
-function renderShell(rota = '/', paginaDaMesa = <p>conteúdo</p>, paginaDaSupervisao = <p>supervisão</p>) {
+function renderShell(rota = '/', paginaDaMesa = <p>conteúdo</p>, paginaDaSupervisao = <p>supervisão</p>, paginaDeConfiguracoes = <p>configurações</p>) {
   return render(
     <MemoryRouter initialEntries={[rota]}>
       <Routes>
@@ -40,6 +40,7 @@ function renderShell(rota = '/', paginaDaMesa = <p>conteúdo</p>, paginaDaSuperv
           <Route path="/" element={paginaDaMesa} />
           <Route path="/supervisao" element={paginaDaSupervisao} />
           <Route path="/relatorios" element={<p>relatórios</p>} />
+          <Route path="/configuracoes/*" element={paginaDeConfiguracoes} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -126,6 +127,33 @@ describe('AppShell', () => {
   // com o encaixe reservado, ficaria sem menu nenhum.
   test('atendente em /supervisao continua com o menu de sempre', () => {
     const { container } = renderShell('/supervisao');
+    expect(menu()).toBeInTheDocument();
+    expect(container.querySelector('[data-encaixe="trilho"]')).toBeNull();
+  });
+
+  // Configurações (Fatia S1): o mesmo trilho, pelo mesmo encaixe, para admin e
+  // gerente; sem os brilhos do fundo, em qualquer página da área.
+  test.each([['admin'], ['manager']])('%s em Configurações: encaixe do trilho, sem menu antigo e sem brilhos', (role) => {
+    useAuth.mockReturnValue({ agent: { role }, logout: vi.fn() });
+    const { container } = renderShell('/configuracoes/equipe/usuarios');
+    expect(screen.getByText('configurações')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Navegação principal' })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-encaixe="trilho"]')).toBeInTheDocument();
+    expect(brilhos(container)).toHaveLength(0);
+  });
+
+  test('a página de Configurações desenha o trilho e o ícone do botão nos encaixes', async () => {
+    useAuth.mockReturnValue({ agent: { role: 'admin' }, logout: vi.fn() });
+    const { container } = renderShell('/configuracoes/canais', undefined, undefined, <PaginaComEncaixe />);
+    const trilho = await screen.findByRole('navigation', { name: 'Trilho de teste' });
+    expect(container.querySelector('[data-encaixe="trilho"]')).toContainElement(trilho);
+    expect(screen.getByTestId('open-mobile-nav')).toContainElement(screen.getByTestId('icone-da-pagina'));
+  });
+
+  // Para o atendente, Configurações é a página de acesso negado, que não
+  // desenha trilho: ele fica com o menu de sempre.
+  test('atendente em /configuracoes continua com o menu de sempre', () => {
+    const { container } = renderShell('/configuracoes');
     expect(menu()).toBeInTheDocument();
     expect(container.querySelector('[data-encaixe="trilho"]')).toBeNull();
   });

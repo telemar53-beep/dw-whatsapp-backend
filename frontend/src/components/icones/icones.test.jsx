@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import * as Icones from './index';
 import * as IconesSgp from './sgp';
 import * as IconesSupervisao from './supervisao';
+import * as IconesConfiguracoes from './configuracoes';
 import * as IconesAntigos from '../icons/WaIcons';
 import * as IconesAntigosSgp from '../icons/SgpIcons';
 
@@ -48,6 +49,28 @@ const NOMES = [
   'IconeEspera',
   'IconeAutomacao',
   'IconeSemResponsavel',
+  // Configurações (Fatia S1): os 21 aprovados nas três pranchas de 29/09.
+  'IconeRegrasEHorarios',
+  'IconeHorario',
+  'IconeMensagens',
+  'IconeBoasVindas',
+  'IconeAberturaEncerramento',
+  'IconeAvisosPorCidade',
+  'IconeTemplates',
+  'IconeTriagemPorMenu',
+  'IconeIdentificacao',
+  'IconeTranscricao',
+  'IconeAtendimentoNoturno',
+  'IconeAcoesDaIa',
+  'IconeIntegracoes',
+  'IconePixEBoleto',
+  'IconeSetores',
+  'IconePerfis',
+  'IconeCadastros',
+  'IconeMotivos',
+  'IconeCidades',
+  'IconeEmpresa',
+  'IconeSemAcesso',
 ];
 
 // Os do painel SGP, desenhados na fatia 3.
@@ -56,17 +79,20 @@ const DO_SGP = ['IconeCodigoPix', 'IconeQrPix', 'IconeCodigoBarras', 'IconeLinkF
 // Os da visão geral da Supervisão, desenhados para aprovação antes da tela.
 const DA_SUPERVISAO = ['IconeFiltros', 'IconeRemoverFiltro', 'IconeEspera', 'IconeAutomacao', 'IconeSemResponsavel'];
 
+// Os de Configurações (Fatia S1), aprovados nas três pranchas de 29/09.
+const DE_CONFIGURACOES = NOMES.slice(NOMES.indexOf('IconeRegrasEHorarios'));
+
 // Desenhados depois da família inicial: não herdam traço de ninguém.
-const NOVOS = [...DO_SGP, ...DA_SUPERVISAO];
+const NOVOS = [...DO_SGP, ...DA_SUPERVISAO, ...DE_CONFIGURACOES];
 
 // A exceção da família: a marca Pix é um sólido. Só estes podem ter traço
 // preenchido, e só na cor do texto.
-const COM_MARCA_PIX = ['IconeCodigoPix', 'IconeQrPix'];
+const COM_MARCA_PIX = ['IconeCodigoPix', 'IconeQrPix', 'IconePixEBoleto'];
 const CHEIO = { fill: 'currentColor', stroke: 'none' };
 
 // A família inteira: o índice (mesa e demais telas) e os módulos do painel SGP
 // e da Supervisão.
-const FAMILIA = { ...Icones, ...IconesSgp, ...IconesSupervisao };
+const FAMILIA = { ...Icones, ...IconesSgp, ...IconesSupervisao, ...IconesConfiguracoes };
 
 // Só geometria nos traços. Cor, espessura, terminação e preenchimento são da
 // moldura, iguais para a família inteira; qualquer atributo fora desta lista
@@ -86,13 +112,23 @@ function desenhar(Componente, props = {}) {
 }
 
 describe('família de ícones DW', () => {
-  test('exporta exatamente os 38 ícones da família: 28 no índice e os 5 do painel SGP e os 5 da Supervisão nos módulos deles', () => {
+  test('exporta exatamente os 59 ícones da família: 28 no índice, 5 do painel SGP, 5 da Supervisão e 21 de Configurações nos módulos deles', () => {
     const doIndice = Object.keys(Icones).filter((nome) => nome.startsWith('Icone') && nome !== 'Icone');
     const doSgp = Object.keys(IconesSgp).filter((nome) => nome.startsWith('Icone'));
     const daSupervisao = Object.keys(IconesSupervisao).filter((nome) => nome.startsWith('Icone'));
+    const deConfiguracoes = Object.keys(IconesConfiguracoes).filter((nome) => nome.startsWith('Icone'));
+    expect(NOMES).toHaveLength(59);
     expect(doIndice.sort()).toEqual(NOMES.filter((nome) => !NOVOS.includes(nome)).sort());
     expect(doSgp.sort()).toEqual([...DO_SGP].sort());
     expect(daSupervisao.sort()).toEqual([...DA_SUPERVISAO].sort());
+    expect(deConfiguracoes.sort()).toEqual([...DE_CONFIGURACOES].sort());
+  });
+
+  // Configurações só leva os desenhos dela; a mesa, que importa o índice em
+  // toda conversa, não leva nenhum.
+  test('o índice da família não leva os desenhos de Configurações', () => {
+    expect(FONTES['./index.jsx']).not.toMatch(/desenhosConfiguracoes|['"]\.\/configuracoes['"]/);
+    expect(FONTES['./desenhos.js']).not.toMatch(/desenhosConfiguracoes|regrasEHorarios|pixEBoleto|semAcesso/);
   });
 
   // O painel do SGP chega sob demanda; a mesa importa o índice em toda
@@ -191,10 +227,10 @@ describe('família de ícones DW', () => {
   // Legibilidade mínima em 16 px, pela geometria: ponto com raio de pelo menos
   // 0,75 e todo o desenho entre 2 e 22 com o traço de 1,75 (0,875 de cada lado).
   // A leitura de fato se julga nos pixels reais da prancha.
-  test.each(DA_SUPERVISAO)('%s: pontos legíveis e desenho dentro da área útil', (nome) => {
+  test.each([...DA_SUPERVISAO, ...DE_CONFIGURACOES])('%s: pontos legíveis e desenho dentro da área útil', (nome) => {
     const svg = desenhar(FAMILIA[nome]);
-    const MEIO_TRACO = 0.875;
     [...svg.children].forEach((traco) => {
+      const MEIO_TRACO = traco.getAttribute('stroke') === 'none' ? 0 : 0.875;
       if (traco.localName === 'circle') {
         const [cx, cy, r] = ['cx', 'cy', 'r'].map((a) => Number(traco.getAttribute(a)));
         expect(r, `${nome}: ponto pequeno demais`).toBeGreaterThanOrEqual(0.75);
@@ -297,6 +333,9 @@ describe('família de ícones DW', () => {
     expect(FONTES['./desenhoRespostasRapidas.js']).not.toMatch(/^\s*import\s/m);
     expect(FONTES['./desenhosDaConversa.js']).not.toMatch(/^\s*import\s/m);
     expect(FONTES['./desenhosSupervisao.js']).not.toMatch(/^\s*import\s/m);
+    expect(FONTES['./desenhosConfiguracoes.js']).not.toMatch(/^\s*import\s/m);
+    expect(FONTES['./desenhoAutomacao.js']).not.toMatch(/^\s*import\s/m);
+    expect(FONTES['./desenhoInformacoesComerciais.js']).not.toMatch(/^\s*import\s/m);
   });
 });
 
@@ -328,5 +367,36 @@ describe('ícones da Supervisão só na Supervisão', () => {
       .filter(([, fonte]) => /desenhosSupervisao/.test(fonte))
       .map(([arquivo]) => arquivo);
     expect(direto).toEqual([]);
+  });
+});
+
+// Os de Configurações só viajam com Configurações; a Automação e Informações
+// comerciais, reaproveitadas lá, moram em arquivos próprios para que a área
+// não leve o módulo inteiro da Supervisão nem o dos motivos.
+const DE_CONFIGURACOES_PODE = /^\/src\/pages\/settings\//;
+const importamDeTelas = (padrao) => Object.entries(TELAS).filter(([, fonte]) => padrao.test(fonte)).map(([arquivo]) => arquivo);
+
+describe('ícones de Configurações só em Configurações', () => {
+  test('só as telas de Configurações importam o módulo', () => {
+    const importam = importamDeTelas(/icones\/configuracoes['"]/);
+    expect(importam.length).toBeGreaterThan(0);
+    expect(importam.filter((arquivo) => !DE_CONFIGURACOES_PODE.test(arquivo))).toEqual([]);
+  });
+
+  test('ninguém importa os desenhos direto: só pelo módulo dos componentes', () => {
+    expect(importamDeTelas(/desenhosConfiguracoes|desenhoAutomacao|desenhoInformacoesComerciais/)).toEqual([]);
+  });
+
+  test('Automação e Informações comerciais, fora dos módulos de origem, só em Configurações', () => {
+    const reusos = importamDeTelas(/icones\/(IconeAutomacao|IconeMotivoInformacoesComerciais)['"]/);
+    expect(reusos.length).toBeGreaterThan(0);
+    expect(reusos.filter((arquivo) => !DE_CONFIGURACOES_PODE.test(arquivo))).toEqual([]);
+  });
+
+  test('os módulos de origem reexportam o mesmo componente: a fonte é uma só', () => {
+    expect(IconesSupervisao.IconeAutomacao).toBeDefined();
+    expect(FONTES['./supervisao.jsx']).toMatch(/export \{ IconeAutomacao \} from '\.\/IconeAutomacao'/);
+    expect(FONTES['./desenhosSupervisao.js']).toMatch(/export \{ automacao \} from '\.\/desenhoAutomacao\.js'/);
+    expect(FONTES['./desenhosMotivos.js']).toMatch(/export \{ informacoesComerciais \} from '\.\/desenhoInformacoesComerciais\.js'/);
   });
 });

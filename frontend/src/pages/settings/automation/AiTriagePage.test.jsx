@@ -184,4 +184,77 @@ describe('sugestao de resposta ao atendente', () => {
     await waitFor(() => expect(api.setAssistantSuggestionsEnabled).toHaveBeenCalledWith(true, 't'));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
+  // Fatia S0 (29/09): a rota exige a permissão de credenciais. Para o gerente
+  // sem ela, o controle fica desligado com o motivo e nenhum pedido sai.
+  function comSugestao(ligada, refresh = vi.fn()) {
+    useAiConfig.mockReturnValue({
+      config: { configured: true, mode: 'assistant', assistantSuggestionsEnabled: ligada },
+      status: 'ready',
+      loading: false,
+      refresh,
+    });
+    return refresh;
+  }
+
+  test('gerente sem credenciais: desativado, com o motivo, e o clique não envia nada', async () => {
+    useAuth.mockReturnValue({ token: 't', agent: { role: 'manager', canManageIntegrations: false } });
+    comSugestao(false);
+    renderPage();
+
+    const controle = screen.getByRole('checkbox', { name: /sugerir respostas/i });
+    expect(controle).toBeDisabled();
+    expect(screen.getByText('Requer permissão de Canais e Integrações')).toBeInTheDocument();
+    await userEvent.click(controle);
+
+    expect(controle).not.toBeChecked();
+    expect(api.setAssistantSuggestionsEnabled).not.toHaveBeenCalled();
+  });
+
+  test('gerente com credenciais: ligar chama a API e recarrega, como o admin', async () => {
+    useAuth.mockReturnValue({ token: 't', agent: { role: 'manager', canManageIntegrations: true } });
+    const refresh = comSugestao(false);
+    api.setAssistantSuggestionsEnabled.mockResolvedValue({});
+    renderPage();
+
+    const controle = screen.getByRole('checkbox', { name: /sugerir respostas/i });
+    expect(controle).toBeEnabled();
+    await userEvent.click(controle);
+
+    await waitFor(() => expect(api.setAssistantSuggestionsEnabled).toHaveBeenCalledWith(true, 't'));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  test('salvando: "Salvando…" e um segundo clique não gera outro pedido', async () => {
+    comSugestao(false);
+    api.setAssistantSuggestionsEnabled.mockReturnValue(new Promise(() => {}));
+    renderPage();
+
+    const controle = screen.getByRole('checkbox', { name: /sugerir respostas/i });
+    await userEvent.click(controle);
+    await userEvent.click(controle);
+
+    expect(api.setAssistantSuggestionsEnabled).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Salvando…');
+    expect(controle).toBeChecked();
+  });
+
+  test('falha: o controle volta, o erro aparece e dá para tentar de novo', async () => {
+    const refresh = comSugestao(true);
+    api.setAssistantSuggestionsEnabled
+      .mockRejectedValueOnce(Object.assign(new Error('falhou'), { status: 500 }))
+      .mockResolvedValueOnce({});
+    renderPage();
+
+    const controle = screen.getByRole('checkbox', { name: /sugerir respostas/i });
+    await userEvent.click(controle);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/valor anterior foi mantido/i);
+    expect(controle).toBeChecked();
+    expect(refresh).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /tentar novamente/i }));
+    await waitFor(() => expect(controle).not.toBeChecked());
+    expect(api.setAssistantSuggestionsEnabled).toHaveBeenLastCalledWith(false, 't');
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
 });

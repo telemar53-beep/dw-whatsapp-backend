@@ -1,0 +1,91 @@
+/* ---------- Diálogo de formulário de Configurações (Fatia S3) ----------
+   Mockup configuracoes-s3-dialogo-formulario: papel branco, índigo só no foco
+   e na ação principal, vermelho só no erro. Sem blur, gradiente, sombra pesada
+   ou animação. Moldura: a clara do Bloco 1 (ui/dialogo-claro.css, tokens
+   --mc-*). A base (overlays.css) tem regras largas fora de @layer — campo
+   (0,5,1), `.dw-dialog button` (0,1,1) —, por isso o prefixo da moldura se
+   repete aqui, sem !important. */
+
+[data-dialog].dw-dialog.mc.cfg-dlg-form { --mc-largura: 660px; }
+
+/* O formulário ocupa a moldura: o corpo rola, cabeçalho e rodapé ficam. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-form-conteudo { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+
+/* Cabeçalho: título, descrição curta e "Fechar" em texto. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-cab { padding: 22px 18px 18px 22px; border-bottom: 1px solid var(--mc-linha); }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-cab-texto h2 { font-size: 20px; font-weight: 650; line-height: 26px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-cab-texto p { margin-top: 4px; color: var(--mc-texto-2); font-size: 13.5px; line-height: 19px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-fechar { min-height: 44px; }
+
+/* Corpo: grade de duas colunas; campos longos ocupam a linha inteira. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 22px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form fieldset.cfg-dlg-campos {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 14px;
+  min-width: 0; margin: 0; padding: 0; border: 0;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-campo.is-inteiro,
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-linha { grid-column: 1 / -1; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-rotulo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-rotulo small { color: var(--mc-texto-3); font-size: 12px; font-weight: 400; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-ajuda { margin: 0; color: var(--mc-texto-3); font-size: 12.5px; line-height: 17px; }
+[data-dialog].dw-dialog.mc.mc.cfg-dlg-form :is(input, select, textarea).mc-entrada {
+  height: 44px; border-color: #d7dae3; border-radius: 10px; font-size: 14px;
+}
+[data-dialog].dw-dialog.mc.mc.cfg-dlg-form textarea.mc-entrada { height: auto; min-height: 76px; padding: 10px 12px; }
+
+/* Senha: o "Mostrar"/"Ocultar" encostado no campo, em texto. O botão cobre a
+   altura toda do campo (alvo de 44 px); a borda transparente, com o fundo só
+   na área interna, deixa a borda do campo (e a cor de foco) à vista. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-segredo { position: relative; }
+[data-dialog].dw-dialog.mc.mc.cfg-dlg-form .cfg-dlg-segredo input.mc-entrada { padding-right: 84px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form button.cfg-dlg-mostrar {
+  position: absolute; top: 0; right: 0; bottom: 0; min-width: 77px; padding: 0 12px;
+  border: 1px solid transparent; border-left-color: var(--mc-linha); border-radius: 0 10px 10px 0;
+  background: #fafafd; background-clip: padding-box;
+  color: var(--mc-indigo-texto); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-form button.cfg-dlg-mostrar:hover:not(:disabled) { background: var(--mc-indigo-claro); }
+[data-dialog].dw-dialog.mc.cfg-dlg-form button.cfg-dlg-mostrar:disabled { color: var(--mc-texto-3); cursor: default; }
+
+/* Marcas (Ativa, Atendida, integrações): a caixa inteira é o alvo. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-marcas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form label.cfg-dlg-marca {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--mc-linha); border-radius: 10px; background: var(--mc-papel);
+  color: var(--mc-texto); font-size: 14px; line-height: 19px; cursor: pointer;
+}
+[data-dialog].dw-dialog.mc.cfg-dlg-form label.cfg-dlg-marca:has(input:checked) { border-color: var(--mc-indigo-linha); background: var(--mc-indigo-claro); }
+[data-dialog].dw-dialog.mc.cfg-dlg-form label.cfg-dlg-marca input { flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--mc-indigo); }
+[data-dialog].dw-dialog.mc.cfg-dlg-form fieldset:disabled label.cfg-dlg-marca { color: var(--mc-texto-2); cursor: default; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-ajuda-marcas { margin-top: 8px; }
+
+/* Erro: fixo entre o corpo e o rodapé (a família clara), alinhado ao corpo. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-erro { margin: 0 22px 12px; padding: 11px 12px; border-radius: 10px; }
+
+/* Rodapé: Cancelar e a ação específica; a nota de trava só durante o envio. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-rodape { padding: 14px 22px; background: #fafafd; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-trava { min-width: 0; margin: 0; color: var(--mc-texto-2); font-size: 12.5px; line-height: 17px; }
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-botao { height: 44px; padding: 0 16px; }
+/* Ocupado ("Adicionando…"/"Salvando…"): sólido, sem a opacidade da família,
+   no tom do mockup (#7770dc) escurecido até o branco passar de 4,5:1. */
+[data-dialog].dw-dialog.mc.cfg-dlg-form .mc-botao.is-principal[aria-disabled='true'] {
+  border-color: #7069cf; background: #7069cf; color: #ffffff; opacity: 1;
+}
+
+/* ---------- Celular: folha que sobe do rodapé ---------- */
+@media (max-width: 767px) {
+  .chat-theme.mc-fundo:has(> .cfg-dlg-form) { align-items: flex-end; padding: 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form { max-width: none; max-height: 92dvh; border: 0; border-radius: 22px 22px 0 0; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .mc-cab { padding: 18px 12px 14px 18px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .mc-cab-texto h2 { font-size: 19px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .mc-corpo { padding: 16px 18px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form fieldset.cfg-dlg-campos,
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-marcas { grid-template-columns: minmax(0, 1fr); }
+  [data-dialog].dw-dialog.mc.mc.cfg-dlg-form :is(input, select).mc-entrada { font-size: 16px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .mc-erro { margin: 0 18px 10px; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-rodape {
+    flex-wrap: wrap; gap: 10px; padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-trava { flex: 1 1 100%; }
+  [data-dialog].dw-dialog.mc.cfg-dlg-form .cfg-dlg-rodape .mc-acoes { display: grid; grid-template-columns: 1fr 1fr; width: 100%; margin-left: 0; }
+}

@@ -3,24 +3,50 @@ import { useAuth } from '../contexts/AuthContext';
 import { createSector } from '../services/api';
 import { Button, Field } from './ui';
 import { descreverErro } from '../utils/errorMessages';
+import { DialogoDeFormulario, CampoDoFormulario } from '../pages/settings/formulario/DialogoDeFormulario';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-focus-ring/40';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
-// `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
-function CreateSectorForm({ onCreated, onCancel, embedded = false }) {
+// `comoDialogo`: o diálogo claro de Configurações (Fatia S3). Sem ele, o
+// formulário solto de antes (a aba sem a página que controla a criação).
+// Os dois modos enviam pela mesma função, com o mesmo payload.
+function CreateSectorForm({ onCreated, onCancel, comoDialogo = false }) {
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function enviar() {
+    return createSector({ name }, token);
+  }
+
+  if (comoDialogo) {
+    return (
+      <DialogoDeFormulario
+        titulo="Adicionar setor"
+        descricao="Crie uma nova fila para organizar os atendimentos."
+        acao="Adicionar setor"
+        andamento="Adicionando…"
+        erroPadrao="Não foi possível adicionar o setor. Verifique os dados e tente novamente."
+        onEnviar={enviar}
+        onConcluido={onCreated}
+        onClose={onCancel}
+      >
+        <CampoDoFormulario id="sector-name" rotulo="Nome do setor" inteiro>
+          <input id="sector-name" className="mc-entrada" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Financeiro" autoComplete="off" required />
+        </CampoDoFormulario>
+      </DialogoDeFormulario>
+    );
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      await createSector({ name }, token);
+      await enviar();
       setName('');
       onCreated();
     } catch (err) {
@@ -33,9 +59,9 @@ function CreateSectorForm({ onCreated, onCancel, embedded = false }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={embedded ? 'space-y-3' : 'settings-open-form space-y-4 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-5'}
+      className="settings-open-form space-y-4 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-5"
     >
-      {!embedded && <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo setor</h3>}
+      <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo setor</h3>
       <div>
         <Field id="sector-name" label="Nome" width="md">
           <input id="sector-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />

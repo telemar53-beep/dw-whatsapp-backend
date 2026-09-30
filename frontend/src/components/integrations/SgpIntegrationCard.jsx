@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useConfirm } from '../../hooks/useConfirm';
 import { updateSgpIntegration, rotateSgpIntegrationKey } from '../../services/api';
 import { isOfficialChannelType } from '../../utils/channelTypes';
 import { Button, DangerZone } from '../ui';
@@ -12,10 +13,9 @@ const cardClass = 'space-y-3 rounded-[16px] border border-white/[0.09] bg-ui-sur
 
 const MODE_LABELS = { freetext: 'Texto livre (Baileys)', template: 'Template (oficial)' };
 
-function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
+function SgpIntegrationCard({ integration, channels, templates, onChanged, onKeyGenerated }) {
   const { token } = useAuth();
-  const [rotating, setRotating] = useState(false);
-  const [generatedKey, setGeneratedKey] = useState(null);
+  const { confirm, confirmDialog } = useConfirm();
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -86,18 +86,34 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
     }
   }
 
+  // Fatia S0 (29/09): gerar a chave invalida a atual no mesmo instante, e o SGP
+  // para de conseguir chamar o chat por esta integração até receber a nova. Por
+  // isso pede confirmação, e a confirmação ESPERA a resposta (useConfirm com
+  // `acao`): ocupada, as saídas ficam presas e o segundo clique não conta; se
+  // falhar, o erro aparece no diálogo e nada muda no cartão. A chave nova vai
+  // para quem mostra (a página), fora da lista que a releitura pode trocar.
   async function handleRotateKey() {
     setError(null);
-    setRotating(true);
-    try {
-      const result = await rotateSgpIntegrationKey(integration.id, token);
-      setGeneratedKey(result.apiKey);
-      onChanged();
-    } catch (err) {
-      setError(descreverErro(err, 'Falha ao gerar a chave'));
-    } finally {
-      setRotating(false);
-    }
+    const referenciaDoCanal = channel ? `canal “${channel.name}”` : 'canal removido';
+    let gerada = null;
+    const confirmou = await confirm(
+      integration.hasApiKey
+        ? `A chave atual da integração “${integration.description}” (${referenciaDoCanal}) deixa de funcionar assim que a nova for gerada. Os avisos e envios que o SGP faz por essa integração param até a nova chave ser cadastrada no SGP.`
+        : `A integração “${integration.description}” (${referenciaDoCanal}) passa a aceitar a chave gerada agora. Ela aparece uma única vez e precisa ser cadastrada no SGP.`,
+      {
+        title: 'Gerar nova chave de API?',
+        danger: Boolean(integration.hasApiKey),
+        confirmLabel: 'Gerar nova chave',
+        busyLabel: 'Gerando chave…',
+        erroPadrao: 'Não foi possível gerar a nova chave.',
+        acao: async () => {
+          gerada = await rotateSgpIntegrationKey(integration.id, token);
+        },
+      }
+    );
+    if (!confirmou || !gerada) return;
+    onKeyGenerated({ integration, referenciaDoCanal, apiKey: gerada.apiKey });
+    onChanged();
   }
 
   return (
@@ -179,18 +195,13 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
           </div>
         </form>
       )}
-      {generatedKey && (
-        <div className="rounded-lg border border-wa-warn-text/40 bg-wa-warn-bg px-3 py-2 text-sm text-wa-text">
-          <p className="font-medium">Copie agora — esta chave não será mostrada novamente:</p>
-          <code className="mt-1 block break-all rounded bg-wa-surface px-2 py-1">{generatedKey}</code>
-        </div>
-      )}
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <DangerZone title="Gerar nova chave" description="A chave atual deixa de funcionar assim que uma nova for gerada.">
-        <Button variant="danger" onClick={handleRotateKey} disabled={rotating}>
+        <Button variant="danger" onClick={handleRotateKey}>
           Gerar nova chave
         </Button>
       </DangerZone>
+      {confirmDialog}
     </div>
   );
 }

@@ -1,72 +1,28 @@
-/* Final polish only: keep the approved channel grid and row density. */
-.channel-status-icon {display:none}
-.settings-channel-center .settings-channel-symbol {border:1px solid #ffffff0a;border-radius:7px;background:#263940;color:#9abfd0}
-.settings-channel-center .settings-channel-symbol[data-provider=meta_cloud] {color:#83b6fb;background:#3987ff12;border-color:#75aaff20}
-/* As marcas sao <svg> inline com `fill: currentColor` — nada de mask, nada de
-   url(), nada de data URI. A cor e declarada AQUI porque esta folha fica fora
-   de @layer e vence a utility do Tailwind: com a cor vindo so da classe
-   `text-[#85d9a4]` do JSX, o glifo saia num azul-acinzentado herdado
-   (rgb(154,191,208) medido), e nao no verde do WhatsApp. */
-.channel-brand {position:relative;display:block;line-height:0;color:#25d366}
-.channel-brand-mark {display:block;width:24px;height:24px}
-/* Selo do provedor: canto inferior direito, com anel na cor da caixa para nao
-   encostar no glifo. Pequeno de proposito — ele diz COMO o numero esta
-   conectado, nao O QUE o canal e. */
-.channel-brand-badge {position:absolute;right:-4px;bottom:-4px;width:13px;height:13px;border-radius:50%;box-shadow:0 0 0 2px var(--chat-surface-panel,#2b343b)}
-.channel-brand-badge:not(.is-logo) {color:#0081fb;background:var(--chat-surface-panel,#2b343b);padding:1px}
-.channel-brand-badge.is-logo {object-fit:contain;background:#0b1f21}
-/* A marca do WhatsApp no titulo de Canais: a regra existia desde antes,
-   presa a um ancestral (.settings-group-header) que nao existe mais no
-   JSX — entao o unico uso de whatsapp.svg no produto nunca desenhava. */
-.settings-workspace[data-settings-page=canais] .settings-title-mark {color:#8ed4ab}
-.settings-workspace[data-settings-page=canais] .settings-title-mark > .settings-functional-icon {display:none}
-.settings-workspace[data-settings-page=canais] .settings-title-mark:after {content:'';width:19px;height:19px;background:currentColor;mask:url('../../../assets/brands/whatsapp.svg') center/contain no-repeat}
-.settings-channel-center .settings-channel-record {transition:background-color .14s ease,box-shadow .14s ease;border-color:#ffffff0a}
-.settings-channel-center .settings-channel-record:hover {background:var(--color-ui-state-hover)}
-.settings-channel-center .settings-channel-record:focus-within {background:#ffffff04}
-.settings-channel-center .settings-channel-record[aria-selected=true] {background:var(--color-ui-state-selected);box-shadow:inset 2px 0 #d5a176}
-.settings-channel-center .settings-channel-record > .settings-channel-identity a {font-size:13px;line-height:18px;font-weight:600;letter-spacing:.005em}
-.settings-channel-center .settings-channel-record > .settings-channel-identity p {color:#aabac5;font-variant-numeric:tabular-nums}
-.settings-channel-center .settings-channel-provider {color:#8fa6b5;font-size:10px;line-height:15px}
-.settings-channel-center .channel-connection {gap:5px;font-size:11px;line-height:16px;min-width:0;max-width:100%}
-.settings-channel-center .channel-status-icon {display:inline-flex;flex:none}
-.settings-channel-center .channel-status-dot {display:none}
-.settings-channel-center .channel-connection[data-connection=connected] {color:#94d7b1}
-.settings-channel-center .channel-connection[data-connection=awaiting_qr] {color:#dac089}
-.settings-channel-center .channel-connection[data-connection=error],.settings-channel-center .channel-connection[data-connection=disconnected] {color:#e7a69f}
-.settings-channel-center .channel-connection[data-connection=unknown] {color:#a5b4c0}
-.settings-channel-center .channel-connection-reason {max-width:none;min-width:0}
-.settings-channel-center .channel-quality-chip {padding:0 5px;font-size:10px;border-radius:4px;line-height:16px}
-.settings-channel-center .channel-attendance-icon {display:inline-flex;align-items:center;margin-right:5px;opacity:.85}
-.settings-channel-center [data-attendance=Humano] {color:#bfccd5}
-.settings-channel-center [data-attendance='IA ativa'],.settings-channel-center [data-attendance='Triagem IA'] {color:#c1b2dc}
-.settings-channel-center .settings-channel-service > .settings-cell-label {font-size:9px;letter-spacing:.08em;color:#91a6b4;line-height:14px;margin-bottom:5px}
-.settings-channel-center .settings-channel-record > .settings-channel-actions a,.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {height:30px;min-height:30px;border-radius:6px;background:#ffffff03;border-color:#ffffff12;font-size:11px;padding:4px 9px;color:#cbd6dd;gap:6px}
-.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {width:30px;padding:0;background:transparent;border-color:transparent}
-.settings-channel-center .settings-channel-record > .settings-channel-actions a:hover {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
-/* O repouso do "..." mora na linha acima em (0,5,1) e declara
-   `background:transparent`. O hover vinha em (0,4,1) e o aberto em (0,3,1):
-   os dois PERDIAM, e os tres estados computavam identicos (medido: os tres em
-   rgba(0,0,0,0)). Aqui so a especificidade muda — os valores de hover sao os
-   que ja estavam escritos. O aberto ganha um degrau para nao se confundir com
-   o hover, no mesmo vocabulario de alpha do arquivo. */
-.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup]:hover,
-.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup]:focus-visible {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
-.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup][aria-expanded=true] {background:#ffffff12;border-color:#ffffff2e;color:#f3f7f9}
-.settings-channel-center :is(a,button,select):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
-.settings-channel-center .channel-row-menu {border-radius:8px;background:var(--color-ui-surface-overlay);border-color:#64778466;box-shadow:0 10px 28px #0005;min-width:172px}
-.settings-workspace .settings-channel-center .channel-row-menu button {display:flex;align-items:center;gap:8px;min-height:30px;padding:6px 9px;font-size:12px;border-radius:4px}
-.settings-channel-center .channel-row-menu button:hover {background:#ffffff08}
-.settings-channel-center .channel-row-menu .dw-menu-item-danger {border-top:1px solid #ffffff0c;margin-top:3px;color:#e7a69f}
-.settings-channel-center .channel-row-menu button:disabled {opacity:.5}
-@media(prefers-reduced-motion:reduce){.settings-channel-center .settings-channel-record{transition:none}}
-
-/* QR de conexao, no tema. Era um iframe de fundo branco; agora e a imagem
-   dentro de uma moldura do produto, com o texto do que fazer ao lado. */
-.channel-qr {display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--color-ui-line)}
-.channel-qr-quadro {width:188px;height:188px;flex:none;display:grid;place-items:center;border-radius:12px;border:1px solid #ffffff14;background:#f6f7f8;padding:10px}
-.channel-qr-imagem {width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
-.channel-qr-vazio {font-size:11px;line-height:16px;text-align:center;color:#5b6472;padding:0 8px}
-.channel-qr-lado {display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
-.channel-qr-instrucao {font-size:12px;line-height:18px;color:var(--color-ui-ink-muted);margin:0}
-@container(max-width:520px){.channel-qr{grid-template-columns:minmax(0,1fr);justify-items:center}.channel-qr-lado{align-items:center;text-align:center}}
+/* O selo de estado da conexão (ChannelsTable.jsx): ponto na cor do tom e o
+   texto, sem ícone. Vale nos cartões, no detalhe e onde mais o selo entrar.
+   As cores são literais: o selo também aparece fora de .settings-workspace.
+   Tons: ok (verde), espera (âmbar), erro (vermelho), neutro (cinza). O verde
+   e o âmbar escurecidos passam de 4,5:1 sobre branco em 12 px (S2). */
+.channel-connection {
+  display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%;
+  color: #1c2030; font-size: 13px; font-weight: 650; line-height: 18px; white-space: nowrap;
+}
+.channel-status-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #8a909d; }
+.channel-connection-reason { overflow: hidden; text-overflow: ellipsis; }
+.channel-connection[data-tom=ok] { color: #11704f; }
+.channel-connection[data-tom=ok] .channel-status-dot { background: #1f9d63; }
+.channel-connection[data-tom=espera] { color: #8a4b00; }
+.channel-connection[data-tom=espera] .channel-status-dot { background: #c77700; }
+.channel-connection[data-tom=erro] { color: #a8241c; }
+.channel-connection[data-tom=erro] .channel-status-dot { background: #c62828; }
+.channel-connection[data-tom=neutro] { color: #5b6272; }
+/* Conectado com qualidade reduzida: o texto continua "Conectado" em verde; o
+   selo da qualidade é que avisa. */
+.channel-connection[data-connection=connected][data-tom=espera] { color: #11704f; }
+.channel-connection[data-connection=connected][data-tom=espera] .channel-status-dot { background: #1f9d63; }
+.channel-quality-chip {
+  flex: none; margin-left: 2px; padding: 2px 8px; border-radius: 999px; background: #e7f5ee;
+  color: #11704f; font-size: 12px; font-weight: 600; line-height: 16px;
+}
+.channel-quality-chip[data-qualidade=YELLOW] { background: #fff4dc; color: #7a4a00; }
+.channel-quality-chip[data-qualidade=RED] { background: #fdecea; color: #8c1d18; }

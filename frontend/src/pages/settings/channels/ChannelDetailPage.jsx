@@ -1,102 +1,130 @@
-import { SettingsTitle, SettingsIcon } from '../SettingsVisuals';
-import { useEffect } from 'react';
-import { useParams, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import ProtectedRoute from '../../../components/ProtectedRoute';
-import { AsyncState, PageHeader, ScopeBadge, Tabs } from '../../../components/ui';
-import { useAuth } from '../../../contexts/AuthContext';
+import './detalhe-do-canal.css';
+import { useCallback, useState } from 'react';
+import { useParams, Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
+import { AsyncState } from '../../../components/ui';
 import { useChannels } from '../../../hooks/useChannels';
-import { hasLevel } from '../../../navigation/navItems';
+import { SETTINGS_BASE } from '../../../navigation/navItems';
 import { formatPhone } from '../../../utils/phone';
+import { sobDemanda, useSobDemanda } from '../../../utils/sobDemanda';
 import { useChannelActions } from './useChannelActions';
-import { ChannelIcon, ConnectionStatus, providerLabel } from './ChannelsTable';
+import { ConnectionStatus, providerLabel } from './ChannelsTable';
+import { EmblemaDoCanal } from './emblema';
+import { AvisoDeSucesso } from './AvisoDeSucesso';
 import SettingsShell from '../SettingsShell';
+
+// Detalhe do canal (Fatia S2, primeiro mockup).
+//
+// - O título é o nome do canal, com o emblema do tipo e o estado ao lado;
+//   "Números conectados" é o caminho de volta (e a trilha), não um título
+//   repetido. Saiu o seletor "Trocar de canal".
+// - Duas abas: Conexão (estado, QR, identificação e ações do canal) e
+//   Atendimento (automações deste canal).
+// - É página de quem gerencia integrações: o gerente sem a permissão vê "Sem
+//   acesso a este canal" e nada daqui monta — nem o QR, que respondia 403.
+// - Excluir, concluído, volta para a lista com a confirmação, em vez de
+//   terminar em "Canal não encontrado".
+// - Migrar para Meta Cloud e Atualizar credenciais abrem um diálogo que só
+//   chega quando é aberto.
+const CREDENCIAIS = sobDemanda(() => import('./CredenciaisMetaDialog'));
+
+const LISTA = '/configuracoes/canais';
+
+const AVISOS = {
+  ocultar: (canal) => ({ titulo: 'Canal ocultado', texto: `“${canal.name}” saiu da lista. Nada foi apagado.` }),
+  reexibir: (canal) => ({ titulo: 'Canal reexibido', texto: `“${canal.name}” voltou para a lista.` }),
+  reconectar: () => ({ titulo: 'Novo QR code gerado', texto: 'Leia o código em Conexão para voltar a receber mensagens.' }),
+};
 
 function ChannelDetailPage() {
   const { id } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
-  const { agent } = useAuth();
-  const canManage = hasLevel(agent, 'integrations');
   const { channels, status, refresh } = useChannels(true, true);
-  const actions = useChannelActions(refresh);
   const channel = channels.find((c) => c.id === id);
-  const currentTab = location.pathname.endsWith('/atendimento') ? 'atendimento' : 'conexao';
+  const [aviso, setAviso] = useState(null);
+  const [credenciais, setCredenciais] = useState(null);
+  const [falhaAoAbrir, setFalhaAoAbrir] = useState(false);
+  const fecharAviso = useCallback(() => setAviso(null), []);
 
-  // Enquanto o canal está mostrando um QR code, atualiza sozinho a cada 5s
-  // para que a aba passe a "Conectado" assim que o celular termina de ler.
-  useEffect(() => {
-    if (!channel || channel.status !== 'awaiting_qr') return undefined;
-    const interval = setInterval(() => refresh(), 5000);
-    return () => clearInterval(interval);
-  }, [channel?.status, refresh]);
+  const actions = useChannelActions(refresh, {
+    aoConcluir: (tipo, canal) => {
+      if (tipo === 'excluir') {
+        navigate(LISTA, { state: { aviso: { titulo: 'Canal excluído', texto: `“${canal.name}” foi removido da lista.` } } });
+        return;
+      }
+      setAviso(AVISOS[tipo](canal));
+    },
+  });
+
+  const aoFalharAbrir = useCallback(() => {
+    setCredenciais(null);
+    setFalhaAoAbrir(true);
+  }, []);
+  const Credenciais = useSobDemanda(CREDENCIAIS, Boolean(credenciais), aoFalharAbrir);
+
+  function abrirCredenciais(modo) {
+    setFalhaAoAbrir(false);
+    setCredenciais(modo);
+  }
+
+  // Na trilha, "Números conectados" é texto: o link para a lista é o voltar
+  // logo abaixo (dois links iguais seguidos só repetiriam o leitor de tela).
+  const trilha = [
+    { label: 'Configurações', to: SETTINGS_BASE },
+    { label: 'Números conectados' },
+    ...(channel ? [{ label: channel.name }] : []),
+  ];
 
   return (
     <SettingsShell
-      areaLabel="Canais WhatsApp"
-      title="Canais WhatsApp"
+      level="integrations"
+      areaLabel="este canal"
+      trilha={trilha}
+      voltar={{ to: LISTA, rotulo: 'Números conectados' }}
+      semAcesso={{
+        titulo: 'Sem acesso a este canal',
+        texto: 'Seu perfil pode ver a lista, mas não pode consultar credenciais, QR code nem configurações de integração.',
+        voltar: { to: LISTA, rotulo: 'Voltar aos canais' },
+      }}
+      title={channel ? channel.name : 'Canal'}
+      description={channel ? `${formatPhone(channel.phoneNumber)} · ${providerLabel(channel.type)}` : null}
+      marca={channel ? <EmblemaDoCanal type={channel.type} /> : undefined}
+      action={channel ? <ConnectionStatus channel={channel} comQualidade /> : undefined}
       iconName="canais"
-      crumb={null}
-      description="Gerencie os números e o atendimento de cada canal."
-      width="table"
+      width="wide"
     >
-            <AsyncState status={status} onRetry={refresh}>
-              <div className="settings-channel-switch flex flex-wrap items-center justify-between gap-3">
-                <Link to="/configuracoes/canais" className="text-[13px] font-medium text-wa-link hover:underline">← Todos os canais</Link>
-                <label className="flex min-w-[220px] flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.08em] text-wa-muted">
-                  <span>Trocar de canal ({channels.length})</span>
-                  <select
-                    aria-label="Trocar de canal"
-                    value={id}
-                    onChange={(event) => navigate(`/configuracoes/canais/${event.target.value}/${currentTab}`)}
-                    className="h-9 min-w-0 rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium normal-case tracking-normal text-wa-text outline-none focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40"
-                  >
-                    {channels.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatPhone(item.phoneNumber)}</option>)}
-                  </select>
-                </label>
-              </div>
-
-              {!channel ? (
-                <div className="rounded-[16px] border border-wa-surface-line bg-wa-surface px-6 py-10 text-center text-[14px] text-wa-muted">
-                  Canal não encontrado.{' '}
-                  <Link to="/configuracoes/canais" className="text-wa-link underline">
-                    Voltar para a lista
-                  </Link>
-                </div>
-              ) : (
-                <section
-                  aria-labelledby="channel-detail-title"
-                  className="overflow-clip rounded-[18px] border border-wa-surface-line bg-wa-surface"
-                >
-                  <div className="settings-channel-detail-head flex flex-wrap items-center gap-3 border-b border-wa-border px-4 py-4 sm:px-5">
-                    <ChannelIcon size={40} />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 id="channel-detail-title" className="truncate font-display text-[17px] font-semibold leading-[22px] text-wa-text">
-                          {channel.name}
-                        </h2>
-                        <ScopeBadge scope="channel" />
-                      </div>
-                      <p className="mt-0.5 text-[13px] text-wa-muted">{formatPhone(channel.phoneNumber)} · {providerLabel(channel.type)}</p>
-                    </div>
-                    <div className="ml-auto"><ConnectionStatus channel={channel} /></div>
-                  </div>
-                  <div className="px-2 sm:px-3">
-                    <Tabs
-                      look="underline"
-                      label="Seções do canal"
-                      tabs={[
-                        { key: 'conexao', label: 'Conexão', to: `/configuracoes/canais/${id}/conexao` },
-                        { key: 'atendimento', label: 'Atendimento', to: `/configuracoes/canais/${id}/atendimento` },
-                      ]}
-                    />
-                  </div>
-                  <div className="settings-channel-detail-body px-4 pb-5 pt-5 sm:px-5">
-                    <Outlet context={{ channel, refresh, actions, canManage }} />
-                  </div>
-                </section>
-              )}
+      <AsyncState status={status} onRetry={refresh}>
+        {!channel ? (
+          <p className="cfg-detalhe-ausente">
+            Canal não encontrado.{' '}
+            <Link to={LISTA}>Voltar para a lista</Link>
+          </p>
+        ) : (
+          <div className="cfg-detalhe cfg-s2">
+            <nav aria-label="Seções do canal" className="cfg-abas">
+              <NavLink to={`/configuracoes/canais/${channel.id}/conexao`} className="cfg-aba">Conexão</NavLink>
+              <NavLink to={`/configuracoes/canais/${channel.id}/atendimento`} className="cfg-aba">Atendimento</NavLink>
+            </nav>
+            {falhaAoAbrir && <p className="cfg-detalhe-erro" role="alert">Não foi possível abrir as credenciais. Tente de novo.</p>}
+            <Outlet context={{ channel, refresh, actions, abrirCredenciais, avisar: setAviso }} />
+          </div>
+        )}
       </AsyncState>
-      {actions.confirmDialog}
+      {actions.dialogo}
+      {credenciais && Credenciais && channel && (
+        <Credenciais
+          modo={credenciais}
+          canal={channel}
+          onClose={() => setCredenciais(null)}
+          onSalvar={(dados) => actions.salvarCredenciaisMeta(channel.id, dados)}
+          onConcluido={() => {
+            setAviso(credenciais === 'migrar'
+              ? { titulo: 'Canal migrado para Meta Cloud', texto: `“${channel.name}” agora usa a conexão oficial da Meta.` }
+              : { titulo: 'Credenciais atualizadas', texto: 'A Meta conferiu os dados antes de salvar.' });
+            setCredenciais(null);
+          }}
+        />
+      )}
+      <AvisoDeSucesso aviso={aviso} onFechar={fecharAviso} />
     </SettingsShell>
   );
 }

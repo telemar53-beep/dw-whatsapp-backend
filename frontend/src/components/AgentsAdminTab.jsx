@@ -1,14 +1,21 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
+import { useConfirm } from '../hooks/useConfirm';
 import { useSectors } from '../hooks/useSectors';
 import { setAgentActive, setAgentSectors, resetAgentPassword } from '../services/api';
-import CreateAgentForm from './CreateAgentForm';
 import AgentAvatar from './AgentAvatar';
-import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
+import { WaError } from './WaDialog';
+import { SegredoGeradoDialog } from './ui/SegredoGeradoDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu } from './ui';
 import { IconSearch, IconUserPlus, IconMore } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+
+// O Adicionar usuário (Fatia S3) só chega quando é aberto: o formulário, o
+// campo de senha, a base de diálogo de Configurações e a folha dela ficam fora
+// do trecho da página.
+const FORMULARIO = sobDemanda(() => import('./CreateAgentForm'));
 
 const ROLE_LABELS = { admin: 'Administrador', manager: 'Gerente', agent: 'Atendente' };
 const ROLE_OPTIONS = [
@@ -42,36 +49,13 @@ function StatusBadge({ active }) {
 }
 
 // Botão de reticências com um pop-up de ações; fecha ao clicar fora, no Esc ou ao escolher.
-function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSaved }) {
+function AgentRow({ agentRow, currentAgent, sectors, onGeneratePassword, onDeactivate, onReactivate, onSectorsSaved }) {
   const { token } = useAuth();
   const [editingSectors, setEditingSectors] = useState(false);
   const [selectedIds, setSelectedIds] = useState(agentRow.sectors.map((s) => s.id));
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState(null);
-  const [generatingPassword, setGeneratingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState(null);
-  const [copied, setCopied] = useState(false);
   const isSelf = agentRow.id === currentAgent?.id;
-
-  async function handleGeneratePassword() {
-    setPasswordError(null);
-    setGeneratingPassword(true);
-    try {
-      const { newPassword } = await resetAgentPassword(agentRow.id, token);
-      setGeneratedPassword(newPassword);
-      setCopied(false);
-    } catch (err) {
-      setPasswordError(descreverErro(err, 'Falha ao gerar senha'));
-    } finally {
-      setGeneratingPassword(false);
-    }
-  }
-
-  async function handleCopyPassword() {
-    await navigator.clipboard.writeText(generatedPassword);
-    setCopied(true);
-  }
 
   function handleEditSectorsClick() {
     setSelectedIds(agentRow.sectors.map((s) => s.id));
@@ -138,10 +122,10 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
             </Button>
             {!isSelf && (
               <RowMenu label={`Mais ações para ${agentRow.name}`}>
-                <button type="button" onClick={handleGeneratePassword} disabled={generatingPassword} className={ITEM_DE_MENU}>
+                <button type="button" onClick={() => onGeneratePassword(agentRow)} className={ITEM_DE_MENU}>
                   Gerar nova senha
                 </button>
-                <button type="button" onClick={() => onToggleActive(agentRow)} className={ITEM_DE_MENU}>
+                <button type="button" onClick={() => (agentRow.active ? onDeactivate(agentRow) : onReactivate(agentRow))} className={ITEM_DE_MENU}>
                   {agentRow.active ? 'Desativar' : 'Reativar'}
                 </button>
               </RowMenu>
@@ -150,10 +134,9 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
         </td>
       </tr>
 
-      {(editingSectors || passwordError) && (
+      {editingSectors && (
         <tr className="bg-black/[0.12]">
           <td colSpan={5} className="px-4 pb-4 pt-3">
-            {passwordError && <WaError className="mb-3">{passwordError}</WaError>}
             {editingSectors && (
               <div className="dialog-sector-assignment space-y-3">
                 <p className="text-[13px] font-medium text-wa-muted">Setores de {agentRow.name}</p>
@@ -189,28 +172,6 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
         </tr>
       )}
 
-      {generatedPassword && (
-        <WaDialog variant="users" title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} closeOnBackdrop size="max-w-sm">
-          <div className="space-y-3 px-6 py-4">
-            <p className="text-sm text-wa-muted">
-              Copie e repasse essa senha pro atendente — ela só aparece essa vez.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm text-wa-text">
-                {generatedPassword}
-              </code>
-              <button type="button" onClick={handleCopyPassword} className={waPrimaryButtonClass}>
-                {copied ? 'Copiado!' : 'Copiar'}
-              </button>
-            </div>
-          </div>
-          <div className="flex shrink-0 justify-end px-4 py-3">
-            <button type="button" onClick={() => setGeneratedPassword(null)} className={waGhostButtonClass}>
-              Fechar
-            </button>
-          </div>
-        </WaDialog>
-      )}
     </>
   );
 }
@@ -234,9 +195,63 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const controlled = creatingProp !== undefined;
   const creatingAgent = controlled ? creatingProp : internalCreating;
   const setCreatingAgent = controlled ? onCreatingChange : setInternalCreating;
+  const [falhaAoAbrir, setFalhaAoAbrir] = useState(null);
+  const formularioNaoBaixou = useCallback(() => {
+    setCreatingAgent(false);
+    setFalhaAoAbrir('Não foi possível abrir o Adicionar usuário. Verifique a conexão e tente de novo.');
+  }, [setCreatingAgent]);
+  const CreateAgentForm = useSobDemanda(FORMULARIO, creatingAgent, formularioNaoBaixou);
 
-  async function handleToggleActive(agentToToggle) {
-    await setAgentActive(agentToToggle.id, !agentToToggle.active, token);
+  function abrirCriacao() {
+    setFalhaAoAbrir(null);
+    setCreatingAgent(true);
+  }
+
+  // Fatia S0 (29/09): gerar senha e desativar pedem confirmação com o nome e o
+  // efeito, e a confirmação ESPERA a resposta (useConfirm com `acao`): ocupada,
+  // as saídas ficam presas e o segundo clique não conta; se falhar, o erro
+  // aparece no diálogo, o usuário continua como estava e dá para tentar de novo.
+  // A senha nova mora aqui, fora da tabela: se a releitura falhar, o AsyncState
+  // troca a tabela por um erro — e a senha, que só aparece uma vez, iria junto.
+  const { confirm, confirmDialog } = useConfirm();
+  const [senhaGerada, setSenhaGerada] = useState(null);
+
+  async function handleGeneratePassword(agentRow) {
+    let gerada = null;
+    const confirmou = await confirm(
+      `A senha atual de ${agentRow.name} deixa de funcionar imediatamente para entrar. Uma senha temporária nova aparece em seguida, uma única vez, para você repassar. Uma sessão que já esteja aberta não é encerrada.`,
+      {
+        title: `Gerar nova senha para ${agentRow.name}?`,
+        danger: true,
+        confirmLabel: 'Gerar nova senha',
+        busyLabel: 'Gerando senha…',
+        erroPadrao: 'Não foi possível gerar a nova senha.',
+        acao: async () => {
+          gerada = await resetAgentPassword(agentRow.id, token);
+        },
+      }
+    );
+    if (confirmou && gerada) setSenhaGerada({ agent: agentRow, senha: gerada.newPassword });
+  }
+
+  async function handleDeactivate(agentRow) {
+    const confirmou = await confirm(
+      `${agentRow.name} não consegue mais entrar. Uma sessão que já esteja aberta continua até expirar. O histórico dos atendimentos é mantido, e a conta pode ser reativada por esta tela.`,
+      {
+        title: `Desativar ${agentRow.name}?`,
+        danger: true,
+        confirmLabel: 'Desativar usuário',
+        busyLabel: 'Desativando…',
+        erroPadrao: 'Não foi possível desativar o usuário. Tente de novo.',
+        acao: () => setAgentActive(agentRow.id, false, token),
+      }
+    );
+    if (confirmou) refresh();
+  }
+
+  // Reativar continua como era: imediato, sem confirmação.
+  async function handleReactivate(agentRow) {
+    await setAgentActive(agentRow.id, true, token);
     refresh();
   }
 
@@ -264,7 +279,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           <h2 id="users-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Usuários
           </h2>
-          <Button onClick={() => setCreatingAgent(true)} className="!py-2">
+          <Button onClick={abrirCriacao} className="!py-2">
             <IconUserPlus size={18} />
             Adicionar usuário
           </Button>
@@ -316,6 +331,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           <span>{countLabel}</span>
           <span>A situação da conta é diferente do status online.</span>
         </div>
+        {falhaAoAbrir && <WaError className="mb-3">{falhaAoAbrir}</WaError>}
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum usuário cadastrado ainda.">
             <DataTable label="Usuários" className="min-w-[720px]">
@@ -352,7 +368,9 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                         agentRow={agentRow}
                         currentAgent={currentAgent}
                         sectors={sectors}
-                        onToggleActive={handleToggleActive}
+                        onGeneratePassword={handleGeneratePassword}
+                        onDeactivate={handleDeactivate}
+                        onReactivate={handleReactivate}
                         onSectorsSaved={refresh}
                       />
                     ))
@@ -365,20 +383,28 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
 
       </section>
 
-      {creatingAgent && (
-        <WaDialog variant="users" title="Adicionar usuário" onClose={() => setCreatingAgent(false)} size="max-w-2xl">
-          <div className="px-6 pb-5 pt-2">
-            <CreateAgentForm
-              embedded
-              onCreated={() => {
-                refresh();
-                setCreatingAgent(false);
-              }}
-              onCancel={() => setCreatingAgent(false)}
-            />
-          </div>
-        </WaDialog>
-      )}
+      {creatingAgent && (CreateAgentForm ? (
+        <CreateAgentForm
+          comoDialogo
+          onCreated={() => {
+            refresh();
+            setCreatingAgent(false);
+          }}
+          onCancel={() => setCreatingAgent(false)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o Adicionar usuário…</p>)}
+      {confirmDialog}
+      <SegredoGeradoDialog
+        open={Boolean(senhaGerada)}
+        titulo={senhaGerada ? `Nova senha de ${senhaGerada.agent.name}` : ''}
+        explicacao={senhaGerada ? `Ela aparece uma única vez: copie e repasse a ${senhaGerada.agent.name}. A senha anterior já não funciona.` : ''}
+        rotulo="Senha temporária"
+        segredo={senhaGerada ? senhaGerada.senha : ''}
+        rotuloCopiar="Copiar senha"
+        confirmacaoCopia="Senha copiada."
+        rotuloFechar="Já copiei a senha"
+        onClose={() => setSenhaGerada(null)}
+      />
     </>
   );
 }

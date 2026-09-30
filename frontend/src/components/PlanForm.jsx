@@ -4,6 +4,7 @@ import { createPlan, updatePlan } from '../services/api';
 import { Button } from './ui';
 import { WaError } from './WaDialog';
 import { descreverErro } from '../utils/errorMessages';
+import { DialogoDeFormulario, CampoDoFormulario, MarcaDoFormulario, ErroDoFormulario } from '../pages/settings/formulario/DialogoDeFormulario';
 
 const CAMPO =
   'h-10 w-full rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[14px] text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60';
@@ -34,8 +35,10 @@ function precoParaCampo(valor) {
   return Number(valor).toFixed(2).replace('.', ',');
 }
 
-// `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
-function PlanForm({ plan = null, onSaved, onCancel, embedded = false }) {
+// `comoDialogo`: o diálogo claro de Configurações (Fatia S3), para criar e
+// editar. Sem ele, o formulário solto de antes. Os dois modos validam e
+// enviam pela mesma função, com o mesmo payload.
+function PlanForm({ plan = null, onSaved, onCancel, comoDialogo = false }) {
   const { token } = useAuth();
   const editando = Boolean(plan);
 
@@ -49,24 +52,18 @@ function PlanForm({ plan = null, onSaved, onCancel, embedded = false }) {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError(null);
-
+  async function enviar() {
     const monthlyPrice = precoEmNumero(price);
     if (monthlyPrice === null) {
-      setError('Informe a mensalidade em reais, por exemplo 100,00.');
-      return;
+      throw new ErroDoFormulario('Informe a mensalidade em reais, por exemplo 100,00.', 'plan-price');
     }
     const speedMbps = velocidadeEmNumero(speed);
     if (speedMbps === undefined) {
-      setError('A velocidade deve ser um número inteiro de megabits, ou ficar em branco.');
-      return;
+      throw new ErroDoFormulario('A velocidade deve ser um número inteiro de megabits, ou ficar em branco.', 'plan-speed');
     }
     const sortOrder = Number(String(order).trim() || '0');
     if (!Number.isInteger(sortOrder)) {
-      setError('A ordem de exibição deve ser um número inteiro.');
-      return;
+      throw new ErroDoFormulario('A ordem de exibição deve ser um número inteiro.', 'plan-order');
     }
 
     const payload = {
@@ -79,28 +76,77 @@ function PlanForm({ plan = null, onSaved, onCancel, embedded = false }) {
       note: note.trim(),
     };
 
+    if (editando) {
+      await updatePlan(plan.id, payload, token);
+    } else {
+      await createPlan(payload, token);
+    }
+  }
+
+  if (comoDialogo) {
+    return (
+      <DialogoDeFormulario
+        titulo={editando ? 'Editar plano' : 'Novo plano'}
+        descricao={editando ? 'Altere os dados deste plano.' : 'Planos comerciais usados pela equipe e pela assistente virtual.'}
+        acao={editando ? 'Salvar alterações' : 'Adicionar plano'}
+        andamento={editando ? 'Salvando…' : 'Adicionando…'}
+        erroPadrao={
+          editando
+            ? 'Não foi possível salvar as alterações. Verifique os dados e tente novamente.'
+            : 'Não foi possível adicionar o plano. Verifique os dados e tente novamente.'
+        }
+        onEnviar={enviar}
+        onConcluido={onSaved}
+        onClose={onCancel}
+      >
+        <CampoDoFormulario id="plan-name" rotulo="Nome" inteiro ajuda="O nome comercial, como o cliente ouve.">
+          <input id="plan-name" className="mc-entrada" value={name} onChange={(e) => setName(e.target.value)} placeholder="500 Mega" autoComplete="off" required />
+        </CampoDoFormulario>
+        <CampoDoFormulario id="plan-speed" rotulo="Velocidade (Mbps)" ajuda="Em branco para plano sem velocidade, como TV.">
+          <input id="plan-speed" className="mc-entrada" inputMode="numeric" value={speed} onChange={(e) => setSpeed(e.target.value)} placeholder="500" autoComplete="off" />
+        </CampoDoFormulario>
+        {/* Sem `required` nativo de propósito: o balão do navegador diria só
+            "preencha este campo", e aqui o que confunde é o FORMATO. */}
+        <CampoDoFormulario id="plan-price" rotulo="Mensalidade (R$)">
+          <input id="plan-price" className="mc-entrada" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="100,00" autoComplete="off" />
+        </CampoDoFormulario>
+        <CampoDoFormulario id="plan-install" rotulo="Condição de instalação">
+          <input id="plan-install" className="mc-entrada" value={install} onChange={(e) => setInstall(e.target.value)} placeholder="Grátis" autoComplete="off" />
+        </CampoDoFormulario>
+        <CampoDoFormulario id="plan-order" rotulo="Ordem de exibição">
+          <input id="plan-order" className="mc-entrada" inputMode="numeric" value={order} onChange={(e) => setOrder(e.target.value)} autoComplete="off" />
+        </CampoDoFormulario>
+        <CampoDoFormulario id="plan-note" rotulo="Observação interna" opcional inteiro ajuda="Uso interno da equipe. Nunca é enviada ao cliente nem à assistente virtual.">
+          <textarea id="plan-note" className="mc-entrada" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        </CampoDoFormulario>
+        <div className="cfg-dlg-linha">
+          <div className="cfg-dlg-marcas">
+            <MarcaDoFormulario id="plan-active" rotulo="Plano ativo" checked={active} onChange={(e) => setActive(e.target.checked)} />
+          </div>
+        </div>
+      </DialogoDeFormulario>
+    );
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
     setSubmitting(true);
     try {
-      if (editando) {
-        await updatePlan(plan.id, payload, token);
-      } else {
-        await createPlan(payload, token);
-      }
+      await enviar();
       onSaved();
     } catch (err) {
-      setError(descreverErro(err, editando ? 'Falha ao salvar o plano' : 'Falha ao cadastrar o plano'));
+      setError(err instanceof ErroDoFormulario ? err.message : descreverErro(err, editando ? 'Falha ao salvar o plano' : 'Falha ao cadastrar o plano'));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className={embedded ? '' : 'rounded-[16px] border border-wa-border bg-wa-surface p-4'}>
-      {!embedded && (
-        <h3 className="mb-2.5 text-[13.5px] font-medium text-wa-text">
-          {editando ? 'Editar plano' : 'Cadastrar novo plano'}
-        </h3>
-      )}
+    <div className="rounded-[16px] border border-wa-border bg-wa-surface p-4">
+      <h3 className="mb-2.5 text-[13.5px] font-medium text-wa-text">
+        {editando ? 'Editar plano' : 'Cadastrar novo plano'}
+      </h3>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
         <div>
           <label htmlFor="plan-name" className={ROTULO}>Nome</label>

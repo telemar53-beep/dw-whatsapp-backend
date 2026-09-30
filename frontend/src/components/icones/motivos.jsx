@@ -1,5 +1,6 @@
 import { Icone } from './Icone';
 import * as desenhos from './desenhosMotivos';
+import { IconeMotivoInformacoesComerciais } from './IconeMotivoInformacoesComerciais';
 
 // Os ícones dos motivos de encerramento, num módulo à parte da família: só o
 // diálogo Encerrar os importará (sob demanda), e a mesa não leva os desenhos
@@ -15,7 +16,7 @@ export function IconeMotivoResolvidoPelaIa(props) { return <Icone desenho={desen
 export function IconeMotivoSemResposta(props) { return <Icone desenho={desenhos.semResposta} {...props} />; }
 export function IconeMotivoSuporteTecnico(props) { return <Icone desenho={desenhos.suporteTecnico} {...props} />; }
 export function IconeMotivoTrocaDeSenha(props) { return <Icone desenho={desenhos.trocaDeSenha} {...props} />; }
-export function IconeMotivoInformacoesComerciais(props) { return <Icone desenho={desenhos.informacoesComerciais} {...props} />; }
+export { IconeMotivoInformacoesComerciais };
 export function IconeMotivoSegundaVia(props) { return <Icone desenho={desenhos.segundaVia} {...props} />; }
 export function IconeMotivoSemConexao(props) { return <Icone desenho={desenhos.semConexao} {...props} />; }
 export function IconeMotivoLentidao(props) { return <Icone desenho={desenhos.lentidao} {...props} />; }

@@ -8,6 +8,7 @@ import { useTemplates } from '../../../hooks/useTemplates';
 import { useSgpQueryConfig } from '../../../hooks/useSgpQueryConfig';
 import SgpIntegrationCard from '../../../components/integrations/SgpIntegrationCard';
 import CreateSgpIntegrationForm from '../../../components/integrations/CreateSgpIntegrationForm';
+import { SegredoGeradoDialog } from '../../../components/ui/SegredoGeradoDialog';
 
 function SgpChannelPage() {
   const { integrations, status, error, refresh } = useSgpIntegrations();
@@ -16,6 +17,10 @@ function SgpChannelPage() {
   const query = useSgpQueryConfig();
   const queryStatus = query.status;
   const [creating, setCreating] = useState(false);
+  // A chave recém-gerada mora aqui, e não no cartão: se a releitura da lista
+  // falhar, o AsyncState troca os cartões por um erro — e a chave, que só
+  // aparece uma vez, iria junto (Fatia S0).
+  const [chaveGerada, setChaveGerada] = useState(null);
   const approvedTemplates = templates.filter((t) => t.status === 'APPROVED');
   const consultaDesligada = queryStatus === 'ready' && query.config.configured && !query.config.enabled;
 
@@ -70,10 +75,22 @@ function SgpChannelPage() {
                 channels={channels}
                 templates={approvedTemplates}
                 onChanged={refresh}
+                onKeyGenerated={setChaveGerada}
               />
             ))}
           </div>
         </AsyncState>
+        <SegredoGeradoDialog
+          open={Boolean(chaveGerada)}
+          titulo="Nova chave gerada"
+          explicacao={chaveGerada ? `Esta é a chave da integração “${chaveGerada.integration.description}” (${chaveGerada.referenciaDoCanal}). Ela aparece uma única vez: copie e cadastre no SGP antes de fechar.` : ''}
+          rotulo="Chave de API"
+          segredo={chaveGerada ? chaveGerada.apiKey : ''}
+          rotuloCopiar="Copiar chave"
+          confirmacaoCopia="Chave copiada."
+          rotuloFechar="Já guardei a chave"
+          onClose={() => setChaveGerada(null)}
+        />
       </div>
     </ProtectedRoute>
   );

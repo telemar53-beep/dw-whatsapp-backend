@@ -88,7 +88,11 @@ function Destino({ item, onNavigate }) {
   );
 }
 
-function TrilhoDaMesa({ onProfileClick, mobileOpen = false, onMobileClose = () => {}, profileVersion = 0 }) {
+// `semEquipe`: Configurações desenha o trilho sem o botão Equipe (como no
+// mockup da área). O painel registra um consumidor da lista de atendentes ao
+// montar, e isso faria GET /api/agents e ligaria os ouvintes de socket da
+// equipe só por entrar em Configurações — que continua sem pedir atendentes.
+function TrilhoDaMesa({ onProfileClick, mobileOpen = false, onMobileClose = () => {}, profileVersion = 0, semEquipe = false }) {
   const { agent, logout } = useAuth();
   const { muted, toggleMuted } = useQueueNotificationSound();
   const { name: companyName, status: companyNameStatus } = useCompanyName();
@@ -145,7 +149,7 @@ function TrilhoDaMesa({ onProfileClick, mobileOpen = false, onMobileClose = () =
       <Marca companyName={companyName} status={companyNameStatus} />
       <div className="worknav-destinations">
         {DESTINOS.map((item) => {
-          if (item.key === 'equipe') return <TeamPanel key={`equipe-${profileVersion}`} />;
+          if (item.key === 'equipe') return semEquipe ? null : <TeamPanel key={`equipe-${profileVersion}`} />;
           if (!hasLevel(agent, item.level)) return null;
           return <Destino key={item.key} item={item} onNavigate={aoNavegar} />;
         })}

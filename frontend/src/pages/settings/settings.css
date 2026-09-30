@@ -1,253 +1,456 @@
-/* Configurações: base comum de controles + composições específicas por conteúdo. */
-.settings-workspace { gap:0; --settings-accent:#d5a176; container-type:inline-size; }
-/* Menu de Configuracoes. Cada peca tem nome; nenhuma regra depende mais de
-   "o primeiro div do aside" ou "o botao dentro do div do nav". */
-.settings-nav {width:258px;background:#26323a;border:0;border-right:1px solid var(--color-ui-line);border-radius:0;backdrop-filter:none}
-.settings-stage {background:#29343c;border:0;border-radius:0;backdrop-filter:none}
-.settings-nav-heading {padding:18px 16px 12px}
-.settings-nav-heading h2 {font-size:17px}
-.settings-nav-search {height:34px;border-radius:6px;background:var(--color-ui-surface-sunken)}
-.settings-nav-list {padding:0 9px 16px}
-.settings-nav-group {margin:3px 0}
-.settings-nav-group-trigger,.settings-nav-solo,.settings-nav-list > .settings-nav-item {border-radius:6px;gap:9px;padding:10px 8px;font-size:12px;line-height:17px}
-.settings-nav-group-trigger[aria-expanded=true] {background:#ffffff05;color:#eef2f5}
-.settings-nav-sublist {margin:3px 0 10px 17px;padding-left:8px;border-color:#ffffff10}
-.settings-nav-sublist .settings-nav-item {font-size:12px;line-height:17px;gap:8px;padding:7px 8px;border-radius:5px}
-.settings-nav :is(.settings-nav-item,.settings-nav-solo)[aria-current=page] {background:#d69a6318;color:#f0c9a8;box-shadow:inset 2px 0 #d9a170}
-.settings-nav :is(.settings-nav-item,.settings-nav-solo)[aria-current=page] .settings-nav-marker {display:none}
-.settings-functional-icon {display:inline-flex;flex:none;vertical-align:middle;color:inherit}
-.settings-nav-group-trigger .settings-functional-icon {color:#bfcbcF}
-.settings-nav-group-trigger[data-settings-category=canais] .settings-functional-icon {color:#83c8a2}
-.settings-nav-group-trigger[data-settings-category=automacao] .settings-functional-icon {color:#b7accf}
-.settings-nav-group-trigger[data-settings-category=integracoes] .settings-functional-icon {color:#91b9d3}
-.settings-search-group {display:block;font-size:10px;color:#98adbb;font-weight:400;margin-top:2px}
-.settings-workspace .settings-shell-header {padding:0 18px;background:#2c3941;border-bottom:1px solid var(--color-ui-line)}
-.settings-workspace .settings-shell-header header {padding:13px 0 12px;gap:8px}
-.settings-workspace .settings-shell-header header p {font-size:12px;line-height:17px;margin-top:4px}
-.settings-workspace .settings-shell-header nav {font-size:10px;margin-bottom:7px;color:#9eb3c1}
-.settings-title {display:flex;align-items:center;gap:10px}
-.settings-title-mark {display:grid;place-items:center;width:34px;height:34px;border:1px solid #ffffff0b;background:#ffffff04;border-radius:8px;color:#c7b6a6}
-[data-settings-group=canais] .settings-title-mark {color:#89d1ac;background:#60bf8c0b}
-[data-settings-group=automacao] .settings-title-mark {color:#c1b3db;background:#c1b3db0b}
-[data-settings-group=integracoes] .settings-title-mark {color:#a5c8de;background:#a5c8de0b}
-.settings-workspace .settings-shell-body {padding:16px 18px 24px;container-type:inline-size}
-/* A largura agora e declarada pela casca (data-width), nao anulada aqui. */
-.settings-workspace .settings-shell-content {display:flex;flex-direction:column;gap:14px;width:100%}
+/* =========================================================================
+   Configurações — folha da área (Fatia S1, mockup aprovado em 29/09/2026)
 
-.settings-workspace .settings-shell-content .settings-section {padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
-.settings-workspace .settings-shell-content .settings-section + .settings-section {padding-top:14px;border-top:1px solid var(--color-ui-line)}
-.settings-workspace .settings-shell-content .settings-section h2:before {display:none!important}
-.settings-workspace .settings-shell-content .settings-section-head + .settings-section-body {padding-top:10px}
-.settings-workspace h2,.settings-workspace h3 {letter-spacing:0}
-.settings-workspace :is(.settings-section h2,.settings-open-form h2,.settings-open-form h3) {font-size:14px;line-height:20px}
-.settings-workspace :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) {font-size:12px;line-height:18px;border-radius:6px;padding:6px 9px;min-height:32px}
-.settings-workspace input[type=search] {min-height:0;padding:0;background:transparent;border:0;border-radius:0}
-.settings-workspace label:has(> input[type=search]) {min-height:34px;height:34px;border-radius:6px;max-width:420px;font-size:12px}
-.settings-workspace textarea {min-height:76px;resize:vertical;line-height:1.5}
-/* Removido: repetia o contorno em campo, que agora usa anel (index.css). */
-.settings-workspace input:is([type=checkbox],[type=radio]) {accent-color:#d5a176}
-.settings-workspace :is(form,section,.settings-shell-header,.settings-shell-body) button:not([role=tab]) {font-size:12px;line-height:18px;border-radius:6px;padding:5px 10px;min-height:30px;box-shadow:none}
-.settings-workspace button:disabled {opacity:.5;cursor:not-allowed}
-.settings-workspace :is(button,a,summary):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
-.settings-workspace :is(form,section) label {font-size:12px}
-.settings-workspace :is(form,section) p.text-sm {font-size:12px;line-height:18px}
-/* Tabela de cadastro. Densidade, cabecalho, hover, vazio e menu de acoes vem
-   do primitivo ui/DataTable; as colunas continuam sendo de cada tela. */
-.dw-table-scroll {overflow-x:auto;margin:0 -2px;padding:0 2px}
-.dw-table {width:100%;min-width:560px;border-collapse:collapse;font-size:12px}
-.dw-table thead {background:#243038}
-/* Removido: `.chat-theme table tbody tr:hover` (index.css) tem
-   especificidade (0,2,3) contra (0,2,2) daqui e vencia sempre —
-   esta regra nunca chegou a pintar nada. */
-.dw-table-head {padding:9px 10px;text-align:left;font-size:11px;line-height:16px;font-weight:500;color:var(--color-ui-ink-muted);vertical-align:middle}
-.dw-table-cell {padding:9px 10px;vertical-align:middle}
-.dw-row-menu-trigger {display:inline-flex;height:32px;width:32px;flex:none;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--color-wa-border);background:var(--color-wa-field);color:var(--color-wa-text);transition:background-color .15s}
-.dw-row-menu-trigger:hover {background:var(--color-wa-panel)}
-.dw-row-menu-trigger:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:2px}
-/* `fixed` porque o menu agora vive num portal do body (ver RowMenu): quem
-   posiciona e quem decide virar para cima e o componente, por coordenada de
-   tela. O teto de altura cobre a viewport curta, onde nem virando cabe. */
-.dw-row-menu {position:fixed;z-index:var(--z-popover);min-width:170px;max-height:calc(100dvh - 16px);overflow-y:auto;border-radius:12px;border:1px solid var(--color-wa-border);background:var(--color-wa-panel);padding:4px;box-shadow:var(--wa-dialog-shadow)}
-.dw-menu-item {display:flex;width:100%;align-items:center;border-radius:8px;padding:8px 12px;text-align:left;font-size:13.5px;color:var(--color-wa-text);transition:background-color .15s}
-.dw-menu-item:hover {background:var(--color-wa-hover)}
-.dw-menu-item:disabled {opacity:.5}
-.settings-workspace [role=alert] {border-left:2px solid #d97b70;border-radius:4px;padding:10px 12px;font-size:12px}
-.settings-workspace details summary {font-size:12px}
-.settings-workspace details[open] {border-color:#d5a17655}
-.settings-workspace .settings-shell-content .settings-section:has(.text-wa-warn-text) {padding:10px 12px;border-left:2px solid #cbaa6b;background:#b9914010}
-/* Menu de triagem: configuration and routing visible together. */
-.settings-triage-menu-layout {display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
-.settings-triage-menu-layout > .settings-intro {grid-column:1/-1}
-.settings-triage-menu-layout > .settings-triage-options {margin:0;padding:0!important;border:0;border-radius:0;background:none}
-.settings-triage-menu-layout > form {border:0;padding:0}
-@container(min-width:800px){.settings-triage-menu-layout{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}.settings-triage-menu-layout > .settings-triage-options{border-left:1px solid var(--color-ui-line);padding-left:18px!important}.settings-menu-text-fields{grid-template-columns:1fr}}
-/* IA: status lateral, política de triagem dominante. */
-.settings-ai-policy {display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
-.settings-ai-policy > .settings-ai-policy-aside {display:flex;flex-direction:column;gap:16px;border:0;padding:0}
-.settings-ai-policy form {padding:0;min-width:0}
-.settings-ai-policy h2 {border:0;padding:0;font-size:14px}
-.settings-ai-policy .settings-section-body > .grid {gap:12px}
-@container(min-width:870px){.settings-ai-policy{grid-template-columns:220px minmax(0,1fr)}.settings-ai-policy > .settings-ai-policy-aside{border-right:1px solid var(--color-ui-line);padding-right:16px}.settings-ai-policy .settings-section-body > .grid:first-of-type{grid-template-columns:repeat(3,minmax(0,1fr))}.settings-ai-policy .settings-section-body > .grid:nth-of-type(2){grid-template-columns:1fr}}
-/* Identificacao: uma coluna so. A grade de duas colunas saiu — uma delas nao
-   tinha controle nenhum, so um paragrafo. */
-.settings-identification {display:flex;flex-direction:column;gap:14px}
-/* Selo de dependencia: diz o estado de uma configuracao de OUTRA pagina.
-   Nao e controle; e informacao com caminho. */
-.settings-dependency-chip {display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:18px;color:var(--color-ui-ink-muted)}
-.settings-dependency-chip .settings-dependency-dot {width:7px;height:7px;border-radius:999px;background:#8fa6b5;flex:none}
-.settings-dependency-chip.is-pronta {color:#a9d3bb}
-.settings-dependency-chip.is-pronta .settings-dependency-dot {background:#7fc79f}
-.settings-dependency-link {margin-left:auto;font-size:12px;font-weight:500;color:var(--color-chat-orange)}
-.settings-dependency-link:hover {text-decoration:underline}
-.settings-dependency-text {font-size:12px;line-height:18px;color:var(--color-ui-ink-muted);max-width:74ch}
-/* Faixa de acao de uma pagina de formulario: sempre a mesma, com nome. */
-.settings-actions {border-top:1px solid var(--color-ui-line);padding-top:12px;display:flex;justify-content:flex-end}
-/* Bloco que abre a pagina e explica do que ela trata. */
-.settings-intro {font-size:12px;line-height:18px}
-.settings-transcription-form section[aria-label] {padding:10px 12px;background:#8daec709;border-left:2px solid #97b4c8;border-bottom:0}
-.settings-transcription-form section {min-width:0}
-.settings-workspace[data-settings-page=noturno] .settings-shell-content {display:grid;grid-template-columns:minmax(0,1.1fr) minmax(200px,.9fr);gap:16px}
-.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-intro {grid-column:1/-1}
-.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section {border-left:1px solid var(--color-ui-line);padding-left:18px}
-.settings-workspace[data-settings-page=ferramentas] section[id], .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] {border-radius:5px;border:0;background:none;border-top:1px solid var(--color-ui-line)}
-.settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] h2 {font-size:12px}
-.settings-workspace[data-settings-page=ferramentas] .settings-tool-group-head {background:#ffffff03;padding:7px 10px}
-.settings-workspace[data-settings-page=ferramentas] label {font-size:12px;line-height:17px}
-.settings-workspace[data-settings-page=ferramentas] [aria-label='Resumo das ações'] {padding:8px 0;border-bottom:1px solid var(--color-ui-line)}
-/* Bibliotecas de mensagens: propósito à esquerda, registros/editoração à direita. */
-.settings-message-library,.settings-message-editor {display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-:is(.settings-message-library,.settings-message-editor) > .settings-intro {border:0;font-size:12px;line-height:18px;padding:0}
-.settings-library-toolbar {display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#afbec8;border-bottom:1px solid var(--color-ui-line);padding-bottom:10px}
-.settings-message-library ul {border:0;border-radius:0;background:none}
-.settings-message-library li {padding:12px 0}
-.settings-message-library li p.truncate {white-space:normal;overflow-wrap:anywhere}
-.settings-message-library .settings-section {min-width:0}
-@container(min-width:820px){.settings-message-library,.settings-message-editor{grid-template-columns:200px minmax(0,1fr)}:is(.settings-message-library,.settings-message-editor) > .settings-intro{grid-column:1;grid-row:1/8;border-right:1px solid var(--color-ui-line);padding-right:16px}:is(.settings-message-library,.settings-message-editor) > :not(.settings-intro){grid-column:2}}
-.settings-message-pair {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
-.settings-message-pair section {border-left:2px solid #a3b8c340;padding:0 10px}
-.settings-message-pair h3 {font-size:11px;color:#b4c3ce;margin-bottom:6px}
-.settings-message-pair p {font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
-.settings-assignment-summary {flex:1;min-width:0}
-.settings-workspace[data-settings-page=abertura-encerramento] .settings-message-pane {padding:0;border:0;background:none}
-.settings-workspace[data-settings-page=horario] .settings-shell-content {display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px}
-.settings-workspace[data-settings-page=horario] .settings-shell-content > .settings-intro {font-size:12px;line-height:18px;border:0;border-right:1px solid var(--color-ui-line);padding-right:16px}
-.settings-workspace[data-settings-page=horario] .settings-pane {border:0;background:none;padding:0}
-.settings-template-library {gap:16px;grid-template-columns:minmax(0,1fr)}
-@container(min-width:960px){.settings-template-library{grid-template-columns:minmax(0,1fr) 280px}.settings-template-library > :last-child{position:sticky;top:0}}
-.settings-template-library section {border-radius:6px;box-shadow:none}
-/* Services: navigation is a service strip, configuration and usage are distinct. */
-.settings-service-switchboard {display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--color-ui-line);padding-bottom:12px}
-.settings-service-link {display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 14px;border-right:1px solid var(--color-ui-line);font-size:12px}
-.settings-service-link:first-of-type {padding-left:0}
-.settings-service-link:last-of-type {border:0}
-.settings-service-switchboard small {display:block;font-size:10px;color:#a8bac8;margin-top:2px}
-.settings-service-link[aria-current=page] {box-shadow:inset 0 -2px #d3a17a;background:#ffffff03}
-.settings-service-detail {grid-template-columns:minmax(0,1fr);gap:20px}
-.settings-service-detail > * {border:0;border-radius:0;background:none;padding:0;min-width:0}
-.settings-service-aside section {padding:0;border:0;background:none}
-@container(min-width:780px){.settings-service-detail{grid-template-columns:minmax(0,1fr) 245px}.settings-service-aside{border-left:1px solid var(--color-ui-line);padding-left:18px}}
-.settings-sgp-deliveries {display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
-.settings-sgp-deliveries > * {margin:0;border-radius:5px;box-shadow:none;border:0;border-top:1px solid var(--color-ui-line);background:#ffffff02}
-@container(min-width:950px){.settings-sgp-deliveries{grid-template-columns:repeat(2,minmax(0,1fr))}}
-/* Canais: resumo do parque, linhas com identidade/status e controles separados. */
-.settings-channel-overview {display:flex;flex-wrap:wrap;gap:12px 28px;padding:0 0 14px;border-bottom:1px solid var(--color-ui-line)}
-.settings-channel-stat {display:flex;align-items:baseline;gap:7px;font-size:11px;color:#afc0cb}
-.settings-channel-overview strong {font-size:22px;font-weight:500;color:#e2eaf0;font-variant-numeric:tabular-nums}
-.settings-channel-toolbar {gap:8px}
-.settings-channel-list {border-radius:5px}
-.settings-channel-record {grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:14px 12px;align-items:start}
-.settings-channel-record > .settings-channel-identity {grid-column:1;grid-row:1}
-.settings-channel-record > .settings-channel-link {grid-column:1;grid-row:2;padding-left:50px}
-.settings-channel-record > .settings-channel-service {grid-column:1/-1;grid-row:3;padding-top:8px;border-top:1px solid var(--color-ui-line)}
-.settings-channel-record > .settings-channel-actions {grid-column:2;grid-row:1/3}
-.settings-channel-chips {gap:5px 12px}
-.settings-channel-chips > span {border:0;padding:0;background:none;border-radius:0;font-size:11px}
-.settings-channel-record > .settings-channel-service p {font-size:11px}
-.settings-channel-link > .settings-cell-label {display:none}
-@container(min-width:860px){.settings-channel-record{grid-template-columns:minmax(200px,1fr) minmax(220px,1fr) auto}.settings-channel-record > .settings-channel-link{grid-column:1;grid-row:2}.settings-channel-record > .settings-channel-service{grid-column:2;grid-row:1/3;border:0;padding:0}.settings-channel-record > .settings-channel-actions{grid-column:3;grid-row:1/3}}
-/* Conexao do canal. A ordem do DOM e a ordem visual: estado, identidade,
-   relacionadas, avancado. Nada de order-* nem de "o segundo bloco". */
-.channel-connection-page {display:flex;flex-direction:column;gap:12px}
-.channel-section {border-radius:5px;border:1px solid var(--color-ui-line);background:#ffffff03;padding:12px 14px}
-.channel-section-estado {border-color:#d5a17640;background:#d5a1760c}
-.channel-section-head {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
-.channel-section-title {font-size:13px;font-weight:600;color:var(--color-wa-text);margin:0}
-.channel-section-text {font-size:12px;line-height:18px;color:var(--color-ui-ink-muted);margin:6px 0 0;max-width:80ch}
-.channel-data-list {margin-top:6px}
-.channel-data-row + .channel-data-row {border-top:1px solid var(--color-ui-line)}
-.channel-inline-edit {margin-top:10px;padding-top:10px;border-top:1px solid var(--color-ui-line)}
-.channel-inline-actions {display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.channel-related-link {display:inline-block;margin-top:8px;font-size:12px;font-weight:500;color:var(--color-chat-orange)}
-.channel-related-link:hover {text-decoration:underline}
-.channel-advanced {border-radius:5px;border:1px solid var(--color-ui-line);background:#00000014}
-.channel-advanced-summary {display:flex;cursor:pointer;list-style:none;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;font-size:12.5px;color:var(--color-wa-text)}
-.channel-advanced-summary::-webkit-details-marker {display:none}
-.channel-advanced-body {padding:0 14px 12px}
-.settings-channel-behavior {display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-@container(min-width:860px){.settings-channel-behavior{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.settings-channel-behavior > p{grid-column:1/-1}}
-/* Cadastros: a barra operacional precede a tabela, sem moldura de cartão. */
-.settings-register-summary {margin-bottom:8px!important;padding:7px 0!important;border-top:1px solid var(--color-ui-line);border-bottom:1px solid var(--color-ui-line);font-size:11px!important}
-.settings-workspace .settings-register-list:has(table) {border:0;border-radius:0;background:none}
-.settings-workspace .settings-register-toolbar {gap:8px;padding-bottom:10px}
-.settings-workspace .settings-register-head {gap:8px;padding-bottom:10px}
-.settings-workspace .settings-register-head h2 {font-size:14px}
-.settings-permissions {display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
-.settings-permissions .settings-permissions-notes {font-size:12px}
-.settings-permissions table thead {position:sticky;top:0;z-index:1}
-.settings-permissions table td {text-align:center}
-@container(min-width:1050px){.settings-permissions{grid-template-columns:minmax(0,1fr) 230px}.settings-permissions .settings-permissions-notes{border:0!important;border-left:1px solid var(--color-ui-line)!important;padding:0 0 0 16px!important}}
-.settings-company-summary {display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:18px}
-.settings-company-name h2 {font-size:22px!important;line-height:1.4!important;margin-top:6px;overflow-wrap:anywhere}
-.settings-company-name > .settings-cell-label {font-size:11px;color:#a8bac7}
-.settings-company-payees {border-left:1px solid var(--color-ui-line);padding-left:18px}
-.settings-company-payees h3 {font-size:12px;color:#acbfca;margin-bottom:8px}
-.settings-company-payees li {font-size:13px;border-bottom:1px solid var(--color-ui-line);padding:8px 0;overflow-wrap:anywhere}
-.settings-company-summary > button {justify-self:start}
-/* Somente os diálogos abertos a partir da área de Configurações. */
-@media(max-width:1023px){.settings-workspace > aside{width:100%;border-right:0;border-bottom:1px solid var(--color-ui-line);flex:none}.settings-workspace > aside > div:first-child{padding:10px 14px}.settings-workspace > aside > div{padding-bottom:8px}}
-@container(max-width:650px){.settings-workspace[data-settings-page=noturno] .settings-shell-content,.settings-workspace[data-settings-page=horario] .settings-shell-content,.settings-company-summary,.settings-message-pair{grid-template-columns:1fr}.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section,.settings-workspace[data-settings-page=horario] .settings-shell-content > .settings-intro{border:0;padding:0}.settings-company-payees{border:0;padding:0}.settings-service-link{padding:8px}.settings-channel-record{grid-template-columns:minmax(0,1fr)}.settings-channel-record > .settings-channel-actions{grid-column:1;grid-row:4}}
-/* Ajustes após inspeção dos canais carregados. */
-.settings-channel-record {row-gap:4px;padding-top:10px;padding-bottom:10px}
-.settings-channel-record > .settings-channel-link {padding-top:0}
-.settings-channel-record > .settings-channel-link > span {font-size:11px;line-height:15px}
-.settings-channel-record > .settings-channel-identity p {font-size:11px;line-height:15px}
-.settings-channel-record > .settings-channel-identity {gap:10px}
-.settings-channel-record > .settings-channel-identity .settings-channel-symbol {width:30px!important;height:30px!important}
-.settings-channel-record > .settings-channel-link {padding-left:40px}
+   Quatro partes, nesta ordem:
+   1. Escopo claro: os tokens do tema escuro (.chat-theme) voltam aos valores
+      claros só dentro da área. O conteúdo das páginas é escrito em tokens
+      (wa-*, ui-*, chat-*, accent) e fica claro sem tocar no JSX delas.
+   2. A casca: diretório, busca, itens, cabeçalho da página, celular e a página
+      de acesso negado.
+   3. Tradução do tema escuro legado: os brancos translúcidos fixos que ainda
+      moram no JSX das páginas (fatias S2 a S7) viram linhas e fundos claros.
+   4. Composições do conteúdo, como já existiam, com as cores fixas do tema
+      escuro trocadas pelas do claro. As regras que fixam botões e campos do
+      conteúdo em 30 px são o R7 e continuam idênticas (congelado).
 
-.settings-workspace [aria-labelledby=channel-detail-title] {border-radius:6px;border:0;background:none}
-.settings-workspace .settings-channel-detail-head {padding:10px 0}
-.settings-workspace .settings-channel-detail-body {padding:12px 0}
-.settings-workspace .settings-register-list {border:0;border-radius:0;background:none}
-.settings-workspace .settings-register-list > [role=status],.settings-workspace .settings-register-list > p {border-top:1px solid var(--color-ui-line);border-bottom:1px solid var(--color-ui-line);padding:14px 0;font-size:12px}
-.settings-workspace .settings-channel-switch {border:0;border-radius:0;background:none;padding:0 0 10px;border-bottom:1px solid var(--color-ui-line)}
-.settings-channel-switch label {flex-direction:row;align-items:center;gap:10px}
-.settings-workspace .settings-shell-body button:not([role=tab]) {height:auto}
-/* Cadastro de usuário: identidade e acesso em pares, com rodapé próprio. */
+   Sem blur, vidro, gradiente, brilho ou animação.
+   ========================================================================= */
 
-/* Bloco que morava no index.css — a folha GLOBAL do produto estilizando uma
-   area especifica, e vencendo a folha local por ser injetada depois. Era por
-   isso que as regras de cabecalho e corpo de settings.css pareciam nao valer:
-   havia um terceiro arquivo por cima. Agora Configuracoes e estilizada num
-   lugar so; a ordem dentro do arquivo preserva quem vencia. */
-.settings-nav {
-  background: linear-gradient(165deg, rgba(54, 61, 65, .96), rgba(37, 45, 50, .97));
-}
-.settings-stage {
-  background: #283137;
-}
-.settings-workspace .settings-shell-header {
-  background: linear-gradient(100deg, rgba(255, 145, 68, .075), transparent 56%);
-}
-.settings-workspace .settings-shell-content {
+/* ---------- 1. Escopo claro ---------- */
+.settings-workspace {
+  color-scheme: light;
+
+  --cfg-tinta: #171927;
+  --cfg-apoio: #62697a;
+  --cfg-fraco: #8a8f9d;
+  --cfg-icone: #727888;
+  --cfg-linha: #e3e5ec;
+  --cfg-linha-suave: #eceef3;
+  --cfg-fundo: #f5f6fa;
+  --cfg-diretorio: #fbfbfd;
+  --cfg-papel: #ffffff;
+  --cfg-indigo: #4f46e5;
+  --cfg-indigo-texto: #29236b;
+  --cfg-indigo-suave: #eeedff;
+  --cfg-indigo-fundo: #f7f7ff;
+  --cfg-verde: #16865f;
+  --cfg-verde-suave: #eaf8f2;
+  --cfg-ambar: #a55b00;
+  --cfg-ambar-suave: #fff5df;
+  --cfg-ambar-linha: #edcf9f;
+  --cfg-vermelho: #b42318;
+  --cfg-vermelho-suave: #fdecea;
+
+  --color-wa-text: var(--cfg-tinta);
+  --color-wa-muted: var(--cfg-apoio);
+  --color-wa-meta: var(--cfg-fraco);
+  --color-wa-icon: var(--cfg-icone);
+  --color-wa-border: var(--cfg-linha);
+  --color-wa-border-strong: #cfd3dc;
+  --color-wa-panel: var(--cfg-papel);
+  --color-wa-panel-header: var(--cfg-fundo);
+  --color-wa-chat: var(--cfg-fundo);
+  --color-wa-in: var(--cfg-papel);
+  --color-wa-out: var(--cfg-papel);
+  --color-wa-out-deep: var(--cfg-fundo);
+  --color-wa-hover: var(--cfg-fundo);
+  --color-wa-active: #eceef5;
+  --color-wa-chip: var(--cfg-verde-suave);
+  --color-wa-chip-text: var(--cfg-verde);
+  --color-wa-avatar: var(--cfg-linha-suave);
+  --color-wa-avatar-text: var(--cfg-apoio);
+  --color-wa-error-bg: var(--cfg-vermelho-suave);
+  --color-wa-error-text: var(--cfg-vermelho);
+  --color-wa-warn-bg: var(--cfg-ambar-suave);
+  --color-wa-warn-text: var(--cfg-ambar);
+  --color-wa-surface: var(--cfg-papel);
+  --color-wa-surface-soft: var(--cfg-fundo);
+  --color-wa-surface-line: var(--cfg-linha);
+  --color-wa-field: var(--cfg-papel);
+  --color-wa-link: var(--cfg-indigo);
+
+  --color-ui-state-hover: var(--cfg-fundo);
+  --color-ui-state-selected: var(--cfg-indigo-suave);
+  --color-ui-error-surface: var(--cfg-vermelho-suave);
+  --color-ui-error-ink: var(--cfg-vermelho);
+  --color-ui-surface-canvas: var(--cfg-fundo);
+  --color-ui-surface-panel: var(--cfg-papel);
+  --color-ui-surface-card: var(--cfg-papel);
+  --color-ui-surface-overlay: var(--cfg-papel);
+  --color-ui-surface-field: var(--cfg-papel);
+  --color-ui-surface-sunken: var(--cfg-fundo);
+  --color-ui-line: var(--cfg-linha);
+  --color-ui-ink-strong: var(--cfg-tinta);
+  --color-ui-ink-muted: var(--cfg-apoio);
+  --color-ui-ink-faint: var(--cfg-fraco);
+  --color-ui-ink-ai: #5b3fa0;
+  --color-sgp-blue: #1a73e8;
+  --color-sgp-red: #d93025;
+  --color-sgp-gray: #57626d;
+
+  --color-accent: var(--cfg-indigo);
+  --color-accent-strong: #4338ca;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: var(--cfg-indigo);
+  --color-accent-surface: rgba(79, 70, 229, 0.1);
+  --color-accent-surface-strong: rgba(79, 70, 229, 0.18);
+  --color-accent-line: rgba(79, 70, 229, 0.4);
+  --color-focus-ring: var(--cfg-indigo);
+
+  --color-chat-canvas: var(--cfg-fundo);
+  --color-chat-text: var(--cfg-tinta);
+  --color-chat-muted: var(--cfg-apoio);
+  --color-chat-faint: var(--cfg-fraco);
+  --color-chat-icon: var(--cfg-icone);
+  --color-chat-copper: var(--cfg-indigo);
+  --color-chat-orange: var(--cfg-indigo);
+  --color-chat-orange-ink: #ffffff;
+
+  --wa-dialog-shadow: 0 12px 28px -12px rgba(23, 25, 39, 0.28);
+  --scroll-thumb: rgba(23, 25, 39, 0.22);
+  --scroll-thumb-hover: rgba(23, 25, 39, 0.36);
+
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--cfg-papel);
+  color: var(--cfg-tinta);
+  font-family: var(--font-sans);
+}
+
+/* Regras globais do tema escuro que alcançam o conteúdo (index.css). */
+.settings-workspace table tbody tr:hover { background-color: var(--cfg-fundo); }
+.settings-workspace select option,
+.settings-workspace select optgroup { background-color: var(--cfg-papel); color: var(--cfg-tinta); }
+
+/* ---------- 2. A casca ---------- */
+
+/* O invólucro dos ícones da área (SettingsVisuals): alinha o traço ao texto. */
+.settings-functional-icon { display: inline-flex; flex: none; vertical-align: middle; color: inherit; }
+
+/* Diretório: coluna fixa de 246 px no computador. */
+.settings-nav {
+  display: flex;
+  flex: none;
   flex-direction: column;
-  gap: 0;
+  width: 246px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 8px 18px 14px;
+  scrollbar-gutter: stable;
+  background: var(--cfg-diretorio);
+  border-right: 1px solid var(--cfg-linha);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
-/* Painel e tabela respiram entre blocos; formulario usa a divisoria das secoes. */
-.settings-workspace .settings-shell-content[data-width=table] {
-  gap: 12px;
+.cfg-diretorio-topo { display: flex; align-items: center; gap: 4px; padding: 0 6px 16px; }
+.cfg-diretorio-titulo { margin: 0; color: var(--cfg-tinta); font-size: 20px; font-weight: 700; line-height: 1.2; }
+.cfg-diretorio-titulo:focus { outline: none; }
+.cfg-voltar { display: none; }
+
+/* Busca */
+.cfg-busca { position: relative; display: flex; align-items: center; margin-bottom: 18px; }
+.cfg-busca-icone { position: absolute; left: 14px; display: flex; color: #777d8d; pointer-events: none; }
+.settings-workspace .settings-nav .cfg-busca input[type=search][aria-label] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px 0 42px;
+  border: 1px solid #dfe1e8;
+  border-radius: 12px;
+  background: var(--cfg-papel);
+  color: var(--cfg-tinta);
+  font-size: 14px;
+  line-height: 20px;
+  outline: none;
 }
+.settings-workspace .settings-nav .cfg-busca input[type=search][aria-label]::placeholder { color: #7a8090; }
+/* Com texto, o campo abre espaço para o botão Limpar. */
+.settings-workspace .settings-nav .cfg-busca input[type=search][aria-label]:not(:placeholder-shown) { padding-right: 64px; }
+.settings-workspace .settings-nav .cfg-busca input[type=search][aria-label]:focus-visible {
+  border-color: var(--cfg-indigo);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.13);
+}
+/* O "x" nativo do campo de busca sai: "Limpar" é o botão, com nome. */
+.settings-nav .cfg-busca input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.cfg-limpar {
+  position: absolute;
+  right: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cfg-indigo);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cfg-limpar:hover { background: var(--cfg-indigo-suave); }
+
+/* Lista */
+.cfg-lista { display: flex; flex-direction: column; }
+.cfg-area + .cfg-area { margin-top: 18px; }
+.cfg-area-rotulo {
+  margin: 0 10px 6px;
+  color: var(--cfg-fraco);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cfg-resultados { margin: 4px 8px 10px; color: #7b808e; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.cfg-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #3f4554;
+  font: inherit;
+  font-size: 14px;
+  line-height: 18px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cfg-item .settings-functional-icon { display: inline-flex; justify-content: center; color: var(--cfg-icone); }
+.cfg-item-texto { min-width: 0; overflow-wrap: anywhere; }
+.cfg-item .settings-search-group { display: block; margin-top: 2px; color: #858a98; font-size: 11px; font-weight: 400; }
+.cfg-seta, .cfg-cadeado { display: inline-flex; color: #9498a3; }
+.cfg-fim { display: inline-flex; align-items: center; gap: 4px; }
+/* Espaço neutro no lugar do ícone (a OpenAI é só texto). */
+.cfg-sem-icone { display: block; width: 16px; height: 1px; }
+.cfg-item:hover { background: #f1f2f7; color: var(--cfg-tinta); }
+.cfg-item[aria-current=page] { background: var(--cfg-indigo-suave); color: var(--cfg-indigo-texto); font-weight: 650; }
+.cfg-item[aria-current=page] .settings-functional-icon { color: var(--cfg-indigo); }
+.cfg-item[aria-expanded=true] { color: var(--cfg-tinta); font-weight: 600; }
+.cfg-item.is-bloqueado { color: #777c89; }
+.cfg-item.is-bloqueado .settings-functional-icon { color: #a0a5b1; }
+.settings-workspace .settings-nav .cfg-lista .cfg-item:focus-visible { outline: 2px solid var(--cfg-indigo); outline-offset: -2px; }
+
+/* Páginas de um grupo aberto */
+.cfg-subitens { margin: 2px 0 6px 19px; padding-left: 9px; border-left: 1px solid var(--cfg-linha); }
+.cfg-subitens .cfg-item { grid-template-columns: 16px minmax(0, 1fr) auto; min-height: 40px; padding: 7px 8px; font-size: 13.5px; }
+
+/* Palco */
+.settings-stage {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--cfg-papel);
+}
+
+/* Cabeçalho da página */
+.settings-workspace .settings-shell-header { padding: 26px clamp(22px, 3.4vw, 48px) 0; }
+.cfg-cabecalho { display: flex; flex-direction: column; padding-bottom: 22px; }
+.cfg-trilha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--cfg-apoio); font-size: 12px; line-height: 16px; }
+.cfg-trilha a { color: inherit; text-decoration: none; }
+.cfg-trilha a:hover { color: var(--cfg-tinta); text-decoration: underline; }
+.cfg-trilha-sep { margin-left: 6px; color: var(--cfg-fraco); }
+.cfg-trilha > :last-child > :first-child { color: var(--cfg-tinta); }
+.cfg-cabecalho-linha { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px 20px; }
+.cfg-titulo { display: flex; flex: 1 1 18rem; align-items: flex-start; gap: 14px; min-width: 0; }
+.settings-title-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--cfg-indigo-suave);
+  color: var(--cfg-indigo);
+}
+.settings-title-mark .settings-functional-icon { display: inline-flex; }
+.cfg-titulo-texto { min-width: 0; }
+.cfg-titulo-texto h1 { margin: 0; color: var(--cfg-tinta); font-family: var(--font-sans); font-size: 25px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.cfg-titulo-texto p { max-width: 68ch; margin: 5px 0 0; color: var(--cfg-apoio); font-size: 14px; line-height: 20px; }
+.cfg-cabecalho-acao { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* Corpo rolável da página */
+.settings-workspace .settings-shell-body { padding: 0 clamp(22px, 3.4vw, 48px) 40px; container-type: inline-size; }
+.settings-workspace .settings-shell-content { display: flex; flex-direction: column; gap: 0; width: 100%; }
+.settings-workspace .settings-shell-content[data-width=table] { gap: 12px; }
+
+/* Acesso negado dentro da área */
+.cfg-sem-acesso { display: grid; flex: 1 1 auto; place-items: center; min-height: 0; overflow-y: auto; padding: 48px 24px; }
+.cfg-sem-acesso-corpo { max-width: 440px; text-align: center; }
+.cfg-sem-acesso-icone {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+  background: var(--cfg-ambar-suave);
+  color: var(--cfg-ambar);
+}
+.cfg-sem-acesso h1 { margin: 0 0 8px; color: var(--cfg-tinta); font-size: 24px; font-weight: 700; line-height: 1.25; }
+.cfg-sem-acesso p { margin: 0 auto 20px; color: var(--cfg-apoio); font-size: 14px; line-height: 1.55; }
+.cfg-botao-secundario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #dcdfe7;
+  border-radius: 10px;
+  background: var(--cfg-papel);
+  color: #343847;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.cfg-botao-secundario:hover { background: var(--cfg-fundo); }
+
+/* Cabeçalho compacto do celular: fica fora no computador. */
+.cfg-topo-celular { display: none; }
+
+/* ---------- Celular e tablet: navegação como tela própria ---------- */
+@media (max-width: 1023px) {
+  .settings-workspace { flex-direction: column; }
+
+  /* Cabeçalho compacto: o botão da gaveta do app (da casca) à esquerda, o nome
+     da página e o botão Áreas. */
+  .cfg-topo-celular {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-height: 60px;
+    padding: 8px 12px 8px 60px;
+    border-bottom: 1px solid var(--cfg-linha);
+    background: var(--cfg-papel);
+  }
+  .cfg-topo-titulo { flex: 1; min-width: 0; margin: 0; overflow: hidden; color: var(--cfg-tinta); font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .cfg-botao-areas {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 12px 0 14px;
+    border: 1px solid #dcdfe7;
+    border-radius: 10px;
+    background: var(--cfg-papel);
+    color: #343847;
+    font-size: 14px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .cfg-botao-areas:hover { background: var(--cfg-fundo); }
+  .settings-workspace .cfg-botao-areas:focus-visible { outline: 2px solid var(--cfg-indigo); outline-offset: 2px; }
+
+  /* O botão "Abrir menu" da casca entra no cabeçalho compacto, como na mesa:
+     mesmo botão, mesmo foco, mesmo comportamento. Só enquanto a área está na
+     tela (:has); sem :has (Safari antigo) ele fica na faixa de cima, como era. */
+  [data-encaixe='trilho'] + div:has(.settings-workspace) > button[aria-controls='sidenav'] {
+    --color-focus-ring: #4f46e5;
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #5b6272;
+  }
+  [data-encaixe='trilho'] + div:has(.settings-workspace) > button[aria-controls='sidenav']:hover { background: #f3f4f7; color: #161a26; }
+  [data-encaixe='trilho'] + div:has(.settings-workspace.cfg-areas-abertas) > button[aria-controls='sidenav'] { display: none; }
+
+  /* O diretório vira a tela das Áreas: fica fora até o botão Áreas abrir. */
+  .settings-nav { display: none; width: auto; padding: 0 16px 24px; border-right: 0; }
+  .cfg-areas-abertas .settings-nav { display: flex; flex: 1 1 auto; }
+  .cfg-areas-abertas .cfg-topo-celular,
+  .cfg-areas-abertas .settings-stage { display: none; }
+
+  .cfg-diretorio-topo {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    min-height: 60px;
+    margin: 0 -16px 14px;
+    padding: 8px 16px 8px 8px;
+    border-bottom: 1px solid var(--cfg-linha);
+    background: var(--cfg-diretorio);
+  }
+  .cfg-voltar {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    padding: 0 12px 0 6px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #343847;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .cfg-voltar:hover { background: var(--cfg-fundo); }
+  .settings-workspace .cfg-voltar:focus-visible { outline: 2px solid var(--cfg-indigo); outline-offset: 2px; }
+  .cfg-diretorio-titulo { font-size: 17px; }
+  .cfg-item { min-height: 48px; }
+  .cfg-subitens .cfg-item { min-height: 44px; }
+  .cfg-limpar { min-height: 44px; }
+
+  /* No celular a página inteira rola, com o cabeçalho dela: fixo, ele tomava
+     metade da primeira tela. */
+  .settings-stage { overflow-y: auto; }
+  .settings-workspace .settings-shell { flex: none; min-height: auto; }
+  .settings-workspace .settings-shell-body { flex: none; min-height: auto; overflow: visible; }
+
+  /* A página no celular: sem trilha (o cabeçalho compacto diz onde se está). */
+  .settings-workspace .settings-shell-header { padding: 18px 16px 0; }
+  .cfg-cabecalho { padding-bottom: 16px; }
+  .cfg-trilha { display: none; }
+  .cfg-titulo-texto h1 { font-size: 22px; line-height: 1.15; }
+  .cfg-titulo-texto p { font-size: 13px; line-height: 18px; }
+  .settings-workspace .settings-shell-body { padding: 0 16px 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-workspace *, .settings-workspace *::before, .settings-workspace *::after { transition: none !important; animation: none !important; }
+}
+
+/* ---------- 3. Tradução do tema escuro legado ----------
+   Classes fixas que ainda estão no JSX das páginas (fatias S2 a S7). No claro
+   o branco translúcido some; aqui ele vira a linha e o fundo do claro. Sai
+   quando a página da vez for redesenhada. */
+.settings-workspace :is(.border-white\/\[0\.06\], .border-white\/\[0\.07\], .border-white\/\[0\.08\], .border-white\/\[0\.09\], .border-white\/\[0\.10\], .border-white\/\[0\.12\], .border-white\/25) { border-color: var(--cfg-linha); }
+.settings-workspace .divide-white\/\[0\.07\] > * { border-color: var(--cfg-linha); }
+.settings-workspace :is(.bg-white\/\[0\.03\], .bg-white\/\[0\.035\], .bg-white\/\[0\.04\], .bg-white\/\[0\.05\], .bg-white\/\[0\.06\], .bg-white\/\[0\.07\], .bg-white\/\[0\.08\], .bg-white\/\[0\.10\], .bg-white\/\[0\.14\]) { background-color: var(--cfg-fundo); }
+/* Painéis que o tema escuro rebaixava com preto translúcido (aba Atendimento
+   do canal, SGP: consultas, OpenAI, rodapé de Templates): no claro, papel com
+   a borda de sempre. Nas tabelas de cadastro, o cabeçalho (0.16) e a linha em
+   edição (0.12) viram o cinza claro do fundo, como o cabeçalho de Perfis. */
+.settings-workspace :is(.bg-black\/\[0\.08\], .bg-black\/\[0\.12\]) { background-color: var(--cfg-papel); }
+.settings-workspace tr:is(.bg-black\/\[0\.12\], .bg-black\/\[0\.16\]) { background-color: var(--cfg-fundo); }
+/* O esqueleto de carregamento (ui/AsyncState) é branco translúcido. */
+.settings-workspace span.animate-pulse { background-color: var(--cfg-linha-suave); }
+/* "Ação sensível" (Ações da IA): o laranja claro não se lê no branco. */
+.settings-workspace .text-\[\#e9b18b\] { color: var(--cfg-ambar); }
+.settings-workspace .bg-\[\#a46e45\]\/\[0\.18\] { background-color: var(--cfg-ambar-suave); }
+/* Símbolo do canal no detalhe (ChannelIcon sem tipo): o verde claro some. */
+
+/* ---------- 4. Composições do conteúdo ---------- */
+
+.settings-workspace .settings-shell-content .settings-section { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.settings-workspace .settings-shell-content .settings-section + .settings-section { padding-top: 14px; border-top: 1px solid var(--color-ui-line); }
+.settings-workspace .settings-shell-content .settings-section-head + .settings-section-body { padding-top: 10px; max-width: none; }
+.settings-workspace h2, .settings-workspace h3 { letter-spacing: 0; }
+.settings-workspace :is(.settings-section h2, .settings-open-form h2, .settings-open-form h3) { font-size: 14px; line-height: 20px; }
 .settings-workspace .settings-shell-content > .settings-section,
 .settings-workspace .settings-shell-content > form > .settings-section {
   background: transparent;
@@ -259,61 +462,152 @@
 .settings-workspace .settings-shell-content > .settings-section + .settings-section,
 .settings-workspace .settings-shell-content > form + .settings-section,
 .settings-workspace .settings-shell-content > form > .settings-section + .settings-section {
-  border-top: 1px solid rgba(255,255,255,.09);
+  border-top: 1px solid var(--cfg-linha);
 }
-.settings-workspace .settings-shell-content .settings-section > .settings-section-head h2 {
-  font-size: 17px;
-  letter-spacing: -.015em;
-}
-.settings-workspace .settings-shell-content .settings-section > .settings-section-head h2::before {
-  content: '';
-  display: inline-block;
-  width: 3px;
-  height: 16px;
-  margin-right: 11px;
-  border-radius: 5px;
-  background: var(--color-chat-orange);
-  vertical-align: -2px;
-}
-.settings-workspace .settings-shell-content .settings-section-head + .settings-section-body {
-  max-width: none;
-}
-/* O cap global de 168px para numero e hora saiu: a largura agora e declarada
-   no campo (ui/Field), pelo dado que ele guarda. */
+.settings-workspace .settings-shell-content .settings-section > .settings-section-head h2 { font-size: 17px; letter-spacing: -0.015em; }
 .settings-workspace .settings-open-form:not(.grid).space-y-4 > :not([hidden]) ~ :not([hidden]),
-/* Espacamento entre blocos de um formulario aberto. Antes a regra se apoiava
-   na classe utilitaria do Tailwind (space-y-4/space-y-5); agora e a relacao
-   entre irmaos, que e o que ela sempre quis dizer. */
-.settings-workspace .settings-open-form:not(.grid) > * + * {
-  margin-top: 12px;
-}
-.settings-workspace .settings-shell-content .settings-section[aria-labelledby] > .settings-section-body:has(table) {
-  max-width: none;
-}
-.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 16px 0 20px;
-}
-.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section + .settings-section {
-  border-top: 1px solid rgba(255,255,255,.09);
-}
-.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section h2::before {
-  content: '';
-  display: inline-block;
-  width: 3px;
-  height: 15px;
-  margin-right: 10px;
-  border-radius: 4px;
-  background: var(--color-chat-orange);
-  vertical-align: -2px;
-}
-.settings-workspace .settings-shell-content .settings-register-list > p {
-  padding-left: 18px;
-  padding-right: 18px;
-}
-@media (min-width: 1024px) {
-  .settings-workspace .settings-shell-header { padding-left: 32px; padding-right: 32px; }
-  .settings-workspace .settings-shell-body { padding-left: 34px; padding-right: 34px; }
+.settings-workspace .settings-open-form:not(.grid) > * + * { margin-top: 12px; }
+.settings-workspace .settings-shell-content .settings-section[aria-labelledby] > .settings-section-body:has(table) { max-width: none; }
+
+/* Controles do conteúdo — R7, congelado: mesmos valores de antes. */
+.settings-workspace :is(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea) { font-size: 12px; line-height: 18px; border-radius: 6px; padding: 6px 9px; min-height: 32px; }
+.settings-workspace input[type=search] { min-height: 0; padding: 0; background: transparent; border: 0; border-radius: 0; }
+.settings-workspace label:has(> input[type=search]) { min-height: 34px; height: 34px; border-radius: 6px; max-width: 420px; font-size: 12px; }
+.settings-workspace textarea { min-height: 76px; resize: vertical; line-height: 1.5; }
+.settings-workspace input:is([type=checkbox], [type=radio]) { accent-color: var(--cfg-indigo); }
+.settings-workspace :is(form, section, .settings-shell-header, .settings-shell-body) button:not([role=tab]) { font-size: 12px; line-height: 18px; border-radius: 6px; padding: 5px 10px; min-height: 30px; box-shadow: none; }
+.settings-workspace .settings-shell-body button:not([role=tab]) { height: auto; }
+.settings-workspace button:disabled { opacity: 0.5; cursor: not-allowed; }
+.settings-workspace :is(button, a, summary):focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.settings-workspace :is(form, section) label { font-size: 12px; }
+.settings-workspace :is(form, section) p.text-sm { font-size: 12px; line-height: 18px; }
+.settings-workspace [role=alert] { border-left: 2px solid #d97b70; border-radius: 4px; padding: 10px 12px; font-size: 12px; }
+.settings-workspace details summary { font-size: 12px; }
+.settings-workspace details[open] { border-color: rgba(79, 70, 229, 0.3); }
+.settings-workspace .settings-shell-content .settings-section:has(.text-wa-warn-text) { padding: 10px 12px; border-left: 2px solid var(--cfg-ambar-linha); background: var(--cfg-ambar-suave); }
+
+/* Tabela de cadastro (ui/DataTable) */
+.dw-table-scroll { overflow-x: auto; margin: 0 -2px; padding: 0 2px; }
+.dw-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 12px; }
+.settings-workspace .dw-table thead { background: #fafafd; }
+.dw-table-head { padding: 9px 10px; text-align: left; font-size: 11px; line-height: 16px; font-weight: 500; color: var(--color-ui-ink-muted); vertical-align: middle; }
+.dw-table-cell { padding: 9px 10px; vertical-align: middle; }
+.dw-row-menu-trigger { display: inline-flex; height: 32px; width: 32px; flex: none; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--color-wa-border); background: var(--color-wa-field); color: var(--color-wa-text); transition: background-color 0.15s; }
+.dw-row-menu-trigger:hover { background: var(--color-wa-panel); }
+.dw-row-menu-trigger:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+/* `fixed` porque o menu vive num portal do body (ver RowMenu). */
+.dw-row-menu { position: fixed; z-index: var(--z-popover); min-width: 170px; max-height: calc(100dvh - 16px); overflow-y: auto; border-radius: 12px; border: 1px solid var(--color-wa-border); background: var(--color-wa-panel); padding: 4px; box-shadow: var(--wa-dialog-shadow); }
+.dw-menu-item { display: flex; width: 100%; align-items: center; border-radius: 8px; padding: 8px 12px; text-align: left; font-size: 13.5px; color: var(--color-wa-text); transition: background-color 0.15s; }
+.dw-menu-item:hover { background: var(--color-wa-hover); }
+.dw-menu-item:disabled { opacity: 0.5; }
+
+/* Menu de triagem: configuração e roteamento lado a lado. */
+.settings-triage-menu-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.settings-triage-menu-layout > .settings-intro { grid-column: 1 / -1; }
+.settings-triage-menu-layout > .settings-triage-options { margin: 0; padding: 0 !important; border: 0; border-radius: 0; background: none; }
+.settings-triage-menu-layout > form { border: 0; padding: 0; }
+@container (min-width: 800px) { .settings-triage-menu-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); } .settings-triage-menu-layout > .settings-triage-options { border-left: 1px solid var(--color-ui-line); padding-left: 18px !important; } .settings-menu-text-fields { grid-template-columns: 1fr; } }
+
+/* IA: situação ao lado, política dominante. */
+.settings-ai-policy { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.settings-ai-policy > .settings-ai-policy-aside { display: flex; flex-direction: column; gap: 16px; border: 0; padding: 0; }
+.settings-ai-policy form { padding: 0; min-width: 0; }
+.settings-ai-policy h2 { border: 0; padding: 0; font-size: 14px; }
+.settings-ai-policy .settings-section-body > .grid { gap: 12px; }
+@container (min-width: 870px) { .settings-ai-policy { grid-template-columns: 220px minmax(0, 1fr); } .settings-ai-policy > .settings-ai-policy-aside { border-right: 1px solid var(--color-ui-line); padding-right: 16px; } .settings-ai-policy .settings-section-body > .grid:first-of-type { grid-template-columns: repeat(3, minmax(0, 1fr)); } .settings-ai-policy .settings-section-body > .grid:nth-of-type(2) { grid-template-columns: 1fr; } }
+
+/* Identificação: uma coluna só. */
+.settings-identification { display: flex; flex-direction: column; gap: 14px; }
+
+/* Selo de dependência: o estado de uma configuração de OUTRA página. */
+.settings-dependency-chip { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; line-height: 18px; color: var(--color-ui-ink-muted); }
+.settings-dependency-chip .settings-dependency-dot { width: 7px; height: 7px; border-radius: 999px; background: #9aa0ad; flex: none; }
+.settings-dependency-chip.is-pronta { color: var(--cfg-verde); }
+.settings-dependency-chip.is-pronta .settings-dependency-dot { background: var(--cfg-verde); }
+.settings-dependency-link { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--color-chat-orange); }
+.settings-dependency-link:hover { text-decoration: underline; }
+.settings-dependency-text { font-size: 12px; line-height: 18px; color: var(--color-ui-ink-muted); max-width: 74ch; }
+
+/* Faixa de ação de uma página de formulário. */
+.settings-actions { border-top: 1px solid var(--color-ui-line); padding-top: 12px; display: flex; justify-content: flex-end; }
+.settings-intro { font-size: 12px; line-height: 18px; }
+.settings-transcription-form section[aria-label] { padding: 10px 12px; background: #f3f7fb; border-left: 2px solid #97b4c8; border-bottom: 0; }
+.settings-transcription-form section { min-width: 0; }
+.settings-workspace[data-settings-page=noturno] .settings-shell-content { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(200px, 0.9fr); gap: 16px; }
+.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-intro { grid-column: 1 / -1; }
+.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section { border-left: 1px solid var(--color-ui-line); padding-left: 18px; }
+.settings-workspace[data-settings-page=ferramentas] section[id], .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] { border-radius: 5px; border: 0; background: none; border-top: 1px solid var(--color-ui-line); }
+.settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] h2 { font-size: 12px; }
+.settings-workspace[data-settings-page=ferramentas] .settings-tool-group-head { background: var(--cfg-diretorio); padding: 7px 10px; }
+.settings-workspace[data-settings-page=ferramentas] label { font-size: 12px; line-height: 17px; }
+.settings-workspace[data-settings-page=ferramentas] [aria-label='Resumo das ações'] { padding: 8px 0; border-bottom: 1px solid var(--color-ui-line); }
+
+/* Bibliotecas de mensagens: propósito à esquerda, registros à direita. */
+.settings-message-library, .settings-message-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+:is(.settings-message-library, .settings-message-editor) > .settings-intro { border: 0; font-size: 12px; line-height: 18px; padding: 0; }
+.settings-library-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; color: var(--cfg-apoio); border-bottom: 1px solid var(--color-ui-line); padding-bottom: 10px; }
+.settings-message-library ul { border: 0; border-radius: 0; background: none; }
+.settings-message-library li { padding: 12px 0; }
+.settings-message-library li p.truncate { white-space: normal; overflow-wrap: anywhere; }
+.settings-message-library .settings-section { min-width: 0; }
+@container (min-width: 820px) { .settings-message-library, .settings-message-editor { grid-template-columns: 200px minmax(0, 1fr); } :is(.settings-message-library, .settings-message-editor) > .settings-intro { grid-column: 1; grid-row: 1 / 8; border-right: 1px solid var(--color-ui-line); padding-right: 16px; } :is(.settings-message-library, .settings-message-editor) > :not(.settings-intro) { grid-column: 2; } }
+.settings-message-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.settings-message-pair section { border-left: 2px solid var(--cfg-linha); padding: 0 10px; }
+.settings-message-pair h3 { font-size: 11px; color: var(--cfg-apoio); margin-bottom: 6px; }
+.settings-message-pair p { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.settings-assignment-summary { flex: 1; min-width: 0; }
+.settings-workspace[data-settings-page=abertura-encerramento] .settings-message-pane { padding: 0; border: 0; background: none; }
+.settings-workspace[data-settings-page=horario] .settings-shell-content { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; }
+.settings-workspace[data-settings-page=horario] .settings-shell-content > .settings-intro { font-size: 12px; line-height: 18px; border: 0; border-right: 1px solid var(--color-ui-line); padding-right: 16px; }
+.settings-workspace[data-settings-page=horario] .settings-pane { border: 0; background: none; padding: 0; }
+.settings-template-library { gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 960px) { .settings-template-library { grid-template-columns: minmax(0, 1fr) 280px; } .settings-template-library > :last-child { position: sticky; top: 0; } }
+.settings-template-library section { border-radius: 6px; box-shadow: none; }
+
+/* Serviços (Integrações): a faixa de serviços, configuração e uso separados. */
+.settings-service-switchboard { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--color-ui-line); padding-bottom: 12px; }
+.settings-service-link { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 14px; border-right: 1px solid var(--color-ui-line); font-size: 12px; }
+.settings-service-link:first-of-type { padding-left: 0; }
+.settings-service-link:last-of-type { border: 0; }
+.settings-service-switchboard small { display: block; font-size: 10px; color: var(--cfg-apoio); margin-top: 2px; }
+.settings-service-link[aria-current=page] { box-shadow: inset 0 -2px var(--cfg-indigo); background: var(--cfg-indigo-fundo); }
+.settings-service-detail { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.settings-service-detail > * { border: 0; border-radius: 0; background: none; padding: 0; min-width: 0; }
+.settings-service-aside section { padding: 0; border: 0; background: none; }
+@container (min-width: 780px) { .settings-service-detail { grid-template-columns: minmax(0, 1fr) 245px; } .settings-service-aside { border-left: 1px solid var(--color-ui-line); padding-left: 18px; } }
+.settings-sgp-deliveries { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.settings-sgp-deliveries > * { margin: 0; border-radius: 5px; box-shadow: none; border: 0; border-top: 1px solid var(--color-ui-line); background: transparent; }
+@container (min-width: 950px) { .settings-sgp-deliveries { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Cadastros: a barra operacional precede a tabela, sem moldura de cartão. */
+.settings-register-summary { margin-bottom: 8px !important; padding: 7px 0 !important; border-top: 1px solid var(--color-ui-line); border-bottom: 1px solid var(--color-ui-line); font-size: 11px !important; }
+.settings-workspace .settings-register-list:has(table) { border: 0; border-radius: 0; background: none; }
+.settings-workspace .settings-register-toolbar { gap: 8px; padding-bottom: 10px; }
+.settings-workspace .settings-register-head { gap: 8px; padding-bottom: 10px; }
+.settings-workspace .settings-register-head h2 { font-size: 14px; }
+.settings-workspace .settings-register-list { border: 0; border-radius: 0; background: none; }
+.settings-workspace .settings-register-list > [role=status], .settings-workspace .settings-register-list > p { border-top: 1px solid var(--color-ui-line); border-bottom: 1px solid var(--color-ui-line); padding: 14px 0; font-size: 12px; }
+.settings-workspace .settings-shell-content .settings-register-list > p { padding-left: 18px; padding-right: 18px; }
+.settings-permissions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.settings-permissions .settings-permissions-notes { font-size: 12px; }
+.settings-permissions table thead { position: sticky; top: 0; z-index: 1; }
+.settings-permissions table td { text-align: center; }
+@container (min-width: 1050px) { .settings-permissions { grid-template-columns: minmax(0, 1fr) 230px; } .settings-permissions .settings-permissions-notes { border: 0 !important; border-left: 1px solid var(--color-ui-line) !important; padding: 0 0 0 16px !important; } }
+.settings-company-summary { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; }
+.settings-company-name h2 { font-size: 22px !important; line-height: 1.4 !important; margin-top: 6px; overflow-wrap: anywhere; }
+.settings-company-name > .settings-cell-label { font-size: 11px; color: var(--cfg-apoio); }
+.settings-company-payees { border-left: 1px solid var(--color-ui-line); padding-left: 18px; }
+.settings-company-payees h3 { font-size: 12px; color: var(--cfg-apoio); margin-bottom: 8px; }
+.settings-company-payees li { font-size: 13px; border-bottom: 1px solid var(--color-ui-line); padding: 8px 0; overflow-wrap: anywhere; }
+.settings-company-summary > button { justify-self: start; }
+
+@container (max-width: 650px) {
+  .settings-workspace[data-settings-page=noturno] .settings-shell-content,
+  .settings-workspace[data-settings-page=horario] .settings-shell-content,
+  .settings-company-summary,
+  .settings-message-pair { grid-template-columns: 1fr; }
+  .settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section,
+  .settings-workspace[data-settings-page=horario] .settings-shell-content > .settings-intro { border: 0; padding: 0; }
+  .settings-company-payees { border: 0; padding: 0; }
+  .settings-service-link { padding: 8px; }
 }

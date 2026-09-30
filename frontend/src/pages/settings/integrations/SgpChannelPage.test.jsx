@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderInShell } from '../../../test-utils/renderInShell';
 import SgpChannelPage from './SgpChannelPage';
@@ -31,6 +31,21 @@ beforeEach(() => {
   useTemplates.mockReturnValue({ templates: [APPROVED_TEMPLATE] });
   useSgpQueryConfig.mockReturnValue({ config: { configured: false }, status: 'ready', refresh: vi.fn() });
 });
+
+function integracao(campos = {}) {
+  return { id: 'int-1', description: 'Avisos Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true, ...campos };
+}
+
+function comIntegracao(campos) {
+  const refresh = vi.fn();
+  useSgpIntegrations.mockReturnValue({ integrations: [integracao(campos)], status: 'ready', refresh });
+  return refresh;
+}
+
+// O jsdom não tem PointerEvent: o clique no fundo é descer e soltar no mesmo ponto.
+function ponteiro(alvo, tipo, x, y) {
+  fireEvent(alvo, new MouseEvent(tipo, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y }));
+}
 
 describe('SgpChannelPage', () => {
   test('lists existing integrations with their channel name and mode label', () => {
@@ -215,18 +230,142 @@ describe('SgpChannelPage', () => {
     expect(within(screen.getByRole('form', { name: /editar integração/i })).getByLabelText(/descrição/i)).toHaveValue('Baileys');
   });
 
-  test('generating a key shows it once', async () => {
-    useSgpIntegrations.mockReturnValue({
-      integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: false }],
-      status: 'ready',
-      refresh: vi.fn(),
-    });
-    api.rotateSgpIntegrationKey.mockResolvedValue({ apiKey: 'plain-key-abc' });
+  // Fatia S0 (29/09): gerar a chave invalida a atual e para os envios do SGP
+  // até ela ser cadastrada. Pede confirmação, e a chave nova só sai da tela
+  // por uma ação explícita.
+  test('gerar nova chave pede confirmação que identifica a integração e o canal e diz o que para', async () => {
+    comIntegracao();
     renderInShell(<SgpChannelPage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
 
-    expect(await screen.findByText('plain-key-abc')).toBeInTheDocument();
+    const dialogo = screen.getByRole('alertdialog', { name: 'Gerar nova chave de API?' });
+    expect(dialogo).toHaveTextContent('Avisos Baileys');
+    expect(dialogo).toHaveTextContent('Berg');
+    expect(dialogo).toHaveTextContent(/deixa de funcionar/i);
+    expect(dialogo).toHaveTextContent(/param até/i);
+    expect(api.rotateSgpIntegrationKey).not.toHaveBeenCalled();
+  });
+
+  test('sem chave anterior, a confirmação não fala em invalidar a chave atual', async () => {
+    comIntegracao({ hasApiKey: false });
+    renderInShell(<SgpChannelPage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+
+    const dialogo = screen.getByRole('alertdialog', { name: 'Gerar nova chave de API?' });
+    expect(dialogo).not.toHaveTextContent(/deixa de funcionar/i);
+    expect(dialogo).toHaveTextContent(/uma única vez/i);
+  });
+
+  test('Cancelar e Escape não geram chave', async () => {
+    comIntegracao();
+    renderInShell(<SgpChannelPage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }));
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(api.rotateSgpIntegrationKey).not.toHaveBeenCalled();
+  });
+
+  test('gerando: um pedido só, "Gerando chave…" e Escape não fecha', async () => {
+    comIntegracao();
+    api.rotateSgpIntegrationKey.mockReturnValue(new Promise(() => {}));
+    renderInShell(<SgpChannelPage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+    const confirmar = within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Gerar nova chave' });
+    await userEvent.click(confirmar);
+    await userEvent.click(confirmar);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(api.rotateSgpIntegrationKey).toHaveBeenCalledTimes(1);
+    expect(api.rotateSgpIntegrationKey).toHaveBeenCalledWith('int-1', 'tok-123');
+    expect(confirmar).toHaveTextContent('Gerando chave…');
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  test('confirmar mostra a chave uma vez, num diálogo que não fecha por Escape nem clique fora', async () => {
+    const refresh = comIntegracao();
+    api.rotateSgpIntegrationKey.mockResolvedValue({ apiKey: 'plain-key-abc' });
+    renderInShell(<SgpChannelPage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Gerar nova chave' }));
+
+    const campo = await screen.findByDisplayValue('plain-key-abc');
+    const dialogo = screen.getByRole('alertdialog', { name: 'Nova chave gerada' });
+    expect(dialogo).toHaveTextContent(/uma única vez/i);
+    expect(refresh).toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    ponteiro(dialogo.parentElement, 'pointerdown', 10, 10);
+    ponteiro(dialogo.parentElement, 'pointerup', 11, 11);
+    expect(campo).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Já guardei a chave' }));
+    expect(screen.queryByDisplayValue('plain-key-abc')).not.toBeInTheDocument();
+  });
+
+  test('a chave nova continua na tela mesmo se a releitura das integrações falhar', async () => {
+    const lista = [integracao()];
+    const refresh = vi.fn(() => {
+      useSgpIntegrations.mockReturnValue({ integrations: lista, status: 'error', error: 'Não foi possível carregar.', refresh });
+    });
+    useSgpIntegrations.mockReturnValue({ integrations: lista, status: 'ready', refresh });
+    api.rotateSgpIntegrationKey.mockResolvedValue({ apiKey: 'plain-key-abc' });
+    renderInShell(<SgpChannelPage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Gerar nova chave' }));
+
+    expect(await screen.findByDisplayValue('plain-key-abc')).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+    expect(screen.queryByText('Uma chave já foi gerada.')).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('plain-key-abc')).toBeInTheDocument();
+  });
+
+  test('erro ao gerar aparece no diálogo, o cartão continua como estava e dá para tentar de novo', async () => {
+    const refresh = comIntegracao();
+    api.rotateSgpIntegrationKey
+      .mockRejectedValueOnce(Object.assign(new Error('falhou'), { status: 500 }))
+      .mockResolvedValueOnce({ apiKey: 'plain-key-abc' });
+    renderInShell(<SgpChannelPage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+    const dialogo = screen.getByRole('alertdialog');
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Gerar nova chave' }));
+
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent(/.+/);
+    expect(screen.getByText('Uma chave já foi gerada.')).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Gerar nova chave' }));
+    expect(await screen.findByDisplayValue('plain-key-abc')).toBeInTheDocument();
+    expect(api.rotateSgpIntegrationKey).toHaveBeenCalledTimes(2);
+  });
+
+  test('copiar a chave: sucesso avisa; falha diz o que fazer e a chave fica', async () => {
+    const writeText = vi.fn().mockResolvedValueOnce().mockRejectedValueOnce(new Error('negado'));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    comIntegracao();
+    api.rotateSgpIntegrationKey.mockResolvedValue({ apiKey: 'plain-key-abc' });
+    renderInShell(<SgpChannelPage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Gerar nova chave' }));
+    await screen.findByDisplayValue('plain-key-abc');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copiar chave' })); });
+    expect(writeText).toHaveBeenCalledWith('plain-key-abc');
+    expect(screen.getByRole('status')).toHaveTextContent('Chave copiada.');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copiar chave' })); });
+    expect(screen.getByRole('alert')).toHaveTextContent(/não foi possível copiar/i);
+    expect(screen.getByDisplayValue('plain-key-abc')).toBeInTheDocument();
   });
 
   test('avisa quando a Consulta ao SGP está desativada', () => {

@@ -1,0 +1,235 @@
+/* ---------- Detalhe do canal (Fatia S2, primeiro mockup) ----------
+   Casca clara da S1 (tokens --cfg-* de settings.css). A folha da área fixa os
+   botões do conteúdo em 30 px (R7, congelado) com (0,3,1), os campos com
+   (0,4,1) e o [role=alert] com (0,2,0): as regras daqui passam disso pelo
+   escopo `.settings-workspace .cfg-s2`, sem mexer no R7. Sem blur, gradiente,
+   sombra pesada ou animação. */
+
+/* Utilitário: fora da tela, presente para o leitor de tela. */
+.cfg-visualmente-oculto {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- Cabeçalho (SettingsShell: voltar e marca) ---------- */
+.settings-workspace a.cfg-voltar-link {
+  display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; min-height: 32px; margin: -4px 0 10px;
+  color: var(--cfg-indigo-texto); font-size: 13.5px; font-weight: 650; text-decoration: none;
+}
+.settings-workspace a.cfg-voltar-link:hover { text-decoration: underline; }
+.cfg-titulo-marca { display: inline-flex; flex: none; }
+.cfg-titulo-marca .cfg-emblema { width: 44px; height: 44px; }
+.settings-workspace .cfg-cabecalho-acao .channel-connection { font-size: 13.5px; }
+
+/* Sem acesso: a trilha e o voltar em cima, o motivo no meio. */
+.settings-workspace .cfg-sem-acesso:has(> .cfg-sem-acesso-topo) {
+  grid-template-rows: auto 1fr; place-items: stretch; padding: 26px clamp(22px, 3.4vw, 48px) 48px;
+}
+.cfg-sem-acesso-topo { display: flex; flex-direction: column; align-items: flex-start; }
+.cfg-sem-acesso:has(> .cfg-sem-acesso-topo) .cfg-sem-acesso-corpo { place-self: center; }
+
+/* ---------- Abas: navegação entre as duas páginas do canal ---------- */
+.cfg-abas { display: flex; gap: 24px; margin: 0 0 18px; border-bottom: 1px solid var(--cfg-linha); }
+.settings-workspace .cfg-abas a.cfg-aba {
+  display: inline-flex; align-items: center; min-height: 46px; margin-bottom: -1px; padding: 0 2px;
+  border-bottom: 3px solid transparent; color: #5d6474; font-size: 14px; font-weight: 650; text-decoration: none;
+}
+.settings-workspace .cfg-abas a.cfg-aba:hover { color: var(--cfg-tinta); }
+.settings-workspace .cfg-abas a.cfg-aba[aria-current=page] { border-bottom-color: var(--cfg-indigo); color: var(--cfg-indigo-texto); }
+.settings-workspace .cfg-abas a.cfg-aba:focus-visible { outline-offset: -2px; }
+
+/* ---------- Grade da aba Conexão ----------
+   Leitura: estado, conexão, identificação, ações. No computador: o estado na
+   largura toda e, embaixo, identificação | conexão lado a lado (a seção
+   Conexão empresta as linhas e colunas da grade por subgrid). */
+.cfg-conexao, .cfg-atendimento { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.cfg-secao { position: relative; min-width: 0; }
+.cfg-secao-conexao { display: flex; flex-direction: column; gap: 12px; }
+@container (min-width: 760px) {
+  .cfg-atendimento { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); align-items: start; }
+  @supports (grid-template-rows: subgrid) {
+    .cfg-conexao { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cfg-secao-conexao {
+      display: grid; grid-column: 1 / -1; grid-row: 1 / span 2;
+      grid-template-columns: subgrid; grid-template-rows: subgrid; gap: 12px;
+    }
+    .cfg-secao-conexao > .cfg-conexao-estado { grid-column: 1 / -1; grid-row: 1; }
+    .cfg-secao-conexao > .cfg-cartao { grid-column: 2; grid-row: 2; }
+    .cfg-secao-identificacao { grid-column: 1; grid-row: 2; }
+    .cfg-secao-acoes { grid-column: 1 / -1; }
+  }
+}
+
+/* ---------- Cartões e linhas ---------- */
+.cfg-s2 .cfg-cartao { height: 100%; padding: 14px 16px 8px; border: 1px solid var(--cfg-linha); border-radius: 14px; background: var(--cfg-papel); }
+.cfg-s2 .cfg-cartao :is(h2, h3) { margin: 2px 0 6px; color: var(--cfg-tinta); font-size: 14.5px; font-weight: 700; line-height: 20px; }
+.cfg-s2 .cfg-linhas { margin: 0; }
+.cfg-s2 .cfg-linha {
+  display: grid; grid-template-columns: minmax(96px, 0.75fr) minmax(0, 1.5fr); align-items: center; gap: 12px;
+  min-height: 46px; border-top: 1px solid #eceef3; font-size: 13.5px; line-height: 19px;
+}
+.cfg-s2 .cfg-linha:first-child { border-top: 0; }
+.cfg-s2 .cfg-linha dt { color: #5d6474; }
+.cfg-s2 .cfg-linha dt a { color: var(--cfg-indigo-texto); font-weight: 650; text-decoration: none; }
+.cfg-s2 .cfg-linha dt a:hover { text-decoration: underline; }
+.cfg-s2 .cfg-linha dd { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; margin: 0; }
+/* O valor quebra linha em vez de sumir em reticências (no celular, a ação da linha divide o espaço). */
+.cfg-s2 .cfg-linha-valor { min-width: 0; color: var(--cfg-tinta); font-weight: 650; overflow-wrap: anywhere; }
+.cfg-s2 .cfg-linha-vazio { color: #5d6474; font-weight: 500; }
+.settings-workspace .cfg-s2 button.cfg-linha-acao:not([role=tab]) {
+  flex: none; min-height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: none;
+  color: var(--cfg-indigo-texto); font-size: 13px; font-weight: 650;
+}
+.settings-workspace .cfg-s2 button.cfg-linha-acao:not([role=tab]):hover:not(:disabled) { background: var(--cfg-indigo-fundo); }
+
+/* ---------- Faixa de estado ---------- */
+.cfg-faixa { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border-radius: 12px; background: #eaf7f2; color: #1d5a44; }
+.cfg-faixa strong { font-size: 14px; line-height: 19px; }
+.cfg-faixa span { font-size: 13px; line-height: 19px; }
+.cfg-faixa[data-tom=espera] { background: #fff4dc; color: #6b4000; }
+.cfg-faixa[data-tom=erro] { background: #fdeeee; color: #8a1f1f; }
+.cfg-faixa[data-tom=neutro] { background: #f3f4f7; color: #444a58; }
+
+.cfg-detalhe-ausente { margin: 0; padding: 32px 16px; border: 1px dashed var(--cfg-linha); border-radius: 14px; color: var(--cfg-apoio); text-align: center; }
+.settings-workspace p.cfg-detalhe-erro[role=alert] { margin: 0 0 12px; border-left: 0; border-radius: 10px; background: #fdecea; color: #8c1d18; font-size: 13px; }
+
+/* ---------- Botões do detalhe ----------
+   Três pesos: comum (contorno), principal (índigo) e perigo (contorno
+   vermelho). A gravidade vem do grupo e da cor, não de caixa dentro de caixa. */
+.settings-workspace .cfg-s2 button.cfg-botao:not([role=tab]) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 14px;
+  border: 1px solid #d5d8e1; border-radius: 10px; background: var(--cfg-papel); color: #353947;
+  font-size: 13.5px; font-weight: 650; line-height: 18px; white-space: nowrap;
+}
+.settings-workspace .cfg-s2 button.cfg-botao:not([role=tab]):hover:not(:disabled) { border-color: #b9bdca; background: #f8f8fb; }
+.settings-workspace .cfg-s2 button.cfg-botao.is-principal:not([role=tab]) { border-color: var(--cfg-indigo); background: var(--cfg-indigo); color: #fff; }
+.settings-workspace .cfg-s2 button.cfg-botao.is-principal:not([role=tab]):hover:not(:disabled) { border-color: #4338ca; background: #4338ca; }
+.settings-workspace .cfg-s2 button.cfg-botao.is-perigo:not([role=tab]) { border-color: #efc7c9; color: var(--cfg-vermelho); }
+.settings-workspace .cfg-s2 button.cfg-botao.is-perigo:not([role=tab]):hover:not(:disabled) { border-color: #e3a5a9; background: #fff5f5; }
+.settings-workspace .cfg-s2 button:is(.cfg-botao, .cfg-linha-acao):not([role=tab]):disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* ---------- Edição em linha (nome e WABA ID) ---------- */
+.cfg-s2 .cfg-linha.is-editando { display: block; padding: 10px 0 12px; }
+.cfg-s2 .cfg-edicao { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 8px; width: 100%; }
+.cfg-s2 .cfg-edicao label { grid-column: 1 / -1; color: #5d6474; font-size: 12.5px; font-weight: 650; }
+.settings-workspace .cfg-s2 .cfg-edicao input.cfg-entrada {
+  min-height: 38px; padding: 0 11px; border: 1px solid #cfd3dd; border-radius: 10px; background: var(--cfg-papel);
+  color: var(--cfg-tinta); font-size: 14px;
+}
+.settings-workspace .cfg-s2 .cfg-edicao input.cfg-entrada:focus { border-color: var(--cfg-indigo); outline: 2px solid rgba(79, 70, 229, 0.18); outline-offset: 0; }
+.settings-workspace .cfg-s2 .cfg-edicao input.cfg-entrada[aria-invalid=true] { border-color: #d9777d; }
+.cfg-s2 .cfg-edicao-acoes { display: flex; gap: 8px; }
+.settings-workspace .cfg-s2 p.cfg-edicao-erro[role=alert] { grid-column: 1 / -1; margin: 2px 0 0; padding: 0; border: 0; background: none; color: var(--cfg-vermelho); font-size: 12.5px; line-height: 17px; }
+
+/* ---------- Erro que nasce no cartão de conexão (Reconectar) ---------- */
+.settings-workspace .cfg-s2 .cfg-cartao-falha[role=alert] {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
+  margin: 4px 0 8px; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--cfg-vermelho-suave); color: #8c1d18;
+}
+.cfg-s2 .cfg-cartao-falha p { margin: 0; font-size: 13px; line-height: 18px; }
+
+/* ---------- QR code do Baileys ---------- */
+.cfg-s2 .cfg-qr {
+  display: grid; grid-template-columns: 216px minmax(0, 1fr); align-items: center; gap: 24px;
+  padding: 18px; border: 1px solid #dcd9ff; border-radius: 14px; background: var(--cfg-indigo-fundo);
+}
+.cfg-s2 .cfg-qr-quadro {
+  display: grid; place-items: center; width: 216px; height: 216px; padding: 12px; border: 1px solid #e6e4fb;
+  border-radius: 12px; background: #fff;
+}
+.cfg-s2 .cfg-qr-imagem { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.cfg-s2 .cfg-qr-vazio { margin: 0; color: var(--cfg-apoio); font-size: 13px; line-height: 18px; text-align: center; }
+.cfg-s2 .cfg-qr-texto { min-width: 0; }
+.cfg-s2 .cfg-qr-texto h3 { margin: 0 0 7px; color: var(--cfg-tinta); font-size: 18px; font-weight: 700; line-height: 24px; }
+.cfg-s2 .cfg-qr-texto p { max-width: 60ch; margin: 0 0 10px; color: var(--cfg-apoio); font-size: 13.5px; line-height: 20px; }
+.cfg-s2 .cfg-qr-texto p.cfg-qr-outro-aparelho { font-size: 12.5px; }
+.cfg-s2 .cfg-qr-texto p.cfg-qr-renovado { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; color: #505667; font-size: 12.5px; }
+.cfg-s2 .cfg-qr-renovado::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cfg-verde); }
+
+/* ---------- Ações do canal ---------- */
+.cfg-s2 .cfg-secao-acoes { display: grid; gap: 12px; margin-top: 4px; }
+.cfg-s2 .cfg-grupo-acoes {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px;
+  padding: 14px 16px; border: 1px solid var(--cfg-linha); border-radius: 14px; background: var(--cfg-papel);
+}
+.cfg-s2 .cfg-grupo-acoes.is-permanente { border-color: #efcfd1; background: #fffafa; }
+.cfg-s2 .cfg-grupo-acoes-texto h3 { margin: 0 0 3px; color: var(--cfg-tinta); font-size: 14px; font-weight: 700; line-height: 19px; }
+.cfg-s2 .cfg-grupo-acoes.is-permanente .cfg-grupo-acoes-texto h3 { color: #912329; }
+.cfg-s2 .cfg-grupo-acoes-texto p { margin: 0; color: var(--cfg-apoio); font-size: 13px; line-height: 19px; }
+.cfg-s2 .cfg-grupo-acoes.is-permanente .cfg-grupo-acoes-texto p { color: #6f5b5d; }
+.cfg-s2 .cfg-grupo-acoes-texto p > span { color: var(--cfg-ambar); font-weight: 650; }
+.cfg-s2 .cfg-grupo-acoes-botoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+/* Regras relacionadas: o atalho à esquerda e o valor à direita (mockup). */
+.cfg-s2 .cfg-atendimento .cfg-linhas .cfg-linha { grid-template-columns: minmax(0, 1fr) auto; }
+.cfg-s2 .cfg-atendimento .cfg-linhas .cfg-linha dd { justify-content: flex-end; text-align: right; }
+/* O atalho ocupa a altura da linha: alvo de 44 px, sem mudar o desenho. */
+.cfg-s2 .cfg-atendimento .cfg-linha dt a { display: flex; align-items: center; min-height: 44px; }
+
+/* ---------- Aba Atendimento: interruptores ---------- */
+.cfg-s2 .cfg-atendimento .cfg-cartao { padding-bottom: 6px; }
+.cfg-s2 .cfg-interruptor {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  min-height: 60px; padding: 10px 0; border-top: 1px solid var(--cfg-linha-suave);
+}
+.cfg-s2 .cfg-cartao h2 + .cfg-interruptor { border-top: 0; }
+.cfg-s2 .cfg-interruptor-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cfg-s2 .cfg-interruptor-texto strong { color: var(--cfg-tinta); font-size: 13.5px; line-height: 19px; }
+.cfg-s2 .cfg-interruptor-texto > span { color: var(--cfg-apoio); font-size: 12.5px; line-height: 17px; }
+.cfg-s2 .cfg-interruptor-texto > span.cfg-interruptor-motivo { color: var(--cfg-ambar); font-weight: 600; }
+.cfg-s2 .cfg-interruptor-motivo a { color: var(--cfg-indigo-texto); font-weight: 650; }
+.cfg-s2 .cfg-interruptor-texto > span.cfg-interruptor-salvando { color: var(--cfg-indigo-texto); font-weight: 600; }
+.settings-workspace .cfg-s2 span.cfg-interruptor-erro[role=alert] { margin: 0; padding: 0; border: 0; background: none; color: var(--cfg-vermelho); font-size: 12.5px; font-weight: 600; }
+.settings-workspace .cfg-s2 button.cfg-chave:not([role=tab]) {
+  position: relative; flex: none; width: 44px; min-width: 44px; height: 26px; min-height: 26px; padding: 0;
+  border: 0; border-radius: 999px; background: #cdd0d8; cursor: pointer;
+}
+.cfg-s2 .cfg-chave::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(23, 25, 39, 0.2);
+}
+.settings-workspace .cfg-s2 button.cfg-chave[aria-checked=true]:not([role=tab]) { background: var(--cfg-indigo); }
+.cfg-s2 .cfg-chave[aria-checked=true]::after { left: 21px; }
+.settings-workspace .cfg-s2 button.cfg-chave[aria-disabled=true]:not([role=tab]) { cursor: progress; opacity: 0.7; }
+.settings-workspace .cfg-s2 button.cfg-chave:not([role=tab]):disabled { cursor: not-allowed; opacity: 0.45; }
+
+/* ---------- Celular ----------
+   Cabeçalho curto (a trilha já some na S1; fica o voltar, o nome e o
+   estado), abas em duas metades, QR centralizado, ações empilhadas e alvos
+   de toque de 44 px. */
+@media (max-width: 767px) {
+  .settings-workspace a.cfg-voltar-link { min-height: 44px; margin: -10px 0 2px; }
+  .cfg-titulo-marca .cfg-emblema { width: 40px; height: 40px; font-size: 13px; }
+  .settings-workspace .cfg-cabecalho:has(.cfg-titulo-marca) { padding-bottom: 12px; }
+  .settings-workspace .cfg-cabecalho:has(.cfg-titulo-marca) .cfg-cabecalho-linha { gap: 8px; }
+  .settings-workspace .cfg-cabecalho:has(.cfg-titulo-marca) .cfg-titulo { gap: 11px; align-items: center; }
+  .settings-workspace .cfg-cabecalho:has(.cfg-titulo-marca) .cfg-titulo-texto h1 { font-size: 20px; }
+  .settings-workspace .cfg-cabecalho:has(.cfg-titulo-marca) .cfg-titulo-texto p { margin-top: 2px; }
+
+  .cfg-abas { gap: 0; margin-bottom: 14px; }
+  .settings-workspace .cfg-abas a.cfg-aba { flex: 1 1 0; justify-content: center; }
+
+  .cfg-s2 .cfg-qr { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 16px; padding: 16px; text-align: center; }
+  .cfg-s2 .cfg-qr-quadro { width: min(232px, 100%); height: auto; aspect-ratio: 1; }
+  .cfg-s2 .cfg-qr-texto p { margin-inline: auto; }
+
+  .cfg-s2 .cfg-cartao { padding: 12px 14px 6px; }
+  .cfg-s2 .cfg-linha { grid-template-columns: minmax(84px, 0.6fr) minmax(0, 1.4fr); gap: 10px; }
+  .cfg-s2 .cfg-edicao { grid-template-columns: minmax(0, 1fr); }
+  .cfg-s2 .cfg-edicao-acoes > button { flex: 1 1 0; }
+
+  .cfg-s2 .cfg-grupo-acoes { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .cfg-s2 .cfg-grupo-acoes-botoes { justify-content: stretch; }
+  .cfg-s2 .cfg-grupo-acoes-botoes > button { flex: 1 1 auto; }
+
+  .settings-workspace .cfg-s2 button.cfg-botao:not([role=tab]),
+  .settings-workspace .cfg-s2 button.cfg-linha-acao:not([role=tab]),
+  .settings-workspace .cfg-s2 .cfg-edicao input.cfg-entrada { min-height: 44px; }
+  /* A chave continua com 26 px de desenho, mas o botão tem 44 px de altura:
+     a trilha passa para o ::before e o botão fica transparente. */
+  .settings-workspace .cfg-s2 button.cfg-chave:not([role=tab]),
+  .settings-workspace .cfg-s2 button.cfg-chave[aria-checked=true]:not([role=tab]) { height: 44px; min-height: 44px; background: transparent; }
+  .cfg-s2 .cfg-chave::before { content: ""; position: absolute; top: 9px; right: 0; left: 0; height: 26px; border-radius: 999px; background: #cdd0d8; }
+  .cfg-s2 .cfg-chave[aria-checked=true]::before { background: var(--cfg-indigo); }
+  .cfg-s2 .cfg-chave::after { top: 12px; }
+}

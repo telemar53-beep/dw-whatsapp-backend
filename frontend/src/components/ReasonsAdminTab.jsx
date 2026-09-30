@@ -1,13 +1,17 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useReasonsAdmin } from '../hooks/useReasonsAdmin';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { updateReason } from '../services/api';
-import CreateReasonForm from './CreateReasonForm';
-import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import { waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconNewChat, IconMore, IconEdit } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+
+// O Novo motivo (Fatia S3) só chega quando é aberto: o formulário, a base de
+// diálogo de Configurações e a folha dela ficam fora do trecho da página.
+const FORMULARIO = sobDemanda(() => import('./CreateReasonForm'));
 
 const STATUS_OPTIONS = [
   ['all', 'Todos os status'],
@@ -158,6 +162,17 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
   const controlled = creatingProp !== undefined;
   const creatingReason = controlled ? creatingProp : internalCreating;
   const setCreatingReason = controlled ? onCreatingChange : setInternalCreating;
+  const [falhaAoAbrir, setFalhaAoAbrir] = useState(null);
+  const formularioNaoBaixou = useCallback(() => {
+    setCreatingReason(false);
+    setFalhaAoAbrir('Não foi possível abrir o Novo motivo. Verifique a conexão e tente de novo.');
+  }, [setCreatingReason]);
+  const CreateReasonForm = useSobDemanda(FORMULARIO, creatingReason, formularioNaoBaixou);
+
+  function abrirCriacao() {
+    setFalhaAoAbrir(null);
+    setCreatingReason(true);
+  }
 
   const term = search.trim().toLowerCase();
   const visible = useMemo(
@@ -184,7 +199,7 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           <h2 id="reasons-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Motivos de atendimento
           </h2>
-          <Button onClick={() => setCreatingReason(true)} className="!py-2">
+          <Button onClick={abrirCriacao} className="!py-2">
             <IconNewChat size={18} />
             Novo motivo
           </Button>
@@ -224,6 +239,7 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           <span>{countLabel}</span>
           <span>O motivo fica registrado no histórico e agrupado em Relatórios.</span>
         </div>
+        {falhaAoAbrir && <WaError className="mb-3">{falhaAoAbrir}</WaError>}
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={reasons.length === 0} emptyMessage="Nenhum motivo cadastrado ainda.">
             <DataTable label="Motivos de contato">
@@ -263,20 +279,16 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
 
       </section>
 
-      {creatingReason && (
-        <WaDialog variant="reason" title="Novo motivo" onClose={() => setCreatingReason(false)} size="max-w-md">
-          <div className="px-6 pb-5 pt-2">
-            <CreateReasonForm
-              embedded
-              onCreated={() => {
-                refresh();
-                setCreatingReason(false);
-              }}
-              onCancel={() => setCreatingReason(false)}
-            />
-          </div>
-        </WaDialog>
-      )}
+      {creatingReason && (CreateReasonForm ? (
+        <CreateReasonForm
+          comoDialogo
+          onCreated={() => {
+            refresh();
+            setCreatingReason(false);
+          }}
+          onCancel={() => setCreatingReason(false)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o Novo motivo…</p>)}
     </>
   );
 }

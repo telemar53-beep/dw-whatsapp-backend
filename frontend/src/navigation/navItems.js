@@ -1,7 +1,4 @@
-import {
-  IconChats, IconTeam, IconMegaphone, IconChart, IconSettings,
-  IconChannel, IconSpark, IconRules, IconQuickReply, IconPlug, IconTags, IconBuilding,
-} from '../components/icons/WaIcons';
+import { IconChats, IconTeam, IconMegaphone, IconChart, IconSettings } from '../components/icons/WaIcons';
 
 // Os três níveis espelham src/auth/auth.middleware.js: requireAuth,
 // requireRole('admin') (admin+manager) e requireIntegrationsAccess.
@@ -28,23 +25,38 @@ export const NAV_ITEMS = [
 
 const s = (path) => `${SETTINGS_BASE}/${path}`;
 
+// As três áreas do diretório (mockup aprovado da S1), na ordem da tela.
+export const SETTINGS_AREAS = ['Atendimento', 'Automação', 'Administração'];
+
+// Oito grupos, na ordem do diretório. Grupo de uma página só aparece como um
+// atalho direto para ela, com o nome do grupo. Mudar de grupo não muda rota nem
+// nível: Boas-vindas e Abertura e encerramento vivem em /mensagens desde sempre
+// e agora aparecem em Mensagens, que é o que elas são.
 export const SETTINGS_SECTIONS = [
   {
-    group: 'WhatsApp e canais', groupKey: 'canais', icon: IconChannel,
+    group: 'Números conectados', groupKey: 'canais', area: 'Atendimento',
     items: [
       { key: 'canais', label: 'Números conectados', to: s('canais'), level: 'admin', description: 'Conexão, status e atendimento de cada número de WhatsApp.' },
     ],
   },
   {
-    group: 'Atendimento', groupKey: 'atendimento', icon: IconRules,
+    group: 'Regras e horários', groupKey: 'regras', area: 'Atendimento',
     items: [
       { key: 'horario', label: 'Horário de atendimento', to: s('regras/horario'), level: 'admin', description: 'Quando há atendente humano e o aviso fora do expediente.' },
-      { key: 'boas-vindas', label: 'Boas-vindas', to: s('mensagens/boas-vindas'), level: 'admin', description: 'Mensagem enviada ao cliente quando inicia o contato.' },
-      { key: 'abertura-encerramento', label: 'Abertura e encerramento', to: s('mensagens/abertura-encerramento'), level: 'admin', description: 'Mensagens ao assumir e finalizar um atendimento.' },
     ],
   },
   {
-    group: 'IA e automação', groupKey: 'automacao', icon: IconSpark,
+    group: 'Mensagens', groupKey: 'mensagens', area: 'Atendimento',
+    items: [
+      { key: 'boas-vindas', label: 'Boas-vindas', to: s('mensagens/boas-vindas'), level: 'admin', description: 'Mensagem enviada ao cliente quando inicia o contato.' },
+      { key: 'abertura-encerramento', label: 'Abertura e encerramento', to: s('mensagens/abertura-encerramento'), level: 'admin', description: 'Mensagens ao assumir e finalizar um atendimento.' },
+      { key: 'avisos-cidade', label: 'Avisos por cidade', to: s('mensagens/avisos-cidade'), level: 'admin', description: 'Avisos automáticos para clientes de uma cidade.' },
+      { key: 'respostas-rapidas', label: 'Respostas rápidas', to: s('mensagens/respostas-rapidas'), level: 'admin', description: 'Textos prontos usados pela equipe no chat.' },
+      { key: 'templates', label: 'Templates WhatsApp', to: s('mensagens/templates'), level: 'admin', description: 'Modelos de mensagem aprovados para os canais oficiais.' },
+    ],
+  },
+  {
+    group: 'IA e automações', groupKey: 'automacao', area: 'Automação',
     items: [
       { key: 'triagem-menu', label: 'Triagem por menu', to: s('automacao/triagem-menu'), level: 'admin', description: 'O menu numerado que o cliente recebe antes de falar com um atendente.' },
       { key: 'ia', label: 'Atendimento com IA', to: s('automacao/ia'), level: 'admin', description: 'Quando a IA responde sozinha e quantas perguntas pode fazer.' },
@@ -55,23 +67,7 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    group: 'Mensagens', groupKey: 'mensagens', icon: IconQuickReply,
-    items: [
-      { key: 'avisos-cidade', label: 'Avisos por cidade', to: s('mensagens/avisos-cidade'), level: 'admin', description: 'Avisos automáticos para clientes de uma cidade.' },
-      { key: 'respostas-rapidas', label: 'Respostas rápidas', to: s('mensagens/respostas-rapidas'), level: 'admin', description: 'Textos prontos usados pela equipe no chat.' },
-      { key: 'templates', label: 'Templates WhatsApp', to: s('mensagens/templates'), level: 'admin', description: 'Modelos de mensagem aprovados para os canais oficiais.' },
-    ],
-  },
-  {
-    group: 'Equipe e permissões', groupKey: 'equipe', icon: IconTeam,
-    items: [
-      { key: 'usuarios', label: 'Usuários', to: s('equipe/usuarios'), level: 'admin', description: 'Contas e status dos atendentes.' },
-      { key: 'setores', label: 'Setores', to: s('equipe/setores'), level: 'admin', description: 'Filas e times de atendimento.' },
-      { key: 'perfis', label: 'Perfis e permissões', to: s('equipe/perfis'), level: 'admin', description: 'Acesso a páginas e ações por perfil.' },
-    ],
-  },
-  {
-    group: 'Integrações', groupKey: 'integracoes', icon: IconPlug,
+    group: 'Integrações', groupKey: 'integracoes', area: 'Automação',
     items: [
       { key: 'sgp-consultas', label: 'SGP: consultas', to: s('integracoes/sgp/consultas'), level: 'integrations', description: 'Dados do cliente, contratos e faturas no atendimento.' },
       { key: 'sgp-envios', label: 'SGP: Pix e boleto', to: s('integracoes/sgp/envios'), level: 'integrations', description: 'Envio de Pix e boleto pelos canais conectados.', terms: 'fatura cobrança financeiro' },
@@ -79,7 +75,15 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    group: 'Cadastros auxiliares', groupKey: 'cadastros', icon: IconTags,
+    group: 'Equipe e permissões', groupKey: 'equipe', area: 'Administração',
+    items: [
+      { key: 'usuarios', label: 'Usuários', to: s('equipe/usuarios'), level: 'admin', description: 'Contas e status dos atendentes.' },
+      { key: 'setores', label: 'Setores', to: s('equipe/setores'), level: 'admin', description: 'Filas e times de atendimento.' },
+      { key: 'perfis', label: 'Perfis e permissões', to: s('equipe/perfis'), level: 'admin', description: 'Acesso a páginas e ações por perfil.' },
+    ],
+  },
+  {
+    group: 'Cadastros auxiliares', groupKey: 'cadastros', area: 'Administração',
     items: [
       { key: 'motivos', label: 'Motivos de atendimento', to: s('cadastros/motivos'), level: 'admin', description: 'Motivos usados ao finalizar conversas e nos relatórios.' },
       { key: 'cidades', label: 'Cidades', to: s('cadastros/cidades'), level: 'admin', description: 'Cidades usadas no cadastro e nos avisos.' },
@@ -87,7 +91,7 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    group: 'Empresa', groupKey: 'empresa', icon: IconBuilding,
+    group: 'Empresa', groupKey: 'empresa', area: 'Administração',
     items: [
       { key: 'empresa', label: 'Empresa', to: s('empresa'), level: 'admin', description: 'Nome da empresa e nomes aceitos na conferência de comprovantes.' },
     ],

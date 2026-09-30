@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ReasonsAdminTab from './ReasonsAdminTab';
 import { useReasonsAdmin } from '../hooks/useReasonsAdmin';
@@ -32,11 +32,12 @@ describe('ReasonsAdminTab', () => {
     render(<ReasonsAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /novo motivo/i }));
-    await userEvent.type(screen.getByLabelText(/nome/i), 'Pagamento');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.type(await screen.findByLabelText(/nome/i), 'Pagamento');
+    // Fatia S3: a ação do diálogo diz o que faz.
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar motivo' }));
 
     expect(api.createReason).toHaveBeenCalledWith({ name: 'Pagamento' }, 'tok-123');
-    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
   test('toggling active calls updateReason with the flipped value and refreshes', async () => {

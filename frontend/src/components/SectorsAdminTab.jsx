@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useSectors } from '../hooks/useSectors';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { updateSector, deleteSector } from '../services/api';
-import CreateSectorForm from './CreateSectorForm';
-import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import { waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, inputClass } from './ui';
 import { descreverErro } from '../utils/errorMessages';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+
+// O Adicionar setor (Fatia S3) só chega quando é aberto: o formulário, a base
+// de diálogo de Configurações e a folha dela ficam fora do trecho da página.
+const FORMULARIO = sobDemanda(() => import('./CreateSectorForm'));
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
 const SMALL_BTN =
@@ -145,6 +149,18 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const controlled = creatingProp !== undefined;
   const creating = controlled ? creatingProp : internalCreating;
   const setCreating = controlled ? onCreatingChange : setInternalCreating;
+  const [falhaAoAbrir, setFalhaAoAbrir] = useState(null);
+  const formularioNaoBaixou = useCallback(() => {
+    setCreating(false);
+    setFalhaAoAbrir('Não foi possível abrir o Adicionar setor. Verifique a conexão e tente de novo.');
+  }, [setCreating]);
+  // Sem controle, o formulário solto fica sempre à mostra: é preciso desde já.
+  const CreateSectorForm = useSobDemanda(FORMULARIO, controlled ? creating : true, formularioNaoBaixou);
+
+  function abrirCriacao() {
+    setFalhaAoAbrir(null);
+    setCreating(true);
+  }
 
   return (
     <>
@@ -162,12 +178,13 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
             </p>
           </div>
           {controlled && (
-            <Button onClick={() => setCreating(true)} className="!py-2">
+            <Button onClick={abrirCriacao} className="!py-2">
               Adicionar setor
             </Button>
           )}
         </div>
 
+        {falhaAoAbrir && <WaError className="mb-3">{falhaAoAbrir}</WaError>}
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
             <DataTable label="Setores">
@@ -198,21 +215,17 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         </div>
       </section>
 
-      {controlled && creating && (
-        <WaDialog variant="sector" title="Adicionar setor" onClose={() => setCreating(false)} size="max-w-md">
-          <div className="px-6 pb-5 pt-2">
-            <CreateSectorForm
-              embedded
-              onCreated={() => {
-                refresh();
-                setCreating(false);
-              }}
-              onCancel={() => setCreating(false)}
-            />
-          </div>
-        </WaDialog>
-      )}
-      {!controlled && (
+      {controlled && creating && (CreateSectorForm ? (
+        <CreateSectorForm
+          comoDialogo
+          onCreated={() => {
+            refresh();
+            setCreating(false);
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o Adicionar setor…</p>)}
+      {!controlled && CreateSectorForm && (
         <CreateSectorForm
           onCreated={() => {
             refresh();

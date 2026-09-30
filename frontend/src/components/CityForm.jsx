@@ -4,6 +4,7 @@ import { createCity, updateCity } from '../services/api';
 import { Button } from './ui';
 import { WaError } from './WaDialog';
 import { descreverErro } from '../utils/errorMessages';
+import { DialogoDeFormulario, CampoDoFormulario, MarcaDoFormulario, ErroDoFormulario } from '../pages/settings/formulario/DialogoDeFormulario';
 
 const CAMPO =
   'h-10 w-full rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[14px] text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60';
@@ -36,7 +37,8 @@ function descreverBloqueio(dependencies) {
   return `Não dá para mudar a estrutura agora: ${lista}. Trate esses vínculos primeiro.`;
 }
 
-function mensagemDeFalha(err, padrao) {
+// As recusas que o backend explica (409): frases próprias, em português.
+function mensagemEspecifica(err) {
   const corpo = (err && err.body) || {};
   if (err && err.status === 409 && corpo.error === 'structural change blocked') {
     return descreverBloqueio(corpo.dependencies || {});
@@ -44,11 +46,13 @@ function mensagemDeFalha(err, padrao) {
   if (err && err.status === 409 && corpo.error === 'sgpPop already in use') {
     return 'Esse POP do SGP já está em uso por outro lugar. Cada POP pertence a um único cadastro.';
   }
-  return descreverErro(err, padrao);
+  return null;
 }
 
-// `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
-function CityForm({ place = null, places = [], onSaved, onCancel, embedded = false }) {
+// `comoDialogo`: o diálogo claro de Configurações (Fatia S3), para criar e
+// editar. Sem ele, o formulário solto de antes. Os dois modos validam e
+// enviam pela mesma função, com o mesmo payload.
+function CityForm({ place = null, places = [], onSaved, onCancel, comoDialogo = false }) {
   const { token } = useAuth();
   const editando = Boolean(place);
 
@@ -65,17 +69,17 @@ function CityForm({ place = null, places = [], onSaved, onCancel, embedded = fal
   // Localidade só pode pendurar em município: a hierarquia tem dois níveis.
   const municipios = places.filter((p) => p.kind !== 'locality' && p.id !== (place && place.id));
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError(null);
+  function mudarTipo(valor) {
+    setKind(valor);
+    if (valor !== 'locality') setParentId('');
+  }
 
+  async function enviar() {
     if (!kind) {
-      setError('Escolha se este cadastro é uma cidade ou uma localidade.');
-      return;
+      throw new ErroDoFormulario('Escolha se este cadastro é uma cidade ou uma localidade.', 'city-kind');
     }
     if (kind === 'locality' && !parentId) {
-      setError('Uma localidade precisa pertencer a um município.');
-      return;
+      throw new ErroDoFormulario('Uma localidade precisa pertencer a um município.', 'city-parent');
     }
 
     const payload = {
@@ -90,28 +94,99 @@ function CityForm({ place = null, places = [], onSaved, onCancel, embedded = fal
       note: note.trim(),
     };
 
-    setSubmitting(true);
     try {
       if (editando) {
         await updateCity(place.id, payload, token);
       } else {
         await createCity(payload, token);
       }
+    } catch (err) {
+      const especifica = mensagemEspecifica(err);
+      if (especifica) throw new ErroDoFormulario(especifica);
+      throw err;
+    }
+  }
+
+  if (comoDialogo) {
+    return (
+      <DialogoDeFormulario
+        titulo={editando ? 'Editar cadastro' : 'Nova cidade ou localidade'}
+        descricao={editando ? 'Altere os dados deste cadastro.' : 'Municípios e povoados do cadastro do cliente e dos avisos.'}
+        acao={editando ? 'Salvar alterações' : 'Adicionar cidade'}
+        andamento={editando ? 'Salvando…' : 'Adicionando…'}
+        erroPadrao={
+          editando
+            ? 'Não foi possível salvar as alterações. Verifique os dados e tente novamente.'
+            : 'Não foi possível adicionar a cidade. Verifique os dados e tente novamente.'
+        }
+        onEnviar={enviar}
+        onConcluido={onSaved}
+        onClose={onCancel}
+        enviarDesativado={!kind}
+      >
+        <CampoDoFormulario id="city-name" rotulo="Nome" inteiro ajuda="Como aparece no sistema. Para município, use o nome igual ao do SGP.">
+          <input id="city-name" className="mc-entrada" value={name} onChange={(e) => setName(e.target.value)} placeholder="Cândido Mendes" autoComplete="off" required />
+        </CampoDoFormulario>
+        <CampoDoFormulario
+          id="city-kind"
+          rotulo="Tipo"
+          inteiro={kind !== 'locality'}
+          ajuda={!kind ? 'Cadastro antigo, ainda não classificado. Escolha o tipo para continuar.' : undefined}
+        >
+          <select id="city-kind" className="mc-entrada" value={kind} onChange={(e) => mudarTipo(e.target.value)}>
+            {!kind && <option value="">Não classificado</option>}
+            <option value="city">Cidade / Município</option>
+            <option value="locality">Povoado / Localidade</option>
+          </select>
+        </CampoDoFormulario>
+        {kind === 'locality' && (
+          <CampoDoFormulario id="city-parent" rotulo="Município">
+            <select id="city-parent" className="mc-entrada" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+              <option value="">Selecione…</option>
+              {municipios.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </CampoDoFormulario>
+        )}
+        <CampoDoFormulario id="city-pop" rotulo="POP do SGP" opcional inteiro ajuda="Exatamente como o SGP devolve — é por ele que a localidade do cliente é reconhecida.">
+          <input id="city-pop" className="mc-entrada" value={sgpPop} onChange={(e) => setSgpPop(e.target.value)} placeholder="Barão" autoComplete="off" />
+        </CampoDoFormulario>
+        <CampoDoFormulario id="city-note" rotulo="Observação" opcional inteiro>
+          <textarea id="city-note" className="mc-entrada" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        </CampoDoFormulario>
+        <div className="cfg-dlg-linha">
+          <div className="cfg-dlg-marcas">
+            <MarcaDoFormulario id="city-active" rotulo="Ativa" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            <MarcaDoFormulario id="city-served" rotulo="Atendida" checked={served} onChange={(e) => setServed(e.target.checked)} />
+          </div>
+          <p className="cfg-dlg-ajuda cfg-dlg-ajuda-marcas">
+            &quot;Atendida&quot; significa cobertura confirmada. Sem essa marca, a equipe verifica a viabilidade em vez de dizer que não atendemos.
+          </p>
+        </div>
+      </DialogoDeFormulario>
+    );
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await enviar();
       onSaved();
     } catch (err) {
-      setError(mensagemDeFalha(err, editando ? 'Falha ao salvar' : 'Falha ao cadastrar'));
+      setError(err instanceof ErroDoFormulario ? err.message : descreverErro(err, editando ? 'Falha ao salvar' : 'Falha ao cadastrar'));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className={embedded ? '' : 'rounded-[16px] border border-wa-border bg-wa-surface p-4'}>
-      {!embedded && (
-        <h3 className="mb-2.5 text-[13.5px] font-medium text-wa-text">
-          {editando ? 'Editar cadastro' : 'Cadastrar nova cidade ou localidade'}
-        </h3>
-      )}
+    <div className="rounded-[16px] border border-wa-border bg-wa-surface p-4">
+      <h3 className="mb-2.5 text-[13.5px] font-medium text-wa-text">
+        {editando ? 'Editar cadastro' : 'Cadastrar nova cidade ou localidade'}
+      </h3>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
         <div>
           <label htmlFor="city-name" className={ROTULO}>Nome</label>
@@ -132,10 +207,7 @@ function CityForm({ place = null, places = [], onSaved, onCancel, embedded = fal
             <select
               id="city-kind"
               value={kind}
-              onChange={(e) => {
-                setKind(e.target.value);
-                if (e.target.value !== 'locality') setParentId('');
-              }}
+              onChange={(e) => mudarTipo(e.target.value)}
               className={CAMPO}
             >
               {!kind && <option value="">Não classificado</option>}

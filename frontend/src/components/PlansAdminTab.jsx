@@ -1,13 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { usePlans } from '../hooks/usePlans';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { deletePlan } from '../services/api';
-import PlanForm from './PlanForm';
-import WaDialog, { WaError } from './WaDialog';
+import { WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable } from './ui';
 import { IconSearch, IconNewChat } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+
+// Novo plano e Editar plano (Fatia S3) só chegam quando são abertos: o formulário, a
+// base de diálogo de Configurações e a folha dela ficam fora do trecho da
+// página. Criar e editar usam o mesmo trecho.
+const FORMULARIO = sobDemanda(() => import('./PlanForm'));
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
 const CONTROL =
@@ -94,6 +99,24 @@ function PlansAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const controlled = creatingProp !== undefined;
   const creating = controlled ? creatingProp : internalCreating;
   const setCreating = controlled ? onCreatingChange : setInternalCreating;
+  const [falhaAoAbrir, setFalhaAoAbrir] = useState(null);
+  const formularioNaoBaixou = useCallback(() => {
+    setCreating(false);
+    setEditing(null);
+    setFalhaAoAbrir('Não foi possível abrir o cadastro de plano. Verifique a conexão e tente de novo.');
+  }, [setCreating]);
+  // Sem controle, o formulário solto fica à mostra: é preciso desde já.
+  const PlanForm = useSobDemanda(FORMULARIO, (controlled ? creating : true) || Boolean(editing), formularioNaoBaixou);
+
+  function abrirCriacao() {
+    setFalhaAoAbrir(null);
+    setCreating(true);
+  }
+
+  function abrirEdicao(plan) {
+    setFalhaAoAbrir(null);
+    setEditing(plan);
+  }
 
   function setPlanError(planId, message) {
     setErrors((prev) => ({ ...prev, [planId]: message }));
@@ -123,7 +146,7 @@ function PlansAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
             </p>
           </div>
           {controlled && (
-            <Button onClick={() => setCreating(true)} className="!py-2">
+            <Button onClick={abrirCriacao} className="!py-2">
               <IconNewChat size={18} />
               Novo plano
             </Button>
@@ -149,6 +172,7 @@ function PlansAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         </div>
 
         <div className="settings-register-summary text-wa-muted">{countLabel}</div>
+        {falhaAoAbrir && <WaError className="mb-3">{falhaAoAbrir}</WaError>}
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={plans.length === 0} emptyMessage="Nenhum plano cadastrado ainda.">
             <DataTable label="Planos" className="min-w-[640px]">
@@ -174,7 +198,7 @@ function PlansAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                     <PlanRow
                       key={plan.id}
                       plan={plan}
-                      onEdit={setEditing}
+                      onEdit={abrirEdicao}
                       onDeleted={refresh}
                       onError={setPlanError}
                     />
@@ -191,39 +215,31 @@ function PlansAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         </div>
       </section>
 
-      {controlled && creating && (
-        <WaDialog title="Novo plano" onClose={() => setCreating(false)} size="max-w-lg">
-          <div className="px-6 pb-5 pt-2">
-            <PlanForm
-              embedded
-              plan={null}
-              onSaved={() => {
-                refresh();
-                setCreating(false);
-              }}
-              onCancel={() => setCreating(false)}
-            />
-          </div>
-        </WaDialog>
-      )}
+      {controlled && creating && (PlanForm ? (
+        <PlanForm
+          comoDialogo
+          plan={null}
+          onSaved={() => {
+            refresh();
+            setCreating(false);
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o cadastro de plano…</p>)}
 
-      {editing && (
-        <WaDialog title="Editar plano" onClose={() => setEditing(null)} size="max-w-lg">
-          <div className="px-6 pb-5 pt-2">
-            <PlanForm
-              embedded
-              plan={editing}
-              onSaved={() => {
-                refresh();
-                setEditing(null);
-              }}
-              onCancel={() => setEditing(null)}
-            />
-          </div>
-        </WaDialog>
-      )}
+      {editing && (PlanForm ? (
+        <PlanForm
+          comoDialogo
+          plan={editing}
+          onSaved={() => {
+            refresh();
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o cadastro de plano…</p>)}
 
-      {!controlled && !editing && (
+      {!controlled && !editing && PlanForm && (
         <PlanForm
           plan={null}
           onSaved={() => {

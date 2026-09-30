@@ -30,6 +30,6 @@ describe('UsersPage', () => {
     renderInShell(<UsersPage />, { path: '/configuracoes/equipe/usuarios' });
     expect(screen.getByText('Nenhum usuário cadastrado ainda.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /adicionar usuário/i }));
-    expect(screen.getByRole('heading', { name: /adicionar usuário/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /adicionar usuário/i })).toBeInTheDocument();
   });
 });

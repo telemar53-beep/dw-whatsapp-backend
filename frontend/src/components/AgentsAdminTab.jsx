@@ -1,16 +1,21 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useConfirm } from '../hooks/useConfirm';
 import { useSectors } from '../hooks/useSectors';
 import { setAgentActive, setAgentSectors, resetAgentPassword } from '../services/api';
-import CreateAgentForm from './CreateAgentForm';
 import AgentAvatar from './AgentAvatar';
-import WaDialog, { WaError } from './WaDialog';
+import { WaError } from './WaDialog';
 import { SegredoGeradoDialog } from './ui/SegredoGeradoDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu } from './ui';
 import { IconSearch, IconUserPlus, IconMore } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+
+// O Adicionar usuário (Fatia S3) só chega quando é aberto: o formulário, o
+// campo de senha, a base de diálogo de Configurações e a folha dela ficam fora
+// do trecho da página.
+const FORMULARIO = sobDemanda(() => import('./CreateAgentForm'));
 
 const ROLE_LABELS = { admin: 'Administrador', manager: 'Gerente', agent: 'Atendente' };
 const ROLE_OPTIONS = [
@@ -190,6 +195,17 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const controlled = creatingProp !== undefined;
   const creatingAgent = controlled ? creatingProp : internalCreating;
   const setCreatingAgent = controlled ? onCreatingChange : setInternalCreating;
+  const [falhaAoAbrir, setFalhaAoAbrir] = useState(null);
+  const formularioNaoBaixou = useCallback(() => {
+    setCreatingAgent(false);
+    setFalhaAoAbrir('Não foi possível abrir o Adicionar usuário. Verifique a conexão e tente de novo.');
+  }, [setCreatingAgent]);
+  const CreateAgentForm = useSobDemanda(FORMULARIO, creatingAgent, formularioNaoBaixou);
+
+  function abrirCriacao() {
+    setFalhaAoAbrir(null);
+    setCreatingAgent(true);
+  }
 
   // Fatia S0 (29/09): gerar senha e desativar pedem confirmação com o nome e o
   // efeito, e a confirmação ESPERA a resposta (useConfirm com `acao`): ocupada,
@@ -263,7 +279,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           <h2 id="users-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Usuários
           </h2>
-          <Button onClick={() => setCreatingAgent(true)} className="!py-2">
+          <Button onClick={abrirCriacao} className="!py-2">
             <IconUserPlus size={18} />
             Adicionar usuário
           </Button>
@@ -315,6 +331,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           <span>{countLabel}</span>
           <span>A situação da conta é diferente do status online.</span>
         </div>
+        {falhaAoAbrir && <WaError className="mb-3">{falhaAoAbrir}</WaError>}
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum usuário cadastrado ainda.">
             <DataTable label="Usuários" className="min-w-[720px]">
@@ -366,20 +383,16 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
 
       </section>
 
-      {creatingAgent && (
-        <WaDialog variant="users" title="Adicionar usuário" onClose={() => setCreatingAgent(false)} size="max-w-2xl">
-          <div className="px-6 pb-5 pt-2">
-            <CreateAgentForm
-              embedded
-              onCreated={() => {
-                refresh();
-                setCreatingAgent(false);
-              }}
-              onCancel={() => setCreatingAgent(false)}
-            />
-          </div>
-        </WaDialog>
-      )}
+      {creatingAgent && (CreateAgentForm ? (
+        <CreateAgentForm
+          comoDialogo
+          onCreated={() => {
+            refresh();
+            setCreatingAgent(false);
+          }}
+          onCancel={() => setCreatingAgent(false)}
+        />
+      ) : <p role="status" className="sr-only">Abrindo o Adicionar usuário…</p>)}
       {confirmDialog}
       <SegredoGeradoDialog
         open={Boolean(senhaGerada)}

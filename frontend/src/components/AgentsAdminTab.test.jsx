@@ -263,7 +263,7 @@ describe('AgentsAdminTab', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /adicionar usuário/i }));
 
-    expect(screen.getByRole('heading', { name: /adicionar usuário/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /adicionar usuário/i })).toBeInTheDocument();
   });
 
   test('canceling the create-agent form hides it again', async () => {
@@ -271,7 +271,7 @@ describe('AgentsAdminTab', () => {
     render(<AgentsAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /adicionar usuário/i }));
-    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /cancelar/i }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /adicionar usuário/i })).toBeInTheDocument();

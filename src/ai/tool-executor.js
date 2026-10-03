@@ -31,6 +31,9 @@ const INSTRUCAO_IDENTIDADE = 'Ainda não sei quem é o cliente. Peça o CPF ou C
 // instrução acima fazia o modelo pedir de novo a cada tentativa de consulta (caso real: três
 // pedidos seguidos). A ação continua recusada do mesmo jeito.
 const INSTRUCAO_IDENTIDADE_JA_PEDIDA = 'Ainda não sei quem é o cliente, e o CPF ou CNPJ JÁ foi pedido: NÃO peça de novo agora. Responda ao que ele disse sem consultar nada; esta ferramenta só funciona depois de buscar_cliente com o documento.';
+// F1 (30/09/2026, terceira revisão): com o esclarecimento da cadeia disponível, a recusa não ordena pedir
+// (seria pedir em todo atendimento) nem proíbe (desmentiria a permissão). Quem decide se cabe é o modelo.
+const INSTRUCAO_IDENTIDADE_ESCLARECER = 'Ainda não sei quem é o cliente, e o CPF ou CNPJ já foi pedido; esta ferramenta só funciona depois de buscar_cliente com o documento. Se ele tentou responder sem o dado, você pode esclarecer uma vez o que falta; se não, responda ao que ele disse sem pedir de novo e sem consultar nada.';
 
 // Só entra em jogo quando o contrato pedido é o do terceiro (contexto.terceiro)
 // e a ferramenta NÃO está em FERRAMENTAS_PERMITIDAS_EM_TERCEIRO — as demais
@@ -228,7 +231,9 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     if (tool.exigeIdentidadeForte && perfilTriagem(contexto) && !emTerceiro
         && !(contexto.identidade && contexto.identidade.nivel === 'forte')) {
       const jaPedido = contexto.documento && contexto.documento.alvo === 'principal';
-      return recusa('identity_not_confirmed', nome, jaPedido ? INSTRUCAO_IDENTIDADE_JA_PEDIDA : INSTRUCAO_IDENTIDADE);
+      if (!jaPedido) return recusa('identity_not_confirmed', nome, INSTRUCAO_IDENTIDADE);
+      return recusa('identity_not_confirmed', nome, contexto.documento.esclarecimentoDisponivel
+        ? INSTRUCAO_IDENTIDADE_ESCLARECER : INSTRUCAO_IDENTIDADE_JA_PEDIDA);
     }
 
     // GATE DO ALVO FINANCEIRO (caso Fulana/Beltrana): com pedido de terceiro em andamento, uma

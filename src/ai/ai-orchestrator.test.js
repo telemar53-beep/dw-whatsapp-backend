@@ -2271,29 +2271,53 @@ describe('documento pendente: não repetir o pedido de CPF/CNPJ', () => {
       expect(vistas[0].sistema).not.toContain('DOCUMENTO JÁ PEDIDO');
     });
 
-    test('1. turno 2 (áudio, sem CPF): o pedido NÃO é repetido — a correção vem no laço', async () => {
-      roteiro(
-        final('Entendi! Para verificar, me informe seu CPF ou CNPJ, por favor.'),
-        final('Entendi, a luz vermelha indica que a conexão caiu. Sem o cadastro eu não consigo ver o status daqui.'),
-      );
+    // F1, terceira revisão (30/09/2026): o código já não separa "está explicando" de "tentou responder
+    // sem o dado" por lista de frases. Ele concede UM esclarecimento por cadeia de pedidos, e o prompt
+    // orienta o modelo a não usá-lo quando o cliente só explica — isso depende do modelo e fica para a
+    // avaliação com modelo real. O que continua determinístico: nunca três pedidos seguidos.
+    const ESCLARECEU = 'Para eu ver o status da conexão, preciso do CPF ou CNPJ do titular.';
+
+    test('1. turno 2 (áudio, sem CPF): o prompt não manda pedir quando ele só explica, e a resposta sem pedido passa intacta', async () => {
+      roteiro(final('Entendi, a luz vermelha indica que a conexão caiu. Sem o cadastro eu não consigo ver o status daqui.'));
       const r = await turno([t1, p1, t2]);
       expect(vistas[0].sistema).toContain('DOCUMENTO JÁ PEDIDO');
-      expect(vistas[1].ultima.content).toMatch(/NÃO peça de novo nesta resposta/);
+      expect(vistas[0].sistema).toMatch(/Se ele está explicando o problema ou pediu outra coisa, não peça de novo/);
+      expect(vistas).toHaveLength(1);
       expect(r.texto).toBe('Entendi, a luz vermelha indica que a conexão caiu. Sem o cadastro eu não consigo ver o status daqui.');
       expect(r.pedidoDeDocumento).toBeNull();
     });
 
-    test('2. turno 3 (ainda sem CPF): nem pela terceira vez — mesmo com o modelo insistindo, e a consulta segue bloqueada', async () => {
+    test('1a. turno 2: se o modelo usar o esclarecimento, ele passa sem correção e fica marcado — o esclarecimento da cadeia foi gasto', async () => {
+      roteiro(final(ESCLARECEU));
+      const r = await turno([t1, p1, t2]);
+      expect(vistas).toHaveLength(1);
+      expect(r.texto).toBe(ESCLARECEU);
+      expect(r.pedidoDeDocumento).toEqual({ alvo: 'principal' });
+    });
+
+    test('2. turno 3 depois de dois pedidos: nem pela terceira vez, mesmo com o modelo insistindo; a consulta segue bloqueada e o cliente fica sabendo o que pode fazer', async () => {
       executeTool.mockResolvedValueOnce({ ok: false, motivo: 'identity_not_confirmed', instrucao: 'Ainda não sei quem é o cliente, e o CPF ou CNPJ JÁ foi pedido: NÃO peça de novo agora.' });
       roteiro(
         chamada('consultar_status_todos_contratos'),
         final('Entendo. Me passa o CPF do titular para eu consultar?'),
         final('Certo. Qual o CPF ou CNPJ?'),
       );
-      const r = await turno([t1, p1, t2, r2, t3]);
+      const r = await turno([t1, p1, t2, pediu(ESCLARECEU), t3]);
       expect(executeTool.mock.calls[0][0]).toBe('consultar_status_todos_contratos');
-      expect(r.texto).toBe('Certo.');
-      expect(r.texto).not.toMatch(/CPF|CNPJ/);
+      expect(vistas[2].ultima.content).toMatch(/NÃO peça de novo nesta resposta/);
+      expect(r.texto.startsWith('Certo.')).toBe(true);
+      expect(r.texto).not.toMatch(/Qual o CPF|Me passa/);
+      expect(r.texto).toMatch(/não consigo localizar/);
+      expect(r.texto).toMatch(/atendente/);
+      expect(r.pedidoDeDocumento).toBeNull();
+    });
+
+    test('2b. turno 3 sem o esclarecimento gasto no turno 2 (a IA respondeu sem pedir): pedir ainda é possível — seria o segundo pedido, não o terceiro', async () => {
+      roteiro(final(ESCLARECEU));
+      const r = await turno([t1, p1, t2, r2, t3]);
+      expect(vistas).toHaveLength(1);
+      expect(r.texto).toBe(ESCLARECEU);
+      expect(r.pedidoDeDocumento).toEqual({ alvo: 'principal' });
     });
   });
 

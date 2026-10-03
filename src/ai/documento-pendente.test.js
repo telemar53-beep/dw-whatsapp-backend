@@ -1,6 +1,6 @@
 const {
   pedeDocumento, alvoDoPedido, estadoDoDocumento, violacoesDoDocumento, correcaoDoDocumento, respostaSemRepetirDocumento,
-  documentosNoTexto, documentoConfirmadoNoTurno, localizacaoDoTerceiro,
+  documentosNoTexto, documentoConfirmadoNoTurno, localizacaoDoTerceiro, recuperacaoComprovada,
 } = require('./documento-pendente');
 
 // Documento pendente (25/09/2026): caso real em que a IA pediu o CPF três vezes seguidas enquanto o
@@ -219,8 +219,13 @@ describe('o que a resposta não pode pedir', () => {
   const pendente = estado([entrada('caiu a internet'), pedido(PEDIDO), entrada('é que nada funciona')]);
   const ctx = (extra = {}) => ({ documento: pendente, identidade: SEM_IDENT, terceiro: null, triagemConcluida: null, atendimentoEncerrado: false, ...extra });
 
-  test('2. repetir o pedido sem avanço é barrado; responder sem pedir passa', () => {
-    expect(violacoesDoDocumento('Entendi! Para verificar, me informe seu CPF.', ctx())).toEqual(['documento_repetido']);
+  // Desenho de 30/09/2026 (F1, terceira revisão): sem mudança relevante, UM esclarecimento por cadeia
+  // de pedidos é permitido — se ele é necessário, quem decide é o modelo, lendo a conversa. O segundo
+  // repedido continua barrado: o caso real de 25/09 (três pedidos seguidos) segue impossível.
+  test('2. sem avanço: o primeiro repedido é o esclarecimento permitido; depois dele, repetir é barrado', () => {
+    expect(violacoesDoDocumento('Entendi! Para verificar, me informe seu CPF.', ctx())).toEqual([]);
+    const esclarecido = estado([entrada('caiu a internet'), pedido(PEDIDO), entrada('é que nada funciona'), pedido('Para verificar, preciso do CPF ou CNPJ.'), entrada('continua sem funcionar')]);
+    expect(violacoesDoDocumento('Me informe seu CPF, por favor.', ctx({ documento: esclarecido }))).toEqual(['documento_repetido']);
     expect(violacoesDoDocumento('Entendi, sem o cadastro não consigo ver o status da conexão.', ctx())).toEqual([]);
   });
 
@@ -313,5 +318,191 @@ describe('correção e resposta sem o pedido repetido', () => {
     expect(respostaSemRepetirDocumento(PEDIDO, ['documento_repetido'], { documento: irritado })).toBe('Entendi, desculpe a insistência.');
     expect(respostaSemRepetirDocumento('Me passa o CPF?', ['documento_apos_encaminhar'], { triagemConcluida: { setor: 'Suporte' }, triagem: { noturno: { ativo: false } } }))
       .toBe('Seu atendimento vai para o setor Suporte e um atendente continua daqui.');
+  });
+});
+
+// F1 — nome no lugar do documento, desenho de 30/09/2026 (terceira revisão). O código não tenta mais
+// reconhecer nomes, adiamentos ou recusas por listas de palavras: controla o que é verificável —
+// documento já pedido, quantos pedidos a cadeia já teve, alvo, e as regras preexistentes de irritação,
+// mudança de assunto e número recebido — e concede UM esclarecimento por cadeia. Se ele é necessário,
+// é o modelo que decide, lendo a conversa. Nada disso identifica, muda o alvo ou libera ferramenta.
+describe('esclarecimento limitado (F1)', () => {
+  const ESCLARECIMENTO = 'Para localizar seu cadastro, preciso do CPF ou CNPJ do titular — só o nome não basta.';
+  const REPEDIDO = 'Me passa o CPF ou CNPJ do titular, por favor?';
+  const ctx = (documento, extra = {}) => ({ documento, identidade: SEM_IDENT, terceiro: null, triagemConcluida: null, atendimentoEncerrado: false, ...extra });
+  const depoisDoPedido = (texto) => estado([entrada('manda o boleto'), pedido(PEDIDO), entrada(texto)]);
+  const depoisDoEsclarecimento = (texto) => estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('Fulana de Tal Exemplo'), pedido(ESCLARECIMENTO), entrada(texto)]);
+
+  describe('o esclarecimento não depende de reconhecer o que o cliente escreveu', () => {
+    test.each([
+      'Fulana Luz', 'sou Fulana Luz', 'sou a Fulana Luz', 'meu nome é Fulana Luz', 'Nome: Fulana',
+      'meu nome é Fulana, quero o boleto', 'meu nome é Fulana e quero o boleto', 'é que nada funciona', 'ok',
+    ])('depois do pedido, "%s": um esclarecimento é permitido, e nada é identificado', (texto) => {
+      const e = depoisDoPedido(texto);
+      expect(e).toMatchObject({ pedidosNaCadeia: 1, esclarecimentoUsado: false, esclarecimentoDisponivel: true, documentoRecebido: false });
+      expect(violacoesDoDocumento(ESCLARECIMENTO, ctx(e))).toEqual([]);
+    });
+  });
+
+  describe('o limite: um esclarecimento por cadeia de pedidos', () => {
+    test.each(['Fulana de Tal Exemplo', 'Fulana Luz', 'é que eu preciso pagar hoje', 'ok'])(
+      'depois do esclarecimento, "%s": pedir de novo é repetição', (texto) => {
+        const e = depoisDoEsclarecimento(texto);
+        expect(e).toMatchObject({ pedidosNaCadeia: 2, esclarecimentoUsado: true, esclarecimentoDisponivel: false });
+        expect(violacoesDoDocumento(REPEDIDO, ctx(e))).toEqual(['documento_repetido']);
+      },
+    );
+
+    test('resposta da IA sem pedido no meio não gasta o esclarecimento', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('é urgente'), resposta('Entendo.'), entrada('Fulana de Tal Exemplo')]);
+      expect(e).toMatchObject({ pedidosNaCadeia: 1, esclarecimentoDisponivel: true });
+    });
+
+    test('três turnos sem o dado não viram três pedidos', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('Fulana'), pedido(ESCLARECIMENTO), entrada('Fulana'), resposta('Sem o CPF não consigo localizar.'), entrada('Fulana')]);
+      expect(violacoesDoDocumento(REPEDIDO, ctx(e))).toEqual(['documento_repetido']);
+    });
+  });
+
+  describe('as regras preexistentes decidem antes do esclarecimento', () => {
+    test('irritação: nem o primeiro repedido passa', () => {
+      const e = depoisDoPedido('já falei meu nome');
+      expect(e).toMatchObject({ irritado: true, esclarecimentoDisponivel: false });
+      expect(violacoesDoDocumento(REPEDIDO, ctx(e))).toEqual(['documento_repetido']);
+    });
+
+    test('mudança de assunto: pedir o documento é forçar formulário', () => {
+      const e = depoisDoPedido('Na verdade só queria saber se vocês atendem meu bairro.');
+      expect(e).toMatchObject({ mudouDeAssunto: true, esclarecimentoDisponivel: false });
+      expect(violacoesDoDocumento(REPEDIDO, ctx(e))).toEqual(['documento_repetido']);
+    });
+
+    test('número novo depois do esclarecimento: pedir para conferir continua sendo avanço (regra de 25/09)', () => {
+      const e = depoisDoEsclarecimento('98991234567');
+      expect(e).toMatchObject({ documentoRecebido: true, mudancaRelevante: true });
+      expect(violacoesDoDocumento('Não localizei com esse número. Confere o CPF ou CNPJ?', ctx(e))).toEqual([]);
+    });
+
+    test('o mesmo número de novo depois da conferência: repetir é barrado', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('98991234567'), pedido('Confere o CPF ou CNPJ?'), entrada('98991234567')]);
+      expect(violacoesDoDocumento('Confere o CPF?', ctx(e))).toEqual(['documento_repetido']);
+    });
+
+    test('pedido de OUTRA pessoa abre cadeia nova: o esclarecimento do terceiro não foi gasto pelo pedido do titular', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('é da minha mãe'), pedido('Qual o CPF ou CNPJ da sua mãe?', 'terceiro'), entrada('Beltrana de Tal')]);
+      expect(e).toMatchObject({ alvo: 'terceiro', pedidosNaCadeia: 1, esclarecimentoDisponivel: true });
+    });
+
+    test('pedido de outro alvo, mesmo sem fala que troque o alvo no meio, não soma na cadeia', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('ok'), pedido('Qual o CPF ou CNPJ dela?', 'terceiro'), entrada('Beltrana de Tal')]);
+      expect(e).toMatchObject({ alvo: 'terceiro', pedidosNaCadeia: 1, esclarecimentoDisponivel: true });
+    });
+
+    test('terceiro novo no meio da cadeia de terceiro também recomeça a contagem', () => {
+      const e = estadoDoDocumento(
+        [entrada('quero o pix da Beltrana'), pedido('Qual o CPF da Beltrana?', 'terceiro'), entrada('um instante'), entrada('agora quero o da minha mãe'), pedido('Qual o CPF da sua mãe?', 'terceiro'), entrada('Beltrana de Tal')],
+        { identidade: FULANA, documentoDeQuemFala: CPF_A },
+      );
+      expect(e).toMatchObject({ pedidosNaCadeia: 1, esclarecimentoDisponivel: true });
+    });
+
+    test('quem fala identificado: a pendência do próprio termina', () => {
+      expect(depoisDoPedido('Fulana') && estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('Fulana')], { identidade: FULANA })).toBeNull();
+    });
+
+    test('o próprio documento continua proibido a quem já está identificado', () => {
+      expect(violacoesDoDocumento('Me informe seu CPF, por favor.', ctx(depoisDoPedido('Fulana'), { identidade: FULANA }))).toEqual(['documento_ja_identificado']);
+    });
+
+    test('documento na mesma mensagem: segue para verificação (recebido, não confirmado)', () => {
+      expect(depoisDoPedido('meu nome é Fulana, cpf 529.982.247-25')).toMatchObject({ documentoRecebido: true });
+    });
+  });
+
+  describe('correção no laço depois do esclarecimento', () => {
+    test('não manda pedir de novo e orienta oferecer enviar depois ou atendente', () => {
+      const t = correcaoDoDocumento(['documento_repetido'], ctx(depoisDoEsclarecimento('Fulana')));
+      expect(t).toMatch(/NÃO peça de novo/);
+      expect(t).toMatch(/atendente/);
+      expect(t).toMatch(/concluir_triagem/);
+    });
+
+    test('com a oferta já feita, manda não repeti-la', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('Fulana'), pedido(ESCLARECIMENTO), entrada('Fulana'), resposta('Sem o CPF não consigo localizar. Você prefere me enviar depois ou seguir com um atendente?'), entrada('Fulana')]);
+      expect(correcaoDoDocumento(['documento_repetido'], ctx(e))).toMatch(/não repita/);
+    });
+  });
+
+  describe('recuperação quando o modelo insiste depois do esclarecimento', () => {
+    const repetido = depoisDoEsclarecimento('Fulana de Tal Exemplo');
+    const semPromessa = (r) => expect(r).not.toMatch(/encaminhei|encaminhado|transferi|já está com (?:um|o) atendente/i);
+
+    test('só o pedido: limitação e continuidade (enviar depois ou atendente), sem novo pedido nem promessa', () => {
+      const r = respostaSemRepetirDocumento('Preciso do seu CPF ou CNPJ para localizar o cadastro.', ['documento_repetido'], { documento: repetido });
+      expect(r).toMatch(/não consigo localizar/);
+      expect(r).toMatch(/atendente/);
+      expect(r).toMatch(/depois/);
+      expect(pedeDocumento(r)).toBe(false);
+      semPromessa(r);
+    });
+
+    test('o texto que sobra só cita "documento": completa a limitação e a oferta', () => {
+      const r = respostaSemRepetirDocumento('Assim que tiver o documento, me avise. Me passa o CPF?', ['documento_repetido'], { documento: repetido });
+      expect(r.startsWith('Assim que tiver o documento, me avise.')).toBe(true);
+      expect(r).toMatch(/não consigo localizar/);
+      expect(r).toMatch(/atendente/);
+    });
+
+    test('o modelo já explicou a limitação: só a oferta entra, sem explicação duplicada', () => {
+      const r = respostaSemRepetirDocumento('Sem o CPF eu não consigo localizar seu cadastro por aqui. Pode me mandar o CPF ou CNPJ?', ['documento_repetido'], { documento: repetido });
+      expect(r.startsWith('Sem o CPF eu não consigo localizar seu cadastro por aqui.')).toBe(true);
+      expect(r.match(/não consigo localizar/g)).toHaveLength(1);
+      expect(r).toMatch(/atendente/);
+    });
+
+    test('o modelo já explicou e ofereceu: nada entra', () => {
+      const texto = 'Sem o CPF eu não consigo localizar seu cadastro por aqui. Você prefere me enviar depois ou seguir com um atendente? Me passa o CPF?';
+      expect(respostaSemRepetirDocumento(texto, ['documento_repetido'], { documento: repetido }))
+        .toBe('Sem o CPF eu não consigo localizar seu cadastro por aqui. Você prefere me enviar depois ou seguir com um atendente?');
+    });
+
+    test('a oferta já foi feita e o cliente respondeu: a oferta não se repete', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('Fulana'), pedido(ESCLARECIMENTO), entrada('Fulana'), resposta('Sem o CPF não consigo localizar. Você prefere me enviar depois ou seguir com um atendente?'), entrada('Fulana')]);
+      const r = respostaSemRepetirDocumento('Preciso do seu CPF ou CNPJ para localizar o cadastro.', ['documento_repetido'], { documento: e });
+      expect(r).toMatch(/não consigo localizar/);
+      expect(r).not.toMatch(/atendente/);
+    });
+
+    test('pedido de terceiro: fala do titular, nunca do cadastro de quem fala', () => {
+      const e = estadoDoDocumento(
+        [entrada('quero o boleto da minha mãe'), pedido('Qual o CPF da sua mãe?', 'terceiro'), entrada('Beltrana de Tal'), pedido('Preciso do CPF dela, o nome não basta.', 'terceiro'), entrada('Beltrana de Tal')],
+        { identidade: FULANA, documentoDeQuemFala: CPF_A },
+      );
+      expect(e).toMatchObject({ alvo: 'terceiro', esclarecimentoUsado: true });
+      const r = respostaSemRepetirDocumento('Preciso do CPF dela para localizar.', ['documento_repetido'], { documento: e });
+      expect(r).toMatch(/titular/);
+      expect(r).not.toMatch(/seu cadastro/);
+    });
+
+    test('fora do contexto comprovado, a troca de sempre: antes do esclarecimento, irritação, mudança de assunto e cadeia com número', () => {
+      expect(respostaSemRepetirDocumento(PEDIDO, ['documento_repetido'], { documento: depoisDoPedido('é que nada funciona') })).toBe('Entendi.');
+      expect(respostaSemRepetirDocumento(PEDIDO, ['documento_repetido'], { documento: depoisDoEsclarecimento('já falei meu nome') })).toBe('Entendi, desculpe a insistência.');
+      expect(respostaSemRepetirDocumento(PEDIDO, ['documento_repetido'], { documento: depoisDoEsclarecimento('Na verdade só queria saber se vocês atendem meu bairro.') })).toBe('Entendi.');
+      const comNumero = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('98991234567'), pedido('Confere o CPF ou CNPJ?'), entrada('é esse mesmo')]);
+      expect(respostaSemRepetirDocumento(PEDIDO, ['documento_repetido'], { documento: comNumero })).toBe('Entendi.');
+    });
+  });
+
+  // O contexto comprovado da recuperação é fato do histórico, não leitura da frase: o módulo de prompt usa
+  // o mesmo predicado, para a instrução e a troca final não divergirem.
+  describe('contexto comprovado da recuperação', () => {
+    test('só depois do esclarecimento, sem irritação, sem mudança de assunto e sem número na cadeia', () => {
+      expect(recuperacaoComprovada(depoisDoEsclarecimento('Fulana'))).toBe(true);
+      expect(recuperacaoComprovada(depoisDoPedido('Fulana'))).toBe(false);
+      expect(recuperacaoComprovada(depoisDoEsclarecimento('já falei meu nome'))).toBe(false);
+      expect(recuperacaoComprovada(depoisDoEsclarecimento('Na verdade só queria saber se vocês atendem meu bairro.'))).toBe(false);
+      expect(recuperacaoComprovada(estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('98991234567'), pedido('Confere o CPF ou CNPJ?'), entrada('é esse mesmo')]))).toBe(false);
+      expect(recuperacaoComprovada(null)).toBe(false);
+    });
   });
 });

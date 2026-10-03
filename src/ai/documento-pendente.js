@@ -107,6 +107,28 @@ const PARENTES = 'mae|pai|filho|filha|irmao|irma|avo|tio|tia|sogro|sogra|vizinho
 // Uma pessoa NOVA (parente, "outra pessoa"); "dela"/"dele" apontam para quem já está no pedido.
 const NOVO_TERCEIRO = new RegExp(`\\b(?:d[aoe]|pr[ao]|para [ao]) (?:minha |meu |sua |seu )?(?:${PARENTES})\\b|\\boutra pessoa\\b|\\boutr[oa] cliente\\b`);
 
+// ------------------------------------------------------------------------------------------------
+// Esclarecimento limitado (F1 — nome no lugar do documento; decisão do gerente, 30/09/2026, terceira
+// revisão). Casos C09 e C14 do diagnóstico de 29/09: o cliente respondeu ao pedido do CPF com o nome, e a
+// guarda tratava explicar-e-pedir como repetição — a troca final deixava só "Claro." ou "Entendi.".
+//
+// O código NÃO tenta mais reconhecer nome, apresentação, adiamento ou recusa por listas de palavras (a
+// primeira e a segunda versões faziam isso, e cada frase nova pedia outro remendo). Ele controla o que é
+// verificável no histórico: que o documento já foi pedido, quantos pedidos seguidos do MESMO alvo a
+// cadeia já teve, se chegou número, e as regras preexistentes (irritação, mudança de assunto, alvo novo).
+// Com isso concede UM esclarecimento por cadeia: o segundo pedido é permitido (possibilidade, não ordem —
+// se ele cabe, quem decide é o modelo, lendo a conversa, orientado pelo prompt); o terceiro, nunca. Nada
+// disso identifica, muda o alvo, libera ferramenta ou anuncia encaminhamento.
+const ESCLARECIMENTOS_POR_CADEIA = 1;
+const ehPedidoMarcado = (m) => Boolean(m && m.direction === 'outbound' && m.sentBy === 'ai'
+  && m.metadata && m.metadata.pedidoDeDocumento);
+const alvoMarcado = (m) => (m.metadata.pedidoDeDocumento.alvo === 'terceiro' ? 'terceiro' : 'principal');
+// O contexto comprovado para a recuperação e para a orientação de oferecer continuidade: esclarecimento
+// já usado, sem irritação (tem caminho próprio), sem mudança de assunto (o assunto novo é o que se
+// responde) e sem número na cadeia (lá o caminho é a conferência). Tudo fato do histórico.
+const recuperacaoComprovada = (pendente) => Boolean(pendente && pendente.esclarecimentoUsado
+  && !pendente.irritado && !pendente.mudouDeAssunto && !pendente.numeroNaCadeia);
+
 const falaDoCliente = (m) => m && m.direction === 'inbound' && !(m.metadata && m.metadata.autorrespostaProvavel === true);
 const textoDaFala = (m) => (m.messageType === 'audio' ? m.transcription : m.content) || '';
 
@@ -131,11 +153,10 @@ function estadoDoDocumento(historico, { identidade = null, documentoDeQuemFala =
   const lista = Array.isArray(historico) ? historico : [];
   let indice = -1;
   for (let i = lista.length - 1; i >= 0; i -= 1) {
-    const m = lista[i];
-    if (m && m.direction === 'outbound' && m.sentBy === 'ai' && m.metadata && m.metadata.pedidoDeDocumento) { indice = i; break; }
+    if (ehPedidoMarcado(lista[i])) { indice = i; break; }
   }
   if (indice < 0) return null;
-  const alvo = lista[indice].metadata.pedidoDeDocumento.alvo === 'terceiro' ? 'terceiro' : 'principal';
+  const alvo = alvoMarcado(lista[indice]);
   if (alvo === 'principal' && identificado({ identidade })) return null;
   // Terceiro localizado DEPOIS deste pedido (o escopo persistido diz quando). Localização anterior —
   // de outro terceiro, antes de um pedido novo — não encerra. Pedido sem hora (legado): sem prova.
@@ -143,6 +164,24 @@ function estadoDoDocumento(historico, { identidade = null, documentoDeQuemFala =
   const localizadoDepois = terceiroLocalizadoEm != null && Number.isFinite(pedidoEm)
     && new Date(terceiroLocalizadoEm).getTime() > pedidoEm;
   if (alvo === 'terceiro' && localizadoDepois) return null;
+
+  // A cadeia: pedidos marcados seguidos do MESMO alvo, sem pessoa nova no meio. Resposta da IA sem pedido
+  // não interrompe; pedido de outro alvo, ou fala que troca o alvo ("é da minha mãe"), começa outra.
+  let inicioDaCadeia = indice;
+  let pedidosNaCadeia = 1;
+  for (let i = indice - 1; i >= 0; i -= 1) {
+    const m = lista[i];
+    if (falaDoCliente(m) && mudouOAlvo(alvo, textoDaFala(m))) break;
+    if (!ehPedidoMarcado(m)) continue;
+    if (alvoMarcado(m) !== alvo) break;
+    inicioDaCadeia = i;
+    pedidosNaCadeia += 1;
+  }
+  const esclarecimentoUsado = pedidosNaCadeia > ESCLARECIMENTOS_POR_CADEIA;
+  // Chegou número em algum ponto da cadeia: o caminho é o da conferência (regra de 25/09), não o de quem
+  // respondeu sem o dado.
+  const numeroNaCadeia = lista.slice(inicioDaCadeia + 1).filter(falaDoCliente)
+    .some((m) => documentosNoTexto(textoDaFala(m)).length > 0);
 
   const antes = lista.slice(0, indice).filter(falaDoCliente).map(textoDaFala).filter(Boolean);
   const anterior = antes[antes.length - 1];
@@ -171,15 +210,26 @@ function estadoDoDocumento(historico, { identidade = null, documentoDeQuemFala =
     else if (deAgora && assuntoDoPedido && deAgora !== assuntoDoPedido) relevante = true;
   }
   const ultima = depois[depois.length - 1];
+  const irritado = Boolean(ultima && IRRITACAO.test(normalizar(ultima)));
+  const mudouDeAssunto = mudou && !retomou;
   return {
     alvo,
     assunto: assuntoDoPedido,
-    mudouDeAssunto: mudou && !retomou,
+    mudouDeAssunto,
     retomou,
     mudancaRelevante: relevante,
-    irritado: Boolean(ultima && IRRITACAO.test(normalizar(ultima))),
+    irritado,
     mandouOProprioDocumento: mandouOProprio,
     documentoRecebido: recebido,
+    pedidosNaCadeia,
+    esclarecimentoUsado,
+    // Pode pedir mais uma vez, se o modelo julgar que o cliente tentou responder sem o dado. Irritação e
+    // mudança de assunto (regras preexistentes) decidem antes: nelas, nem o primeiro repedido passa.
+    esclarecimentoDisponivel: !esclarecimentoUsado && !irritado && !mudouDeAssunto,
+    numeroNaCadeia,
+    // A IA já ofereceu, depois deste pedido, seguir com um atendente: a oferta não se repete.
+    ofertaFeita: lista.slice(indice + 1).some((m) => m && m.direction === 'outbound' && m.sentBy === 'ai'
+      && /\batendente\b/.test(normalizar(m.content))),
   };
 }
 
@@ -228,7 +278,10 @@ function violacoesDoDocumento(texto, contexto) {
   const pedeODeQuemFala = pedidos.some((f) => DE_QUEM_FALA.test(f) && !DE_OUTRA_PESSOA.test(f));
   if (identificado(c) && pedeODeQuemFala) return ['documento_ja_identificado'];
   const pendente = pendenteAgora(c);
-  if (pendente && (pendente.irritado || !pendente.mudancaRelevante)) return ['documento_repetido'];
+  // Sem mudança relevante, pedir de novo só passa se o esclarecimento da cadeia ainda está disponível.
+  if (pendente && (pendente.irritado || (!pendente.mudancaRelevante && !pendente.esclarecimentoDisponivel))) {
+    return ['documento_repetido'];
+  }
   if (!pendente && terceiroLocalizado(c) && !pedeODeQuemFala
       && !NOVO_TERCEIRO.test(normalizar(c.ultimaFala))) {
     return ['documento_terceiro_localizado'];
@@ -254,6 +307,11 @@ function correcaoDoDocumento(violacoes, contexto) {
     const deQuem = pendente.alvo === 'terceiro' ? 'o CPF ou CNPJ da OUTRA pessoa (o de quem fala não serve)' : 'o CPF ou CNPJ';
     partes.push(`Você já pediu ${deQuem} e ele ainda não informou: NÃO peça de novo nesta resposta, nem com outras palavras. Responda ao que ele disse agora; o que depende da identificação continua sem poder ser feito.`);
     if (pendente.mudouDeAssunto) partes.push('Ele mudou de assunto: responda ao assunto novo.');
+    if (recuperacaoComprovada(pendente) && pendente.ofertaFeita) {
+      partes.push('Você já esclareceu o que falta e JÁ ofereceu enviar depois ou seguir com um atendente: não repita a oferta. Responda ao que ele disse; se ainda precisar, diga em uma frase, sem repreender, que sem o CPF ou CNPJ não dá para localizar o cadastro por aqui. Se ele pedir o atendente, chame concluir_triagem antes de anunciar.');
+    } else if (recuperacaoComprovada(pendente)) {
+      partes.push('Você já esclareceu o que falta. Responda ao que ele disse; se ele ainda não tem como seguir, diga, sem repreender, que sem o CPF ou CNPJ não dá para localizar o cadastro por aqui e pergunte se ele prefere enviar depois ou seguir com um atendente. Só diga que encaminhou depois de chamar concluir_triagem, com "identificação pendente" no resumo.');
+    }
     if (pendente.irritado) {
       partes.push('Ele se incomodou com o pedido: não discuta nem se justifique. Se não der para seguir sem o cadastro, encaminhe com concluir_triagem, com "identificação pendente" no resumo.');
     }
@@ -271,10 +329,33 @@ function fraseDoEncaminhamento(contexto) {
     : `Seu atendimento vai para o setor ${setor} e um atendente continua daqui.`;
 }
 
+// Recuperação da F1 — o modelo insistiu no pedido DEPOIS do esclarecimento da cadeia. Tirado o pedido, o
+// cliente precisa saber POR QUE nada anda e O QUE pode fazer (revisão gerencial de 30/09/2026): a
+// limitação, e a oferta de enviar depois ou seguir com um atendente — sem novo pedido, sem afirmar
+// encaminhamento, sem repetir a oferta já feita e sem duplicar o que o modelo já escreveu. Só no contexto
+// comprovado: esclarecimento já usado, sem irritação (tem caminho próprio), sem mudança de assunto (o
+// assunto novo é o que se responde) e sem número na cadeia (lá o caminho é a conferência). Fora dele, a
+// troca final continua a mesma. "do titular" serve ao alvo próprio e ao terceiro.
+const SEM_DOCUMENTO_NAO_LOCALIZA = 'Sem o CPF ou CNPJ do titular, não consigo localizar o cadastro por aqui.';
+const OFERTA_DE_CONTINUIDADE = 'Se preferir, você pode me enviar depois ou seguir com um atendente.';
+// "Explica a limitação" pede o documento E a falta dele — citar "documento" sozinho não basta.
+const explicaALimitacao = (t) => /\b(?:cpf|cnpj|documento)\b/.test(t)
+  && /\b(?:nao consigo|nao da|nao e possivel|nao tenho como|sem ele|sem o|so com o|precis\w*)\b/.test(t);
+const ofereceContinuidade = (t) => /\batendente\b/.test(t)
+  || (/\b(?:depois|mais tarde|quando (?:tiver|puder)|assim que)\b/.test(t) && /\b(?:envi|mand|pass)\w*/.test(t));
+
 /** Se o modelo insistir: a resposta perde só a(s) frase(s) do pedido; sem nada útil, uma frase curta. */
 function respostaSemRepetirDocumento(texto, violacoes, contexto) {
   const c = contexto || {};
   const resto = frasesDe(texto).filter((f) => !pedeNaFrase(f)).join(' ').trim();
+  const pendente = c.documento;
+  if (violacoes.includes('documento_repetido') && recuperacaoComprovada(pendente)) {
+    const lido = normalizar(resto);
+    const partes = resto ? [resto] : [];
+    if (!explicaALimitacao(lido)) partes.push(SEM_DOCUMENTO_NAO_LOCALIZA);
+    if (!pendente.ofertaFeita && !ofereceContinuidade(lido)) partes.push(OFERTA_DE_CONTINUIDADE);
+    return partes.join(' ');
+  }
   if (resto) return resto;
   if (violacoes.includes('documento_apos_encaminhar') && fraseDoEncaminhamento(c)) return fraseDoEncaminhamento(c);
   if (c.documento && c.documento.irritado) return 'Entendi, desculpe a insistência.';
@@ -283,5 +364,5 @@ function respostaSemRepetirDocumento(texto, violacoes, contexto) {
 
 module.exports = {
   pedeDocumento, alvoDoPedido, documentosNoTexto, estadoDoDocumento, violacoesDoDocumento, correcaoDoDocumento,
-  respostaSemRepetirDocumento, documentoConfirmadoNoTurno, localizacaoDoTerceiro,
+  respostaSemRepetirDocumento, documentoConfirmadoNoTurno, localizacaoDoTerceiro, recuperacaoComprovada,
 };

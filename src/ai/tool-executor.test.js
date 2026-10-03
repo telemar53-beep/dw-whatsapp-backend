@@ -277,6 +277,31 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
     expect(r.instrucao).toBe('Ainda não sei quem é o cliente, e o CPF ou CNPJ JÁ foi pedido: NÃO peça de novo agora. Responda ao que ele disse sem consultar nada; esta ferramenta só funciona depois de buscar_cliente com o documento.');
   });
 
+  // F1, terceira revisão (30/09/2026): com o esclarecimento da cadeia disponível, a recusa não pode
+  // mandar pedir (seria ordem em todo atendimento) nem proibir (desmentiria a permissão) — deixa a
+  // decisão ao modelo. A ação continua bloqueada.
+  test('13b. documento já pedido e esclarecimento disponível: ação bloqueada, sem ordem de pedir e sem proibir o esclarecimento', async () => {
+    const tool = toolFake({ exigeIdentidadeForte: true });
+    findTool.mockReturnValue(tool);
+    isToolEnabled.mockResolvedValue(true);
+    const documento = { alvo: 'principal', mudancaRelevante: false, irritado: false, pedidosNaCadeia: 1, esclarecimentoUsado: false, esclarecimentoDisponivel: true };
+    const r = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'none' }, documento });
+    expect(r.motivo).toBe('identity_not_confirmed');
+    expect(tool.executar).not.toHaveBeenCalled();
+    expect(r.instrucao).not.toMatch(/NÃO peça de novo/);
+    expect(r.instrucao).not.toMatch(/Peça o CPF/);
+    expect(r.instrucao).toMatch(/esclarecer uma vez/);
+    expect(r.instrucao).toMatch(/só funciona depois de buscar_cliente com o documento/);
+  });
+
+  test('13c. esclarecimento já usado: volta a recusa que não manda pedir de novo', async () => {
+    findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
+    isToolEnabled.mockResolvedValue(true);
+    const documento = { alvo: 'principal', mudancaRelevante: false, irritado: false, pedidosNaCadeia: 2, esclarecimentoUsado: true, esclarecimentoDisponivel: false };
+    const r = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'none' }, documento });
+    expect(r.instrucao).toMatch(/NÃO peça de novo agora/);
+  });
+
   test('as outras recusas não ganham instrução (detalhe delas é texto interno)', async () => {
     findTool.mockReturnValue(null);
     const r = await executeTool('consultar_ip', {}, CONTEXTO);

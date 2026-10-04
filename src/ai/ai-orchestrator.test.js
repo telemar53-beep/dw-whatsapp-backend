@@ -1194,6 +1194,62 @@ describe('perfil de triagem', () => {
     });
   });
 
+  // C4#3 (03/10/2026): encaminhamento só se afirma com a conclusão confirmada. A guarda acima exige a conclusão uma
+  // vez; depois de uma segunda tentativa sem sucesso, o anúncio saía como estava.
+  describe('anúncio depois de concluir_triagem sem confirmação', () => {
+    const CONCLUIR = { message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"pediu atendente","confianca":0.9,"pendenciasObrigatorias":[]}' } }] }, usage: {} };
+    const turnoDeTriagem = () => runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+    test.each([
+      ['erro na gravação', { ok: false, motivo: 'execution_error', detalhe: 'banco fora' }],
+      ['tempo esgotado (resultado desconhecido)', { ok: false, motivo: 'timeout', detalhe: 'concluir_triagem' }],
+      ['recusa por pendência', { ok: true, resultado: { concluido: false, pendenciasObrigatorias: ['CPF'], instrucao: 'x' } }],
+    ])('%s nas duas tentativas: a frase do anúncio sai e entra a de transferência não confirmada', async (_nome, resposta) => {
+      createChatCompletion
+        .mockResolvedValueOnce(CONCLUIR)
+        .mockResolvedValueOnce({ message: { content: 'Vou encaminhar seu atendimento para o Financeiro.' }, usage: {} })
+        .mockResolvedValueOnce(CONCLUIR)
+        .mockResolvedValueOnce({ message: { content: 'Um atendente continua daqui. Qualquer dúvida, é só chamar.' }, usage: {} });
+      executeTool.mockResolvedValue(resposta);
+
+      const r = await turnoDeTriagem();
+
+      expect(executeTool).toHaveBeenCalledTimes(2);
+      expect(r.triagemConcluida).toBeNull();
+      expect(r.texto).toBe('Qualquer dúvida, é só chamar. Ainda não consegui confirmar a sua transferência para um atendente.');
+    });
+
+    test('a segunda tentativa confirma: o anúncio sai como o modelo escreveu', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce(CONCLUIR)
+        .mockResolvedValueOnce({ message: { content: 'Vou encaminhar seu atendimento para o Financeiro.' }, usage: {} })
+        .mockResolvedValueOnce(CONCLUIR)
+        .mockResolvedValueOnce({ message: { content: 'Seu atendimento vai para o setor Financeiro e um atendente continua daqui.' }, usage: {} });
+      executeTool
+        .mockResolvedValueOnce({ ok: false, motivo: 'timeout', detalhe: 'concluir_triagem' })
+        .mockImplementationOnce(async (_nome, _args, ctx) => {
+          ctx.triagemConcluida = { setor: 'Financeiro' };
+          return { ok: true, resultado: { concluido: true, setor: 'Financeiro' } };
+        });
+
+      const r = await turnoDeTriagem();
+
+      expect(r.triagemConcluida).toEqual({ setor: 'Financeiro' });
+      expect(r.texto).toBe('Seu atendimento vai para o setor Financeiro e um atendente continua daqui.');
+    });
+
+    test('só o anúncio vira "não confirmado": sem anúncio, o texto do modelo fica inteiro', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce(CONCLUIR)
+        .mockResolvedValueOnce({ message: { content: 'Não consegui concluir agora. Pode me dizer o endereço?' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: false, motivo: 'execution_error', detalhe: 'banco fora' });
+
+      const r = await turnoDeTriagem();
+
+      expect(r.texto).toBe('Não consegui concluir agora. Pode me dizer o endereço?');
+    });
+  });
+
   // À noite a IA age sozinha: se ela ANUNCIAR uma liberação ou um
   // encaminhamento que não aconteceram, ninguém corrige antes do cliente ler.
   describe('afirmações que precisam de fato', () => {

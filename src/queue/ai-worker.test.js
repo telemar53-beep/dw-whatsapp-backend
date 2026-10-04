@@ -1895,7 +1895,7 @@ describe('ai-worker — triagem', () => {
 
         expect(enqueueOutboundMessage).toHaveBeenCalledWith({
           conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
-          content: 'Prontinho, Willemberg! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das 08:00. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?',
+          content: 'Prontinho, Willemberg! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das 08:00. Já deixei seu atendimento na fila para acompanhamento. Você consegue testar se a internet voltou?',
         });
         expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({
           summary: expect.stringMatching(/desbloqueio em confiança realizado/i),

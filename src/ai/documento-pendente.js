@@ -330,7 +330,8 @@ function fraseDoEncaminhamento(contexto) {
   const noturno = contexto.triagem && contexto.triagem.noturno;
   return noturno && noturno.ativo
     ? `Seu atendimento ficou registrado para o setor ${setor} e nossa equipe dá continuidade a partir das ${noturno.retornoAs}.`
-    : `Seu atendimento vai para o setor ${setor} e um atendente continua daqui.`;
+    // Conclusão do atendimento (04/10/2026): fila, não atendimento iniciado.
+    : `Seu atendimento entrou na fila do setor ${setor}. Um atendente responde por aqui assim que estiver disponível.`;
 }
 
 // Recuperação da F1 — o modelo insistiu no pedido DEPOIS do esclarecimento da cadeia. Tirado o pedido, o

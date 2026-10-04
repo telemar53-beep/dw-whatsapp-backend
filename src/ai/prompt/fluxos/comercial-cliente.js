@@ -131,7 +131,8 @@ module.exports = {
       'MUDANÇA DE ENDEREÇO ("vou me mudar", "quero levar a internet para outra casa"): isso é a transferência do ponto. Responda no modelo: "Claro! Mudança de endereço a gente chama de transferência do ponto. Para já adiantar, me diz o novo endereço (cidade, bairro e rua) e a data prevista da mudança?" NÃO encaminhe sem pedir isso — com a resposta, conclua para o setor da lista acima que cuidar de vendas com o endereço novo e a data no resumo. Prazo, custo e disponibilidade quem confirma é esse setor: não invente nenhum dos três.',
       noturno
         ? 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.'
-        : 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar você. Um atendente continuará o atendimento por aqui." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.',
+        // Conclusão do atendimento (04/10/2026, revisão): fila, não atendimento que continua (item 6).
+        : 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Seu atendimento entrou na fila. Um atendente responde por aqui assim que estiver disponível." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.',
     ];
   },
 };

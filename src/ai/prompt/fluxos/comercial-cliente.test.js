@@ -125,9 +125,11 @@ describe('módulo comercial-cliente', () => {
     // mesma frase-modelo dia x noite que comercial-novo.js tem, centralizada
     // nos módulos comerciais em vez de partida com noturno.js.
     describe('frase-modelo de encaminhamento ao setor de vendas (dia x noite)', () => {
-      test('de dia, o modelo diz que um atendente continua por aqui, sem menção a horário', () => {
+      // Conclusão do atendimento (04/10/2026, revisão): fila, não atendimento que continua (item 6).
+      test('de dia, o modelo diz que o atendimento entrou na fila e que um atendente responde quando estiver disponível, sem horário', () => {
         const t = texto({ triagem: { noturno: { ativo: false }, forcarConclusao: false } });
-        expect(t).toMatch(/Vou encaminhar você\. Um atendente continuará o atendimento por aqui\./);
+        expect(t).toMatch(/Certo! 😊 Seu atendimento entrou na fila\. Um atendente responde por aqui assim que estiver disponível\./);
+        expect(t).not.toMatch(/continuará o atendimento/);
         expect(t).not.toMatch(/fora do horário de atendimento/);
       });
 

@@ -468,6 +468,17 @@ describe('PAGAMENTO — conferir_pagamento relê o MESMO título no SGP', () => 
     expect(FERRAMENTAS_TRIAGEM_NOTURNO).toContain('conferir_pagamento');
   });
 
+  // Conclusão do atendimento (04/10/2026; avaliação de 01/10, falha 5): "diga que um atendente vai conferir e chame
+  // concluir_triagem" fazia a promessa sair antes de a conclusão confirmar. A ordem agora é concluir e só então dizer.
+  test('20b. sem cobrança enviada nesta conversa: concluir antes, e só dizer que a equipe vai conferir depois de confirmado', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx());
+    expect(r.pagamentoConfirmado).toBe(false);
+    expect(r.instrucao).toMatch(/chame concluir_triagem para o setor que cuidar de financeiro e, só depois de a conclusão confirmar \(concluido: true\), diga que a equipe vai conferir/);
+    // Avaliação real (04/10/2026, E3 #1): quem só quer pagar não é encaminhado por aqui.
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e quer pagar, não conclua/);
+  });
+
   test('21. cliente diz "paguei" e o título continua Gerado: NÃO confirma', async () => {
     titulosPorContrato[100] = leitura([titulo(3001, -5)]);
     const c = ctx({ ultimaFala: 'paguei agora pelo pix' });

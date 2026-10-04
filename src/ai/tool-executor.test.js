@@ -934,6 +934,8 @@ describe('tool-executor — concluir_triagem sem confirmação (erro ou tempo es
     concluirCom(jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432')));
     const r = await executeTool('concluir_triagem', ARGS, CONTEXTO_TRIAGEM);
     expect(r).toMatchObject({ ok: false, motivo: 'execution_error', detalhe: 'connect ECONNREFUSED 10.0.0.5:5432' });
+    // Conclusão do atendimento (04/10/2026): a recusa sem confirmação vai marcada — o turno seguinte sabe da tentativa.
+    expect(r.semConfirmacao).toBe(true);
     exigeOsElementos(r);
     expect(r.instrucao).toMatch(/Ele já pediu para falar com um atendente: reconheça esse pedido e não pergunte de novo se ele quer/);
     expect(r.instrucao).not.toMatch(/ECONNREFUSED/);
@@ -943,6 +945,7 @@ describe('tool-executor — concluir_triagem sem confirmação (erro ou tempo es
     concluirCom(() => new Promise(() => {}));
     const r = await executeTool('concluir_triagem', ARGS, CONTEXTO_TRIAGEM, { timeoutMs: 20 });
     expect(r).toMatchObject({ ok: false, motivo: 'timeout' });
+    expect(r.semConfirmacao).toBe(true);
     exigeOsElementos(r);
   }, 10000);
 
@@ -963,6 +966,7 @@ describe('tool-executor — concluir_triagem sem confirmação (erro ou tempo es
     const erro = await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO);
     expect(erro).toMatchObject({ motivo: 'execution_error', detalhe: 'SGP down' });
     expect(erro.instrucao).toBeUndefined();
+    expect(erro.semConfirmacao).toBeUndefined();
     executar = () => new Promise(() => {});
     const lento = await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO, { timeoutMs: 20 });
     expect(lento.motivo).toBe('timeout');
@@ -974,5 +978,6 @@ describe('tool-executor — concluir_triagem sem confirmação (erro ou tempo es
     const r = await executeTool('concluir_triagem', ARGS, CONTEXTO_TRIAGEM);
     expect(r).toMatchObject({ ok: false, motivo: 'execution_error', detalhe: 'Unknown setorId' });
     expect(r.instrucao).toBeUndefined();
+    expect(r.semConfirmacao).toBeUndefined();
   });
 });

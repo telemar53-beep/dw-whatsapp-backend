@@ -282,7 +282,7 @@ describe('resposta segura (se o modelo insistir depois da correção)', () => {
   test('equipamento encaminhado, de dia e à noite', () => {
     const s = sinais('meu roteador queimou');
     expect(respostaSeguraDaContencao(['equipamento_roteiro'], ctx(s, { triagemConcluida: { setor: 'Suporte' } })))
-      .toBe('Entendi. Não mexa no equipamento nem tente consertar. Seu atendimento vai para o setor Suporte e um atendente continua daqui.');
+      .toBe('Entendi. Não mexa no equipamento nem tente consertar. Seu atendimento entrou na fila do setor Suporte. Um atendente responde por aqui assim que estiver disponível.');
     expect(respostaSeguraDaContencao(['equipamento_roteiro'], ctx(s, { triagemConcluida: { setor: 'Suporte' }, triagem: { noturno: { ativo: true, retornoAs: '08:00' } } })))
       .toBe('Entendi. Não mexa no equipamento nem tente consertar. Seu atendimento ficou registrado para o setor Suporte e nossa equipe dá continuidade a partir das 08:00.');
   });
@@ -307,7 +307,7 @@ describe('resposta segura (se o modelo insistir depois da correção)', () => {
     const s = sinais('teve proporcional?');
     expect(respostaSeguraDaContencao(['financeiro_sem_fonte'], ctx(s))).toBe('Não tenho essa informação confirmada no sistema.');
     expect(respostaSeguraDaContencao(['financeiro_sem_fonte'], ctx(s, { triagemConcluida: { setor: 'Financeiro' } })))
-      .toBe('Não tenho essa informação confirmada no sistema. Seu atendimento vai para o setor Financeiro e um atendente continua daqui.');
+      .toBe('Não tenho essa informação confirmada no sistema. Seu atendimento entrou na fila do setor Financeiro. Um atendente responde por aqui assim que estiver disponível.');
   });
 
   test('a própria resposta segura não viola a contenção', () => {

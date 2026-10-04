@@ -3,7 +3,8 @@ const { executeTool } = require('./tool-executor');
 const { toOpenAiTools } = require('./tool-registry');
 const { montarContexto } = require('./prompt/montar');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
-const { recordAiInteraction } = require('./ai-interaction.repository');
+const { recordAiInteraction, listAiInteractionsByConversation } = require('./ai-interaction.repository');
+const { promessasSemEvidencia, respostaSemPromessas } = require('./promessas-sem-evidencia');
 const { listRecentMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { resumoParaModelo, encontrarDisparoRelacionado, fatoDoDisparo } = require('../conversations/automatic-message');
 const { linhasDoDisparoRecente } = require('./prompt/fluxos/disparo-recente');
@@ -69,7 +70,9 @@ function anunciaEncaminhamento(texto) {
 // ferramenta pode dizer) e que o atendimento já está na fila (só
 // concluir_triagem pode dizer).
 const AFIRMA_LIBERACAO = /desbloqueio (em confian[çc]a )?(foi |está )?(realizado|feito|conclu[íi]do)|acesso (foi |está )?liberado|liberei (seu|o) acesso|internet (foi |está )?liberada/i;
-const AFIRMA_FILA = /deixei (seu |o )?(atendimento|caso|pedido) (na|em) fila|registr(ei|ado) (seu |o )?(atendimento|caso|pedido) para a equipe|já está na fila/i;
+// Conclusão do atendimento (04/10/2026, revisão): "entrou na fila" é a frase de fila nova (instrução de sucesso e modelos).
+// Avaliação real (04/10/2026, E7 #2): "vou deixar seu pedido registrado para um atendente" depois de uma conclusão que falhou.
+const AFIRMA_FILA = /deixei (seu |o )?(atendimento|caso|pedido) (na|em) fila|registr(ei|ado) (seu |o )?(atendimento|caso|pedido) para a equipe|já está na fila|entrou na fila|(vou deixar|deixei|deixo) (o |seu |sua |a )?(atendimento|caso|pedido|chamado|solicita[çc][aã]o) registrad[oa]|(atendimento|caso|pedido|chamado|solicita[çc][aã]o) (fica|ficou|vai ficar|ficar[aá]) registrad[oa]/i;
 // Janela em que uma liberação já feita ainda explica um "foi liberado?" do
 // cliente: ele volta na mesma madrugada, ou de manhã, para dizer se voltou.
 const LIBERACAO_RECENTE_MS = 24 * 60 * 60 * 1000;
@@ -101,7 +104,14 @@ function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 
 // C4#3 (03/10/2026): sem a conclusão confirmada, as frases que anunciam o encaminhamento saem da resposta (as demais
 // ficam) e entra a frase de que a transferência ainda não foi confirmada.
-const ENCAMINHAMENTO_NAO_CONFIRMADO = 'Ainda não consegui confirmar a sua transferência para um atendente.';
+// Conclusão do atendimento (04/10/2026): com o próximo passo que existe de fato — ele pedir de novo; não há outro canal.
+const ENCAMINHAMENTO_NAO_CONFIRMADO = 'Ainda não consegui confirmar a sua transferência para um atendente. Se quiser, pode me pedir de novo por aqui.';
+// Autorrevisão (04/10/2026): o prompt do turno como fonte de horário, sem a linha da hora atual e da saudação (fatos.js:
+// "agora são 14:05", "até 11:59", "de 12:00 a 17:59") — não é horário de atendimento.
+function fonteDeHorarios(sistema) {
+  return String(sistema || '').split('\n').filter((l) => !/^Hoje é .* em Brasília\./.test(l)).join('\n');
+}
+
 function respostaSemEncaminhamentoNaoConfirmado(texto) {
   const resto = String(texto || '').split(/(?<=[.!?\n])\s*/).map((f) => f.trim()).filter(Boolean)
     .filter((f) => !anunciaEncaminhamento(f) && !afirmaFila(f))
@@ -398,6 +408,21 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       terceiroLocalizadoEm,
     });
     const ultimaFala = textosRecentesDoCliente(historico).slice(-1)[0] || null;
+    // Conclusão do atendimento (04/10/2026; avaliação de 01/10, falha 4; micropiloto 2, E3): os resultados de ferramenta de
+    // turnos anteriores não voltam ao histórico, e no turno seguinte a um encaminhamento que falhou o modelo não sabia
+    // disso. O registro das interações (durável, gravado a cada turno) diz quantas tentativas ficaram sem confirmação
+    // (a marca semConfirmacao do executor). A conversa ainda está na triagem, então nenhuma delas concluiu. Falha na
+    // leitura: sem o fato (nada é afirmado a partir de uma leitura que não aconteceu).
+    let tentativasSemConfirmacao = 0;
+    try {
+      const anteriores = (await listAiInteractionsByConversation(conversation.id)) || [];
+      tentativasSemConfirmacao = anteriores.reduce((n, i) => n + (Array.isArray(i.toolsRefused) ? i.toolsRefused : [])
+        .filter((r) => r && r.nome === 'concluir_triagem' && r.semConfirmacao === true).length, 0);
+    } catch (err) {
+      console.error(`Interações anteriores não lidas na conversa ${conversation.id}: ${mensagemSegura(err)}`);
+      tentativasSemConfirmacao = 0;
+    }
+    const encaminhamentoNaoConcluido = tentativasSemConfirmacao > 0 ? { tentativas: tentativasSemConfirmacao } : null;
     // Perfil fixo: os contratos vêm da identidade já resolvida (Task 2), não
     // de uma nova consulta ao SGP via carregarContratos — o cache do turno
     // (contexto.contracts) é o que tool-executor.js usa para a checagem de
@@ -412,6 +437,12 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // Persistência do alvo (03/10/2026): os estados do escopo que este turno conhece (worker). As gravações do
       // escopo pelas ferramentas exigem um deles na própria instrução e atualizam a lista.
       esperadosDoAlvo: Array.isArray(esperadosDoAlvo) ? esperadosDoAlvo.slice() : [],
+      // Conclusão do atendimento: o encaminhamento tentado e não concluído em turno anterior, e as ferramentas pedidas
+      // neste turno (concluir_triagem decide a nova tentativa por elas).
+      encaminhamentoNaoConcluido,
+      ferramentasDoTurno: [],
+      // A última fala do cliente: o trecho do pedido renovado (concluir_triagem) é conferido nela.
+      ultimaFalaDoCliente: ultimaFala,
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
       // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
       // gravam aqui (buscar_cliente pode descobri-lo no meio do turno).
@@ -448,6 +479,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       setores,
       motivos,
       terceiro,
+      // Conclusão do atendimento: o fato do encaminhamento não concluído (fluxos/acoes-pendentes.js).
+      acoesPendentes: encaminhamentoNaoConcluido ? { encaminhamento: encaminhamentoNaoConcluido } : null,
       agora: new Date(),
     };
     systemContent = montarContexto(estadoDoPrompt);
@@ -581,6 +614,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
             // guarda de fila/anúncio exija a conclusão uma segunda vez.
             if (!contexto.triagemConcluida && !contexto.atendimentoEncerrado) {
               exigiuConclusaoPorAnuncio = true;
+              // Conclusão do atendimento (04/10/2026, revisão): conclusão que o CÓDIGO exige — a trava da nova tentativa
+              // depois de uma falha (concluir_triagem) não a barra.
+              contexto.conclusaoExigidaPeloCodigo = true;
               messages.push({ role: 'assistant', content: texto });
               messages.push({
                 role: 'system',
@@ -635,6 +671,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           messages.push({ role: 'system', content: correcao.instrucao });
           if (correcao.concluir && !contexto.triagemConcluida && !contexto.atendimentoEncerrado) {
             exigiuConclusaoPorAnuncio = true;
+            // Conclusão do atendimento (04/10/2026, revisão): a contenção exige a conclusão — a trava da nova tentativa não a barra.
+            contexto.conclusaoExigidaPeloCodigo = true;
             proximoToolChoice = 'concluir_triagem';
           }
           continue;
@@ -730,6 +768,11 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // ferramenta não derruba as demais, porque executeTool nunca rejeita (ele
       // sempre resolve com {ok:false,...}); cada resultado é tratado depois,
       // individualmente, no laço abaixo.
+      // Conclusão do atendimento: as ferramentas desta volta entram na lista ANTES de qualquer execução — numa volta com
+      // duas chamadas em paralelo, concluir_triagem tem de ver a outra.
+      if (perfil === 'triagem' && Array.isArray(contexto.ferramentasDoTurno)) {
+        contexto.ferramentasDoTurno.push(...chamadas.map((c) => c.function && c.function.name).filter(Boolean));
+      }
       const resultados = await Promise.all(
         chamadas.map(async (chamada) => {
           const nome = chamada.function.name;
@@ -781,7 +824,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           // 10.0.0.5:5432"), que não pode entrar no contexto do modelo.
           // `instrucao` é o campo oposto: texto escrito à mão para o modelo
           // ler (defeito D — sem ele, a recusa seca fazia o modelo improvisar).
-          toolsRefused.push({ nome, motivo: resposta.motivo, detalhe: resposta.detalhe });
+          toolsRefused.push({ nome, motivo: resposta.motivo, detalhe: resposta.detalhe, ...(resposta.semConfirmacao ? { semConfirmacao: true } : {}) });
           messages.push({
             role: 'tool',
             tool_call_id: chamada.id,
@@ -876,6 +919,30 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   ) {
     console.warn(`Resposta da IA afirmava encaminhamento sem conclusão confirmada na conversa ${conversation.id}; frase retirada`);
     texto = respostaSemEncaminhamentoNaoConfirmado(texto);
+  }
+
+  // Conclusão do atendimento (04/10/2026; avaliação de 01/10, falhas 1 e 5; micropiloto 2, E3): horário sem fonte e promessa
+  // de trabalho futuro (nova tentativa, retorno, acompanhamento) ou de ação da equipe sem encaminhamento confirmado neste
+  // turno saem da resposta, frase a frase (promessas-sem-evidencia.js). O único horário com fonte é o retorno da equipe
+  // no modo noturno, que vem da configuração. Sem nada que sobre: a frase de transferência não confirmada (se ela foi
+  // tentada neste turno) ou a de que não há informação confirmada.
+  if (perfil === 'triagem' && texto) {
+    const noturno = contexto.triagem && contexto.triagem.noturno;
+    // Revisão (04/10/2026): o horário ou prazo escrito no prompt do turno (aviso de cidade, instruções do painel, fatos)
+    // também tem fonte.
+    const opcoesPromessas = {
+      encaminhamentoConfirmado: Boolean(contexto.triagemConcluida),
+      horariosConfirmados: noturno && noturno.ativo && noturno.retornoAs ? [noturno.retornoAs] : [],
+      textoComFonte: fonteDeHorarios((messages[0] && messages[0].content) || systemContent || ''),
+    };
+    const motivosPromessas = promessasSemEvidencia(texto, opcoesPromessas);
+    if (motivosPromessas.length > 0) {
+      console.warn(`Resposta da IA trazia ${motivosPromessas.join(', ')} na conversa ${conversation.id}; frase retirada`);
+      texto = respostaSemPromessas(texto, {
+        ...opcoesPromessas,
+        seNadaSobrar: tentouConcluir && !contexto.triagemConcluida ? ENCAMINHAMENTO_NAO_CONFIRMADO : undefined,
+      });
+    }
   }
 
   await recordAiInteraction({

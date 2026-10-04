@@ -675,9 +675,11 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // conversa continua em triagem, sem atendente e sem ter sido fechada.)
     const nome = (turno.identidade && turno.identidade.primeiroNome)
       || (identidade && identidade.primeiroNome) || 'cliente';
+    // Conclusão do atendimento (04/10/2026): sem "com o comprovante" — o worker não sabe se houve comprovante, e a
+    // liberação em confiança não o exige (mesma correção da instrução de desbloqueio_confianca).
     await enqueueOutboundMessage({
       conversationId: conversation.id, channelId: conversation.channelId, sentBy: 'ai',
-      content: `Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?`,
+      content: `Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila para acompanhamento. Você consegue testar se a internet voltou?`,
     });
     await concluirEmCodigo(conversation.id, 'Modo noturno: desbloqueio em confiança realizado; o turno da IA estourou o tempo antes da resposta final. Conferir pagamento e dar baixa.');
     return;

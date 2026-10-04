@@ -19,6 +19,7 @@ const MODULOS = [
   require('./fluxos/comprovante'),
   require('./fluxos/contencoes'),
   require('./fluxos/documento-pendente'),
+  require('./fluxos/acoes-pendentes'),
   require('./fluxos/limite-perguntas'),
   require('./formato'),
 ];

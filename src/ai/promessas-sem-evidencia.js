@@ -39,6 +39,21 @@ const RETORNO_OU_ACOMPANHAMENTO = [
   /\bestou\s+tentando\s+(?:encaminhar|transferir|passar)\b/,
 ];
 
+// Pendências do atendimento (04/10/2026, decisão do proprietário): verificar "quando o pagamento constar" é trabalho
+// futuro que nenhum mecanismo faz (a frase aprovada em 25/09 saiu do código). O gatilho é o pagamento, não o cliente:
+// "assim que você me mandar o comprovante, eu confiro" depende dele e fica.
+const QUANDO_O_PAGAMENTO_CONSTAR = /\b(?:assim que|quando|logo que)\s+(?:o\s+)?(?:pagamento|boleto|pix)\b|\b(?:assim que|quando|logo que)\s+(?:constar|compensar|cair|baixar)\b/;
+// Revisão (04/10/2026): o próximo passo que depende do cliente ("me avise", "me manda o comprovante") é real e fica — só
+// o PEDIDO a ele (imperativo, presente ou infinitivo, nunca passado como "você enviou"), e ANTES da verificação na frase
+// ("…vou conferir; me chama se precisar" continua sendo promessa).
+const DEPENDE_DO_CLIENTE = /\bme\s+(?:avise|avisa|avisar|mande|manda|mandar|envie|envia|enviar|chame|chama|chamar|escreva|escreve|escrever)\b|\bvoce\s+(?:me\s+)?(?:avisa|avisar|manda|mandar|envia|enviar)\b/;
+function dependeDoClienteAntes(frase) {
+  const pedido = DEPENDE_DO_CLIENTE.exec(frase);
+  const verificacao = VERIFICACAO_FUTURA.exec(frase);
+  return Boolean(pedido && verificacao && pedido.index < verificacao.index);
+}
+const VERIFICACAO_FUTURA = /\b(?:vou|irei|vamos|iremos)\s+(?:verificar|conferir|checar)\b|\b(?:sera|vai ser)\s+(?:verificad|conferid|analisad|checad)[oa]\b/;
+
 const PROMESSA_DA_EQUIPE = [
   /\bum[a]?\s+(?:atendente|colega|especialista|pessoa da (?:nossa )?equipe)\s+(?:vai|ira)\s+(?:entrar em contato|te chamar|te responder|responder|retornar|falar com voce|continuar|conferir|verificar|analisar|cuidar|te atender|atender)\b/,
   // Revisão (04/10/2026): "a equipe responsável vai orientar" — uma palavra entre equipe e o verbo.
@@ -80,7 +95,8 @@ function motivosDaFrase(frase, { encaminhamentoConfirmado = false, horariosConfi
   const f = norm(frase);
   const motivos = [];
   const tentativaCondicionada = CONDICIONADA_AO_CLIENTE.test(f) && !ADIADA.test(f);
-  if ((!tentativaCondicionada && NOVA_TENTATIVA.some((r) => r.test(f))) || RETORNO_OU_ACOMPANHAMENTO.some((r) => r.test(f))) motivos.push('promessa_da_ia');
+  const verificacaoFutura = QUANDO_O_PAGAMENTO_CONSTAR.test(f) && VERIFICACAO_FUTURA.test(f) && !dependeDoClienteAntes(f);
+  if ((!tentativaCondicionada && NOVA_TENTATIVA.some((r) => r.test(f))) || RETORNO_OU_ACOMPANHAMENTO.some((r) => r.test(f)) || verificacaoFutura) motivos.push('promessa_da_ia');
   if (!encaminhamentoConfirmado && PROMESSA_DA_EQUIPE.some((r) => r.test(f))) motivos.push('promessa_da_equipe');
   if (horasSemFonte(frase, horariosConfirmados, textoComFonte)) motivos.push('horario_sem_fonte');
   return motivos;

@@ -345,7 +345,8 @@ describe('idempotência da entrega no harness', () => {
       respostaComTexto('Enviei acima o boleto em PDF.'),
     ]);
 
-    await conversar({ ...ROTEIRO_ENTREGA, numero: 90, mensagens: ['Não recebi, manda de novo'] });
+    // Pendências do atendimento (04/10/2026): o cliente cita o meio — sem meio escolhido (nem envio anterior), a entrega não sai.
+    await conversar({ ...ROTEIRO_ENTREGA, numero: 90, mensagens: ['Não recebi o boleto, manda de novo'] });
 
     expect(documentos()).toHaveLength(1);
     const reenvios = idsDeReenvio();

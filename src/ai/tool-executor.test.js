@@ -981,3 +981,135 @@ describe('tool-executor — concluir_triagem sem confirmação (erro ou tempo es
     expect(r.semConfirmacao).toBeUndefined();
   });
 });
+
+// Pendências do atendimento (04/10/2026; avaliação real r2 E12 #4 e r3 E6 #4): o modelo inventou um documento para
+// buscar_cliente com quem fala já identificado. O documento só vale com ORIGEM — escrito pelo cliente nesta conversa, ou o
+// do titular já confirmado. Formato e dígito verificador não provam origem.
+describe('tool-executor — buscar_cliente na triagem: o documento precisa de origem', () => {
+  const real = jest.requireActual('./tool-registry');
+  const TRIAGEM_IDENTIFICADA = {
+    conversationId: 'c-1', contact: { id: 'ct-1', sgpDocument: '52998224725' }, contracts: [{ id: 17402 }],
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Fulano', client: { id: 9, document: '52998224725' }, contestado: false },
+    ferramentasPermitidas: ['buscar_cliente'],
+    falasDoCliente: ['Oi, vocês aceitam pagamento por PIX?'],
+  };
+  const SEM_IDENTIDADE = { contact: { id: 'ct-1', sgpDocument: null }, identidade: { nivel: 'none', origem: 'none' }, contracts: [] };
+  const buscar = () => {
+    const executar = jest.fn().mockResolvedValue({ cliente: { nome: 'X' } });
+    findTool.mockImplementation((n) => (n === 'buscar_cliente' ? { ...real.findTool('buscar_cliente'), executar } : real.findTool(n)));
+    isToolEnabled.mockResolvedValue(true);
+    return executar;
+  };
+  beforeEach(() => jest.clearAllMocks());
+
+  test('CPF que o cliente não escreveu (inventado), com quem fala identificado: nada é consultado, e o modelo lê que ele já está identificado', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '00000000000' }, TRIAGEM_IDENTIFICADA);
+    expect(r).toMatchObject({ ok: false, motivo: 'document_without_origin' });
+    expect(r.instrucao).toMatch(/NADA foi consultado/);
+    expect(r.instrucao).toMatch(/JÁ está identificado: não peça CPF ou CNPJ dele/);
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test('formato e dígito verificador válidos não provam origem', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '111.444.777-35' }, TRIAGEM_IDENTIFICADA);
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test('CPF de outra pessoa que o cliente escreveu (com pontuação) segue como consulta de terceiro', async () => {
+    const executar = buscar();
+    const ctx = { ...TRIAGEM_IDENTIFICADA, falasDoCliente: ['quero pagar a fatura da minha mãe', 'o cpf dela é 111.444.777-35'] };
+    expect((await executeTool('buscar_cliente', { cpf: '11144477735' }, ctx)).ok).toBe(true);
+    expect(executar).toHaveBeenCalledWith(expect.objectContaining({ cpf: '11144477735', titularEOutraPessoa: true }), expect.anything());
+  });
+
+  test('o documento do titular já confirmado tem origem (o cadastro)', async () => {
+    const executar = buscar();
+    expect((await executeTool('buscar_cliente', { cpf: '529.982.247-25' }, TRIAGEM_IDENTIFICADA)).ok).toBe(true);
+    expect(executar).toHaveBeenCalled();
+  });
+
+  test('sem identificação: CPF inventado não é consultado, e o modelo lê que deve pedir o documento', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '11144477735' }, { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['quero minha fatura'] });
+    expect(r.motivo).toBe('document_without_origin');
+    expect(r.instrucao).toMatch(/peça o CPF ou CNPJ do titular/);
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test('sem identificação: o CPF que ele escreveu é consultado', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '11144477735' }, { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é 11144477735'] });
+    expect(r.ok).toBe(true);
+    expect(executar).toHaveBeenCalled();
+  });
+
+  test('texto no lugar do CPF ("contato já identificado"): recusa com a instrução de que ele já está identificado', async () => {
+    buscar();
+    const r = await executeTool('buscar_cliente', { cpf: 'contato já identificado' }, TRIAGEM_IDENTIFICADA);
+    expect(r).toMatchObject({ ok: false, motivo: 'invalid_args' });
+    expect(r.instrucao).toMatch(/JÁ está identificado/);
+  });
+
+  // Revisão (04/10/2026, 4 e 5): igualdade com um número de 11 ou 14 dígitos que o cliente escreveu — nunca pedaço de número;
+  // vale o ditado por extenso (áudio transcrito, "meia") e o partido em duas falas seguidas.
+  test('pedaço de número que o cliente escreveu (o número do contrato) não é documento', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '17402' }, { ...TRIAGEM_IDENTIFICADA, falasDoCliente: ['é o contrato 17402'] });
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test('CPF ditado por extenso (áudio transcrito, com "meia") tem origem', async () => {
+    buscar();
+    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é um um um meia meia meia sete sete sete três cinco'] };
+    expect((await executeTool('buscar_cliente', { cpf: '11166677735' }, ctx)).ok).toBe(true);
+  });
+
+  // Revisão do incremento (04/10/2026): formatos reais de áudio e digitação não podem ser recusados como "não escrito".
+  test.each([
+    ['vírgulas de pausa no áudio', 'meu cpf é 529, 982, 247-25'],
+    ['dígito a dígito com vírgulas', '5, 2, 9, 9, 8, 2, 2, 4, 7, 2, 5'],
+    ['traço com espaços', '529.982.247 - 25'],
+    ['artigo depois do número', '52998224725 um abraço'],
+  ])('CPF escrito com %s tem origem', async (_nome, fala) => {
+    buscar();
+    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: [fala] };
+    expect((await executeTool('buscar_cliente', { cpf: '52998224725' }, ctx)).ok).toBe(true);
+  });
+
+  test('número ditado logo depois do CPF não estraga o CPF escrito (vale também o texto como ele veio)', async () => {
+    buscar();
+    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é 52998224725 um dois'] };
+    expect((await executeTool('buscar_cliente', { cpf: '52998224725' }, ctx)).ok).toBe(true);
+  });
+
+  test('o "uma" de artigo não soma dígito na junção de duas falas', async () => {
+    buscar();
+    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['tenho uma dúvida, meu cpf é 529.982.247', '25'] };
+    expect((await executeTool('buscar_cliente', { cpf: '52998224725' }, ctx)).ok).toBe(true);
+  });
+
+  test('11 dígitos tirados de um número maior (linha digitável colada) não são documento', async () => {
+    const executar = buscar();
+    const ctx = { ...TRIAGEM_IDENTIFICADA, falasDoCliente: ['segue a linha: 23790.12345 60000.123456 78901.234567 1 98760000012345'] };
+    const r = await executeTool('buscar_cliente', { cpf: '23790123456' }, ctx);
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test('CPF partido em duas falas seguidas tem origem', async () => {
+    buscar();
+    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é 111.444', '777-35'] };
+    expect((await executeTool('buscar_cliente', { cpf: '11144477735' }, ctx)).ok).toBe(true);
+  });
+
+  test('sem as falas do cliente no contexto (chamada fora do orquestrador), nada muda', async () => {
+    const executar = buscar();
+    const { falasDoCliente, ...semFalas } = TRIAGEM_IDENTIFICADA;
+    expect((await executeTool('buscar_cliente', { cpf: '11144477735' }, semFalas)).ok).toBe(true);
+    expect(executar).toHaveBeenCalled();
+  });
+});

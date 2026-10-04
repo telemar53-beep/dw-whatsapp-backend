@@ -1,4 +1,5 @@
 const { findTool, perfilTriagem, temEfeitoReal, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
+const { documentosNoTexto } = require('./documento-pendente');
 const { FERRAMENTAS_DE_COBRANCA, alvoFinanceiro, AMBIGUIDADE } = require('./financial-target');
 const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
@@ -108,6 +109,50 @@ function documentoDoTitularDaConversa(contexto) {
   return '';
 }
 
+// Pendências do atendimento (04/10/2026; avaliação real r2 E12 #4 e r3 E6 #4): o modelo inventou um documento para
+// buscar_cliente ("00000000000") com quem fala já identificado. Na triagem, um CPF diferente do titular vira consulta de
+// terceiro, que grava o pendente e troca o alvo antes de o SGP responder — e o modelo passou a pedir documento a quem já
+// estava identificado. O documento só vale com ORIGEM: escrito pelo cliente numa fala desta conversa (a janela que o modelo
+// vê: texto, transcrição ou legenda), ou o do titular já confirmado no cadastro. Formato e dígito verificador não provam
+// origem. Sem origem, nada é consultado nem gravado: a identidade confirmada e o alvo ficam como estavam. Vale quando o
+// turno informa as falas do cliente (o orquestrador, único chamador em produção, sempre informa).
+// Revisão (04/10/2026): igualdade com um número de 11 ou 14 dígitos que ele escreveu (documentosNoTexto, o mesmo leitor do
+// documento pendente) — nunca pedaço de número, como o do contrato. Vale também: a fala cujos dígitos, todos, formam o
+// documento ("529, 982, 247-25", "529.982.247 - 25", ditado dígito a dígito com pausas); o ditado por extenso (áudio
+// transcrito: "cinco dois nove", "meia"), só em sequências de duas ou mais palavras-dígito — "uma dúvida" e "um abraço"
+// não viram dígito; e o partido em duas falas seguidas ("529.982" e depois "247-25").
+const DIGITO_FALADO = { zero: '0', um: '1', uma: '1', dois: '2', duas: '2', tres: '3', quatro: '4', cinco: '5', seis: '6', meia: '6', sete: '7', oito: '8', nove: '9' };
+const SEQUENCIA_FALADA = /\b(?:zero|uma?|dois|duas|tres|quatro|cinco|seis|meia|sete|oito|nove)(?:[\s,.-]+(?:zero|uma?|dois|duas|tres|quatro|cinco|seis|meia|sete|oito|nove))+\b/g;
+const PALAVRA_DIGITO = /\b(?:zero|uma?|dois|duas|tres|quatro|cinco|seis|meia|sete|oito|nove)\b/g;
+const comDigitosFalados = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(SEQUENCIA_FALADA, (sequencia) => sequencia.replace(PALAVRA_DIGITO, (palavra) => DIGITO_FALADO[palavra]));
+function documentosDasFalas(falas) {
+  const textos = falas.map(comDigitosFalados);
+  const documentos = new Set([...falas, ...textos].flatMap(documentosNoTexto));
+  for (const texto of textos) {
+    const todos = soDigitos(texto);
+    if (todos.length === 11 || todos.length === 14) documentos.add(todos);
+  }
+  for (let i = 0; i + 1 < textos.length; i += 1) {
+    const [a, b] = [soDigitos(textos[i]), soDigitos(textos[i + 1])];
+    if (a && b && [11, 14].includes(a.length + b.length)) documentos.add(a + b);
+  }
+  return documentos;
+}
+function documentoTemOrigem(documento, contexto) {
+  if (!contexto || !Array.isArray(contexto.falasDoCliente)) return true;
+  if (documento && documento === documentoDoTitularDaConversa(contexto)) return true;
+  return Boolean(documento) && documentosDasFalas(contexto.falasDoCliente).has(documento);
+}
+
+function instrucaoDoDocumentoSemOrigem(contexto) {
+  const identidade = contexto && contexto.identidade;
+  const identificado = Boolean(identidade && identidade.nivel === 'forte' && !identidade.contestado);
+  return identificado
+    ? 'NADA foi consultado: este documento não foi escrito pelo cliente nesta conversa. Não invente nem complete CPF ou CNPJ. Quem está falando JÁ está identificado: não peça CPF ou CNPJ dele e não consulte de novo; siga com o que ele pediu usando o cadastro que você já tem. Se ele pedir algo de OUTRA pessoa, use só o documento que ele escrever.'
+    : 'NADA foi consultado: este documento não foi escrito pelo cliente nesta conversa. Não invente nem complete CPF ou CNPJ: use só o que ele escrever. Se ele ainda não informou, peça o CPF ou CNPJ do titular.';
+}
+
 function comTimeout(promise, ms) {
   let timer;
   const estouro = new Promise((resolve) => {
@@ -207,6 +252,10 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       // Com o alvo em dúvida não há contrato para deduzir: a recusa certa é a do alvo, com a instrução de
       // perguntar — não um erro de argumento que o modelo não sabe explicar.
       if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto && contexto.alvoAmbiguo) return recusaPorAlvoEmDuvida(contexto);
+      // Pendências do atendimento (04/10/2026, r3 E6 #4): texto no lugar do documento — o modelo lê o que fazer.
+      if (nome === 'buscar_cliente' && perfilTriagem(contexto) && Array.isArray(contexto.falasDoCliente)) {
+        return recusa('invalid_args', validacao.erro, instrucaoDoDocumentoSemOrigem(contexto));
+      }
       return recusa('invalid_args', validacao.erro);
     }
     let argsValidados = validacao.args;
@@ -227,6 +276,9 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       // era recusada e o modelo seguia com a cobrança de quem fala. Agora ela vira consulta de
       // terceiro — que nunca troca a identidade, nem grava nada no contato.
       if (perfilTriagem(contexto)) {
+        if (!documentoTemOrigem(argsValidados.cpf, contexto)) {
+          return recusa('document_without_origin', null, instrucaoDoDocumentoSemOrigem(contexto));
+        }
         const titular = documentoDoTitularDaConversa(contexto);
         if (titular && titular !== argsValidados.cpf && argsValidados.titularEOutraPessoa !== true) {
           argsValidados = { ...argsValidados, titularEOutraPessoa: true };

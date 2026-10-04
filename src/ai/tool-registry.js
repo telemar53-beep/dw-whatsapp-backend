@@ -763,8 +763,56 @@ function respostaDeAlvoMudou(item) {
 const normalizarFala = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 function trechoEstaNaFala(trecho, fala) {
   const t = normalizarFala(trecho);
-  if (t.split(' ').filter(Boolean).length < 2) return false;
+  // Pendências do atendimento (04/10/2026): sem mínimo de palavras — "Atendente" sozinho pode ser o pedido renovado; quem
+  // interpreta é o modelo, o código só confere que o trecho está na mensagem atual.
+  if (!t) return false;
   return ` ${normalizarFala(fala)} `.includes(` ${t} `);
+}
+
+// Pendências do atendimento (04/10/2026, decisão do proprietário; avaliação real E3, 0 de 6): sem meio de pagamento
+// escolhido ou estabelecido nesta conversa, a IA pergunta antes de entregar. Estabelecido, pelos FATOS que o código vê:
+// (1) o cliente escreveu o nome do meio numa fala desta conversa (a janela que o modelo vê) — "código de barras" e "linha
+// digitável" contam como boleto, "copia e cola" e "QR code" como PIX; (2) a última fala da IA citou este meio e não citou
+// também o outro, quando os dois existem nesta fatura — "Você prefere boleto ou PIX?" (ou "o código de barras ou o QR
+// code") não estabelece nenhum; "não há PIX agora; posso enviar o boleto?" estabelece o boleto; (3) este meio desta fatura
+// já saiu nesta conversa. A trava só age quando o
+// meio EXISTE nesta fatura (revisão de 04/10/2026): sem código PIX ou sem link do boleto, sai a recusa honesta de sempre; e
+// quando só um meio existe, a pergunta oferece só ele. Nenhum campo preenchido pelo modelo prova
+// escolha. Continua dependendo da interpretação do modelo: se a menção é escolha (uma pergunta como "aceitam PIX?" e
+// uma negação como "não quero PIX" também são menções), se a resposta dele aceita a oferta da IA, e qual ferramenta
+// chamar. "Segunda via" não estabelece meio: a IA pergunta. Vale quando o turno
+// informa as falas do cliente (o orquestrador sempre informa). Fica depois do gate 0/1/2+, do alvo e da fatura, e antes
+// da reserva: nada disso muda, e nada é reservado sem meio.
+const MEIO_CITADO = {
+  pix: /\bpix\b|\bcopia e cola\b|\bqr ?code\b/,
+  boleto: /\bboletos?\b|\bcodigo de barras\b|\blinha digitavel\b/,
+};
+const NOME_DO_MEIO = { pix: 'PIX', boleto: 'boleto' };
+async function meioNaoEstabelecido({ meio, tool, contexto, fatura, outroDisponivel }) {
+  if (!contexto || !Array.isArray(contexto.falasDoCliente)) return null;
+  const cita = (texto, m) => MEIO_CITADO[m].test(normalizarFala(texto));
+  if (contexto.falasDoCliente.some((fala) => cita(fala, meio))) return null;
+  const outro = meio === 'pix' ? 'boleto' : 'pix';
+  const daIa = contexto.ultimaFalaDaIa;
+  if (daIa && cita(daIa, meio) && !(outroDisponivel && cita(daIa, outro))) return null;
+  const invoiceId = identificadorDeFatura(fatura);
+  if (invoiceId) {
+    try {
+      if (await findEnqueuedDeliveryOfInvoice({ conversationId: contexto.conversationId, tool, invoiceId })) return null;
+    } catch (err) {
+      console.error(`${tool}: entrega anterior não lida na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    }
+  }
+  // Revisão (04/10/2026): no turno do limite de perguntas, a triagem não pergunta mais nada (limite-perguntas.js).
+  let instrucao;
+  if (contexto.triagem && contexto.triagem.forcarConclusao) {
+    instrucao = 'NADA foi enviado: o cliente ainda não escolheu o meio de pagamento, e esta é a última resposta da triagem. Não pergunte: chame concluir_triagem para o setor que cuidar de financeiro, com "meio de pagamento não escolhido" no resumo.';
+  } else if (outroDisponivel) {
+    instrucao = 'NADA foi enviado: o cliente ainda não escolheu o meio de pagamento nesta conversa. Pergunte só: "Você prefere boleto ou PIX?" e espere a resposta dele. Não escolha por ele e não diga que enviou.';
+  } else {
+    instrucao = `NADA foi enviado: o cliente ainda não escolheu o meio de pagamento, e esta fatura só tem o ${NOME_DO_MEIO[meio]} disponível agora. Pergunte só se pode enviar o ${NOME_DO_MEIO[meio]} desta fatura e espere a resposta dele. Não diga que enviou.`;
+  }
+  return { enviado: false, meioNaoEscolhido: true, motivo: 'O cliente ainda não escolheu o meio de pagamento nesta conversa.', instrucao };
 }
 
 function respostaDeDuplicata(registro, item, messageId) {
@@ -1748,6 +1796,12 @@ const TOOLS = [
       // depois do ramo assistente acima de propósito: lá nada é enviado, e
       // reivindicar ali gravaria o envio INICIAL da fatura sem nunca usá-lo —
       // o índice parcial bloquearia a entrega de verdade logo depois.
+      // Pendências do atendimento (04/10/2026): sem meio escolhido ou estabelecido, nada é reservado nem enviado.
+      // Revisão: só quando o PIX existe nesta fatura — sem código, sai a recusa honesta do PIX sem código (mais abaixo).
+      const semMeio = primeira.pixCode
+        ? await meioNaoEstabelecido({ meio: 'pix', tool: 'gerar_pix', contexto, fatura: primeira, outroDisponivel: Boolean(primeira.boletoLink) })
+        : null;
+      if (semMeio) return { sucesso: false, ...semMeio };
       const entrega = await reivindicarEntrega({
         tool: 'gerar_pix', item: 'PIX', contratoId: busca.contratoId, fatura: primeira, args, contexto,
       });
@@ -2014,7 +2068,7 @@ const TOOLS = [
         // O motivo vem de três fontes (regra da casa, SGP, comprovante) e nem
         // sempre termina em ponto: sem normalizar, "…judicial Assim que…".
         const motivoPontuado = String(motivo).replace(/[.\s]*$/, '.');
-        const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado} Assim que o pagamento constar no sistema, a situação do contrato será verificada.`;
+        const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado}`;
         return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e ${concluirPara} NA MESMA resposta.`;
       };
       // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
@@ -2341,6 +2395,12 @@ const TOOLS = [
       // Idempotência: o claim vem DEPOIS de faturaEmAlgumContrato (só aqui
       // primeira.id existe) e ANTES de qualquer trabalho externo — antes do
       // download do PDF, antes de gravar o arquivo, antes de enfileirar.
+      // Pendências do atendimento (04/10/2026): sem meio escolhido ou estabelecido, nada é reservado nem enviado.
+      // Revisão: só quando o boleto existe nesta fatura — sem link, sai a recusa de sempre (mais abaixo).
+      const semMeio = primeira.boletoLink
+        ? await meioNaoEstabelecido({ meio: 'boleto', tool: 'enviar_boleto', contexto, fatura: primeira, outroDisponivel: Boolean(primeira.pixCode) })
+        : null;
+      if (semMeio) return semMeio;
       const entrega = await reivindicarEntrega({
         tool: 'enviar_boleto', item: 'boleto', contratoId: busca.contratoId, fatura: primeira, args, contexto,
       });

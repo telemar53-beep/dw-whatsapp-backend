@@ -59,7 +59,17 @@ const TURNO_MAX_MS = 120000;
 // modelo anunciando o encaminhamento ao cliente. Qualquer "vou … setor" na
 // mesma frase conta — o 2º teste real usou "repassar", que a lista de verbos
 // não tinha.
-const ANUNCIO_DE_ENCAMINHAMENTO = /\bvou (te )?(encaminhar|transferir|direcionar|repassar|passar|levar|acionar)\b|\bvou\b[^.!?\n]{0,80}\bsetor\b|encaminh(ar|ando|ei) (o |a |seu |sua |este |esta )?(atendimento|solicita[çc][aã]o|pedido|caso|chamado)|(direcionad|encaminhad|repassad)[oa] para o setor|um atendente (continua|vai continuar|d[aá] continuidade|dar[aá] continuidade)/i;
+// Pendências do atendimento (04/10/2026): a forma negada ("Não consegui encaminhar seu atendimento", "ainda não entrou na
+// fila", "não deixei registrado") não é anúncio nem afirmação de sucesso — e não pede uma conclusão para cumpri-la. A
+// negação vale colada ao verbo, com até uma palavra entre ("não consegui encaminhar"); "não" de outra oração não conta.
+const NAO_NEGADO = String.raw`(?<!\bn[aã]o\s+(?:[^\s.,;:!?]+\s+)?)`;
+const ANUNCIO_DE_ENCAMINHAMENTO = new RegExp([
+  String.raw`${NAO_NEGADO}\bvou (te )?(encaminhar|transferir|direcionar|repassar|passar|levar|acionar)\b`,
+  String.raw`${NAO_NEGADO}\bvou\b[^.!?\n]{0,80}\bsetor\b`,
+  String.raw`${NAO_NEGADO}encaminh(ar|ando|ei) (o |a |seu |sua |este |esta )?(atendimento|solicita[çc][aã]o|pedido|caso|chamado)`,
+  String.raw`${NAO_NEGADO}(direcionad|encaminhad|repassad)[oa] para o setor`,
+  'um atendente (continua|vai continuar|d[aá] continuidade|dar[aá] continuidade)',
+].join('|'), 'i');
 
 function anunciaEncaminhamento(texto) {
   return ANUNCIO_DE_ENCAMINHAMENTO.test(String(texto || ''));
@@ -72,7 +82,15 @@ function anunciaEncaminhamento(texto) {
 const AFIRMA_LIBERACAO = /desbloqueio (em confian[çc]a )?(foi |está )?(realizado|feito|conclu[íi]do)|acesso (foi |está )?liberado|liberei (seu|o) acesso|internet (foi |está )?liberada/i;
 // Conclusão do atendimento (04/10/2026, revisão): "entrou na fila" é a frase de fila nova (instrução de sucesso e modelos).
 // Avaliação real (04/10/2026, E7 #2): "vou deixar seu pedido registrado para um atendente" depois de uma conclusão que falhou.
-const AFIRMA_FILA = /deixei (seu |o )?(atendimento|caso|pedido) (na|em) fila|registr(ei|ado) (seu |o )?(atendimento|caso|pedido) para a equipe|já está na fila|entrou na fila|(vou deixar|deixei|deixo) (o |seu |sua |a )?(atendimento|caso|pedido|chamado|solicita[çc][aã]o) registrad[oa]|(atendimento|caso|pedido|chamado|solicita[çc][aã]o) (fica|ficou|vai ficar|ficar[aá]) registrad[oa]/i;
+// Pendências do atendimento (04/10/2026): a forma negada não é afirmação (NAO_NEGADO, acima).
+const AFIRMA_FILA = new RegExp([
+  String.raw`${NAO_NEGADO}deixei (seu |o )?(atendimento|caso|pedido) (na|em) fila`,
+  String.raw`${NAO_NEGADO}registr(ei|ado) (seu |o )?(atendimento|caso|pedido) para a equipe`,
+  String.raw`${NAO_NEGADO}já está na fila`,
+  String.raw`${NAO_NEGADO}entrou na fila`,
+  String.raw`${NAO_NEGADO}(vou deixar|deixei|deixo) (o |seu |sua |a )?(atendimento|caso|pedido|chamado|solicita[çc][aã]o) registrad[oa]`,
+  '(atendimento|caso|pedido|chamado|solicita[çc][aã]o) (fica|ficou|vai ficar|ficar[aá]) registrad[oa]',
+].join('|'), 'i');
 // Janela em que uma liberação já feita ainda explica um "foi liberado?" do
 // cliente: ele volta na mesma madrugada, ou de manhã, para dizer se voltou.
 const LIBERACAO_RECENTE_MS = 24 * 60 * 60 * 1000;
@@ -443,6 +461,12 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       ferramentasDoTurno: [],
       // A última fala do cliente: o trecho do pedido renovado (concluir_triagem) é conferido nela.
       ultimaFalaDoCliente: ultimaFala,
+      // Pendências do atendimento (04/10/2026): o que o cliente escreveu nesta conversa (a janela do histórico, como o modelo
+      // vê) e a última fala da IA. A origem do documento (executor) e o meio de pagamento (gerar_pix/enviar_boleto) são
+      // conferidos nelas.
+      falasDoCliente: historico.filter((m) => m && m.direction === 'inbound').map((m) => conteudoParaModelo(m, perfil)).filter(Boolean),
+      ultimaFalaDaIa: historico.filter((m) => m && m.direction === 'outbound' && m.sentBy === 'ai')
+        .map((m) => conteudoParaModelo(m, perfil)).filter(Boolean).slice(-1)[0] || null,
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
       // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
       // gravam aqui (buscar_cliente pode descobri-lo no meio do turno).
@@ -594,7 +618,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
             messages.push({ role: 'assistant', content: conteudo });
             messages.push({
               role: 'system',
-              content: 'Você afirmou uma liberação que NÃO aconteceu neste atendimento. Responda de novo, sem afirmar liberação: diga que não conseguiu liberar o acesso agora, que o pedido/comprovante fica registrado para a equipe conferir no horário de retorno, e que, assim que o pagamento constar no sistema, a situação do contrato será verificada — sem prometer liberação nem prazo.',
+              content: 'Você afirmou uma liberação que NÃO aconteceu neste atendimento. Responda de novo, sem afirmar liberação: diga que não conseguiu liberar o acesso agora, que o pedido/comprovante fica registrado para a equipe conferir no horário de retorno — sem prometer liberação nem prazo.',
             });
             const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
             promptTokens += final.usage.promptTokens || 0;

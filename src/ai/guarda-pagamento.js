@@ -10,8 +10,11 @@
 // - conectada / online / "voltou", depois de conferir o pagamento → contexto.conexaoOnline (a
 //   verificação da conexão). Contrato ativo não é conexão online.
 // - promessa de que o acesso volta sozinho depois do pagamento → NUNCA (ajuste de 25/09/2026): não
-//   é garantido — com duas ou mais vencidas, pagar uma não libera. A formulação segura é "assim que
-//   o pagamento constar no sistema, vou verificar a situação do contrato".
+//   é garantido — com duas ou mais vencidas, pagar uma não libera. A formulação segura diz o estado
+//   confirmado e o próximo passo que existe (pendências do atendimento, 04/10/2026): "Não consigo
+//   garantir que o acesso volta sozinho depois do pagamento. Quando quiser, eu confiro o pagamento por
+//   aqui." — serve a quem já pagou e a quem vai pagar. A de 25/09 prometia uma verificação futura que
+//   nenhum mecanismo faz.
 //
 // Módulo puro: o orquestrador corrige o modelo UMA vez e, se ele insistir, troca a frase.
 
@@ -176,7 +179,7 @@ const FRASE_SEGURA = {
   pagamento_sem_confirmacao: 'O pagamento ainda não consta como confirmado no sistema.',
   liberacao_sem_fato: 'Ainda não tenho a confirmação de que o acesso foi liberado.',
   conexao_sem_fato: 'Daqui eu não consigo confirmar se a conexão já está online.',
-  promessa_de_liberacao: 'Assim que o pagamento constar no sistema, vou verificar a situação do contrato.',
+  promessa_de_liberacao: 'Não consigo garantir que o acesso volta sozinho depois do pagamento. Quando quiser, eu confiro o pagamento por aqui.',
 };
 
 /**
@@ -212,7 +215,7 @@ function correcaoDoPagamento(violacoes) {
     partes.push('Contrato ativo não quer dizer conexão online: não diga que a internet está conectada, online ou que voltou sem a verificação da conexão.');
   }
   if (violacoes.includes('promessa_de_liberacao')) {
-    partes.push('Você prometeu que o acesso volta sozinho depois do pagamento, e isso não é garantido. Diga no máximo: "Assim que o pagamento constar no sistema, vou verificar a situação do contrato."');
+    partes.push('Você prometeu que o acesso volta sozinho depois do pagamento, e isso não é garantido. Diga no máximo: "Não consigo garantir que o acesso volta sozinho depois do pagamento. Quando quiser, eu confiro o pagamento por aqui."');
   }
   return `${partes.join(' ')} Responda de novo ao cliente sem essa afirmação.`;
 }

@@ -1305,6 +1305,8 @@ describe('perfil de triagem', () => {
       ]));
       // O turno não termina nela: a conclusão é exigida em seguida.
       expect(createChatCompletion.mock.calls[2][0].toolChoice).toBe('concluir_triagem');
+      // Pendências do atendimento (04/10/2026): a correção não manda prometer verificação futura sem mecanismo.
+      expect(correcao.messages.find((m) => m.role === 'system' && /afirmou uma liberação/.test(m.content)).content).not.toMatch(/assim que o pagamento constar/i);
       expect(executeTool).toHaveBeenCalledWith('concluir_triagem', expect.objectContaining({ resumo: 'comprovante' }), expect.anything());
       // Conclusão do atendimento (04/10/2026, revisão): conclusão exigida pelo código — a trava da nova tentativa não a barra.
       expect(executeTool.mock.calls.find(([n]) => n === 'concluir_triagem')[2].conclusaoExigidaPeloCodigo).toBe(true);
@@ -2100,6 +2102,46 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
       roteiro(chamada('consultar_status_todos_contratos'), final('Certo.'));
       await turno(['oi', 'pode tentar de novo? quero falar com alguém']);
       expect(executeTool.mock.calls[0][2].ultimaFalaDoCliente).toBe('pode tentar de novo? quero falar com alguém');
+    });
+
+    // Pendências do atendimento (04/10/2026): a forma negada não é afirmação de sucesso nem pede ação para cumpri-la.
+    test('"ainda não entrou na fila" depois de uma conclusão que falhou: nenhuma conclusão a mais, e a frase fica', async () => {
+      roteiro(chamada('concluir_triagem'), final('Não consegui confirmar a transferência agora. Seu atendimento ainda não entrou na fila.'));
+      executeTool.mockReset().mockResolvedValue({ ok: false, motivo: 'execution_error', detalhe: 'banco fora', semConfirmacao: true, instrucao: 'x' });
+      const r = await turno(['quero falar com um atendente']);
+      expect(executeTool).toHaveBeenCalledTimes(1);
+      expect(r.texto).toBe('Não consegui confirmar a transferência agora. Seu atendimento ainda não entrou na fila.');
+    });
+
+    test('"Não consegui encaminhar seu atendimento" não é anúncio: nenhuma conclusão é forçada', async () => {
+      roteiro(final('Não consegui encaminhar seu atendimento agora. Pode me contar o que aconteceu?'));
+      const r = await turno(['minha internet caiu']);
+      expect(executeTool).not.toHaveBeenCalled();
+      expect(r.texto).toBe('Não consegui encaminhar seu atendimento agora. Pode me contar o que aconteceu?');
+    });
+
+    test('afirmaFila: a forma negada não é afirmação', () => {
+      const { afirmaFila } = require('./ai-orchestrator');
+      expect(afirmaFila('Seu atendimento entrou na fila do setor Suporte.')).toBe(true);
+      expect(afirmaFila('Seu atendimento ainda não entrou na fila.')).toBe(false);
+      expect(afirmaFila('Vou deixar seu pedido registrado para um atendente.')).toBe(true);
+      expect(afirmaFila('Não deixei seu pedido registrado.')).toBe(false);
+      // Revisão (04/10/2026, 3): o "não" de outra oração (vírgula, dois-pontos) não nega.
+      expect(afirmaFila('Não precisa, já está na fila.')).toBe(true);
+    });
+
+    test('"Não esquenta, vou te transferir." é anúncio (o "não" de outra oração não nega): a conclusão é exigida', async () => {
+      roteiro(final('Não esquenta, vou te transferir.'), chamada('concluir_triagem'), final('Certo.'));
+      await turno(['quero falar com alguém']);
+      expect(executeTool.mock.calls.some(([n]) => n === 'concluir_triagem')).toBe(true);
+    });
+
+    test('as falas do cliente e a última fala da IA chegam às ferramentas (origem do documento e meio de pagamento)', async () => {
+      roteiro(chamada('consultar_status_todos_contratos'), final('Certo.'));
+      await turno(['oi', saida('Você prefere boleto ou PIX?'), 'pode ser no pix']);
+      const ctx = executeTool.mock.calls[0][2];
+      expect(ctx.falasDoCliente).toEqual(['oi', 'pode ser no pix']);
+      expect(ctx.ultimaFalaDaIa).toBe('Você prefere boleto ou PIX?');
     });
 
     test('"entrou na fila" depois de uma conclusão que falhou sai, e entra a frase de transferência não confirmada', async () => {

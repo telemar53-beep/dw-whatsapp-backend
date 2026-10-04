@@ -1125,7 +1125,9 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(paraOCliente).toBe(
       `Willemberg, recebi seu comprovante e ele já está registrado para a equipe conferir a partir das 08:00. `
       // Ajuste de 25/09/2026: sem a promessa de liberação automática (não é garantida).
-      + `Não consegui liberar o acesso em confiança agora: ${r.motivo} Assim que o pagamento constar no sistema, a situação do contrato será verificada.`
+      // Pendências do atendimento (04/10/2026): sem a promessa de verificar "assim que o pagamento constar" (nenhum
+      // mecanismo faz isso); a equipe confere a partir do horário de retorno, como a primeira frase já diz.
+      + `Não consegui liberar o acesso em confiança agora: ${r.motivo}`
     );
     // O que o cliente lê não pode conter o nome de uma ferramenta.
     expect(paraOCliente).not.toContain('concluir_triagem');
@@ -1134,7 +1136,8 @@ describe('desbloqueio_confianca — modo noturno', () => {
   test('motivo sem ponto final não emenda na frase seguinte', async () => {
     sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: 'contrato com bloqueio judicial' });
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
-    expect(r.instrucao).toContain('contrato com bloqueio judicial. Assim que o pagamento constar no sistema');
+    expect(r.instrucao).toContain('contrato com bloqueio judicial."');
+    expect(r.instrucao).not.toMatch(/assim que o pagamento constar/i);
   });
 
   test('a recusa do SGP à noite também vem com acolhimento, mesmo sem motivo do SGP', async () => {
@@ -2477,9 +2480,16 @@ describe('concluir_triagem', () => {
       expect(concludeAiTriage).not.toHaveBeenCalled();
     });
 
-    test('trecho curto demais (menos de duas palavras) não vale', async () => {
-      const c = depoisDaFalha({ ultimaFalaDoCliente: 'Sim.' });
-      expect(await concluir({ pedidoRenovadoNaMensagemAtual: 'Sim' }, c)).toMatchObject({ concluido: false });
+    // Pendências do atendimento (04/10/2026): "Atendente" sozinho, depois de uma falha, pode ser pedido novo. Quem
+    // interpreta é o modelo; o código só confere que o trecho está na mensagem atual — sem mínimo de palavras.
+    test('trecho de uma palavra que é a mensagem atual ("Atendente") vale', async () => {
+      const c = depoisDaFalha({ ultimaFalaDoCliente: 'Atendente.' });
+      expect(await concluir({ pedidoRenovadoNaMensagemAtual: 'Atendente' }, c)).toMatchObject({ concluido: true });
+    });
+
+    test('trecho de uma palavra que não está na mensagem atual não vale', async () => {
+      const c = depoisDaFalha({ ultimaFalaDoCliente: 'Obrigado.' });
+      expect(await concluir({ pedidoRenovadoNaMensagemAtual: 'Atendente' }, c)).toMatchObject({ concluido: false });
     });
 
     test('validar: o trecho é texto (aparado); outro tipo é invalid_args', () => {
@@ -3870,6 +3880,136 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   // atraso no SGP garante que ambas passem de faturaEmAlgumContrato antes de
   // qualquer uma chegar ao claim — é a corrida de verdade, a mesma que dois
   // workers fariam em produção.
+  // Pendências do atendimento (04/10/2026, decisão do proprietário; avaliação real E3, 0 de 6): sem meio escolhido ou
+  // estabelecido na conversa, nada sai — o modelo pergunta "Você prefere boleto ou PIX?". Nenhum campo do modelo prova a
+  // escolha: o código lê as falas do cliente, a última fala da IA e as entregas já feitas.
+  describe('meio de pagamento escolhido antes da entrega', () => {
+    const comFalas = (falasDoCliente, extra = {}) => ctx({ falasDoCliente, ...extra });
+
+    test('pedido genérico ("quero pagar minha fatura"): nem PIX nem boleto saem, nada é reservado, e o modelo lê a pergunta', async () => {
+      const p = await pix({ contratoId: 17402 }, comFalas(['Oi, quero pagar minha fatura.']));
+      expect(p).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+      expect(p.instrucao).toMatch(/Pergunte só: "Você prefere boleto ou PIX\?"/);
+      const b = await boleto({ contratoId: 17402 }, comFalas(['Oi, quero pagar minha fatura.']));
+      expect(b).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+      expect(claimDelivery).not.toHaveBeenCalled();
+      expect(enviarPix).not.toHaveBeenCalled();
+      expect(documentos()).toHaveLength(0);
+    });
+
+    test('o meio que o cliente escreveu sai: PIX e boleto', async () => {
+      expect((await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura', 'pode ser no PIX']))).enviado).toBe(true);
+      expect((await boleto({ contratoId: 17402 }, comFalas(['manda o boleto, por favor']))).enviado).toBe(true);
+    });
+
+    test('o cliente escreveu um meio: o outro continua sem escolha', async () => {
+      const b = await boleto({ contratoId: 17402 }, comFalas(['vocês aceitam pix?', 'então quero pagar']));
+      expect(b).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+    });
+
+    test('a última fala da IA ofereceu o boleto (não há PIX nesta fatura) e ele respondeu: o boleto sai (se a resposta aceita a oferta, quem interpreta é o modelo)', async () => {
+      // Revisão do incremento (04/10/2026): a fatura coerente com a fala — sem código PIX. Com os dois meios existindo, a fala
+      // da IA que cita os dois não estabelece nenhum (testes acima).
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
+      const r = await boleto({ contratoId: 17402 }, comFalas(['manda o pix', 'sim, pode mandar'], { ultimaFalaDaIa: 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?' }));
+      expect(r.enviado).toBe(true);
+    });
+
+    test('a pergunta "Você prefere boleto ou PIX?" (ou "PIX ou o boleto") não estabelece meio nenhum', async () => {
+      const r = await pix({ contratoId: 17402 }, comFalas(['quero pagar', 'pode ser'], { ultimaFalaDaIa: 'Você prefere boleto ou PIX?' }));
+      expect(r).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+      const b = await boleto({ contratoId: 17402 }, comFalas(['quero pagar', 'pode ser'], { ultimaFalaDaIa: 'Prefere PIX ou o boleto?' }));
+      expect(b).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+    });
+
+    test('o mesmo meio desta fatura já saiu nesta conversa: o reenvio pedido segue', async () => {
+      expect((await pix({ contratoId: 17402 }, comFalas(['manda o pix'], { messageId: 'msg-1' }))).enviado).toBe(true);
+      const r = await pix({ contratoId: 17402, reenviar: true }, comFalas(['não achei, manda de novo'], { messageId: 'msg-2' }));
+      expect(r.enviado).toBe(true);
+    });
+
+    test('reenviar: true sem envio anterior e sem meio escolhido não dispensa a pergunta', async () => {
+      const r = await boleto({ contratoId: 17402, reenviar: true }, comFalas(['quero pagar']));
+      expect(r).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+    });
+
+    test('sem as falas do cliente no contexto (chamada fora do orquestrador), nada muda', async () => {
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+
+    // Revisão (04/10/2026, impeditivo 1): variações comuns da pergunta de escolha na fala da IA.
+    test.each([
+      'Prefere pagar com boleto bancário ou PIX?',
+      'Posso enviar o boleto (PDF) ou o PIX copia e cola, como preferir.',
+      'Para regularizar, posso te enviar o boleto bancário ou o PIX.',
+      'Quer o boleto ou a chave PIX?',
+      // Revisão do incremento: com os sinônimos e com mais palavras entre os meios.
+      'Prefere pagar com código de barras ou PIX?',
+      'Quer o boleto ou o QR code?',
+      'Você prefere o PIX copia e cola ou o código de barras do boleto?',
+      'Posso mandar o boleto em PDF para pagar no banco ou o código PIX.',
+    ])('a fala da IA "%s" cita os dois meios, que existem nesta fatura: não estabelece meio', async (daIa) => {
+      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar', 'pode mandar'], { ultimaFalaDaIa: daIa }));
+      expect(p).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+    });
+
+    // Revisão (impeditivo 2): a trava só pergunta quando o meio existe nesta fatura; quando o outro não existe, oferece só
+    // o que existe.
+    test('PIX sem código: a trava não pergunta; sai a recusa honesta do PIX sem código', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
+      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      expect(p.meioNaoEscolhido).toBeUndefined();
+      expect(p).toMatchObject({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
+    });
+
+    test('boleto sem link: a trava não pergunta; sai a recusa de sempre', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, boletoLink: null }] });
+      const b = await boleto({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      expect(b.meioNaoEscolhido).toBeUndefined();
+      expect(b).toMatchObject({ enviado: false, motivo: 'Boleto sem link para download' });
+    });
+
+    test('só o boleto existe (PIX sem código): a pergunta oferece só o boleto', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
+      const b = await boleto({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      expect(b).toMatchObject({ meioNaoEscolhido: true });
+      expect(b.instrucao).toMatch(/só tem o boleto disponível agora/);
+      expect(b.instrucao).not.toMatch(/boleto ou PIX/);
+    });
+
+    test('a IA ofereceu o boleto dizendo que não há PIX (PIX sem código): o boleto sai na resposta dele', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
+      const r = await boleto({ contratoId: 17402 }, comFalas(['quero pagar', 'pode ser'], { ultimaFalaDaIa: 'Não há PIX para esta fatura agora. Posso enviar o boleto ou prefere esperar?' }));
+      expect(r.enviado).toBe(true);
+    });
+
+    test('só o PIX existe (boleto sem link): a pergunta oferece só o PIX', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, boletoLink: null }] });
+      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      expect(p).toMatchObject({ meioNaoEscolhido: true });
+      expect(p.instrucao).toMatch(/só tem o PIX disponível agora/);
+      expect(p.instrucao).not.toMatch(/boleto ou PIX/);
+    });
+
+    // Revisão (8): no turno do limite de perguntas, a recusa não manda perguntar.
+    test('no turno do limite de perguntas, a recusa manda concluir com o meio não escolhido no resumo, sem perguntar', async () => {
+      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar'], { triagem: { threshold: 0.8, maxQuestions: 2, attempts: 2, forcarConclusao: true, noturno: { ativo: false } } }));
+      expect(p).toMatchObject({ meioNaoEscolhido: true });
+      expect(p.instrucao).toMatch(/Não pergunte: chame concluir_triagem/);
+    });
+
+    // Revisão (10): pedido explícito do meio sem o nome dele.
+    test.each([
+      ['enviar_boleto', 'manda o código de barras'],
+      ['enviar_boleto', 'me passa a linha digitável'],
+      ['gerar_pix', 'manda o copia e cola'],
+      ['gerar_pix', 'pode ser pelo QR code'],
+    ])('%s: "%s" é pedido explícito do meio', async (nome, fala) => {
+      const r = await (nome === 'gerar_pix' ? pix : boleto)({ contratoId: 17402 }, comFalas([fala]));
+      expect(r.enviado).toBe(true);
+    });
+  });
+
   describe('1. duas execuções simultâneas do envio inicial', () => {
     const depois = (ms, valor) => new Promise((resolve) => { setTimeout(() => resolve(valor), ms); });
 

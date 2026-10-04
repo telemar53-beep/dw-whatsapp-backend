@@ -15,6 +15,7 @@ jest.mock('../city-notices/city-notice.service');
 jest.mock('../city-notices/city-notice.repository');
 jest.mock('../cities/city.repository');
 jest.mock('../sectors/reactivation-sector');
+jest.mock('../company/company-config.repository');
 
 const { runAiTurn } = require('../ai/ai-orchestrator');
 const { createSuggestion } = require('../ai/ai-suggestion.repository');
@@ -26,7 +27,11 @@ const {
 } = require('../conversations/conversation.repository');
 const { setorDeReativacao } = require('../sectors/reactivation-sector');
 const { findContactById } = require('../conversations/contact.repository');
-const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation, findLastMessageCreatedAt } = require('../conversations/message.repository');
+const {
+  findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation, findLastMessageCreatedAt, listarFalasSemAlvoConfirmado,
+  marcarFalasComAlvoProcessado,
+} = require('../conversations/message.repository');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const { enqueueTriageTimeout } = require('./ai-queue');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { resolverIdentidade } = require('../ai/identity-resolver');
@@ -53,6 +58,12 @@ beforeEach(() => {
   findLatestInboundMessageId.mockResolvedValue('m-1');
   createSuggestion.mockResolvedValue({ id: 's-1', content: 'texto' });
 });
+
+// Persistência do alvo (03/10/2026): toda gravação do escopo pelo worker é condicional ao estado lido, e cada
+// escopo gravado leva uma marca nova. As asserções conferem as duas coisas.
+const GRAVACAO_CONDICIONAL = expect.objectContaining({ esperados: expect.any(Array) });
+const VOLTA_CONDICIONAL = expect.objectContaining({ esperados: expect.any(Array), aceitaNulo: true });
+const comMarca = (escopo) => ({ ...escopo, marca: expect.any(String) });
 
 describe('ai-worker', () => {
   test('assistant mode stores a suggestion and notifies the assigned agent', async () => {
@@ -216,7 +227,10 @@ describe('ai-worker — triagem', () => {
     // automock puro. Mesmo raciocínio de defesa que getThirdPartyScope acima:
     // um default benigno aqui evita que um mockRejectedValue esquecido em
     // teste futuro vaze pelo mesmo motivo.
-    setThirdPartyScope.mockResolvedValue();
+    // Persistência do alvo (03/10/2026): a gravação condicional devolve se gravou; só `true` confirma.
+    setThirdPartyScope.mockResolvedValue(true);
+    // Terceira revisão da F2: a marca das entradas processadas. Default benigno, pelo mesmo motivo.
+    marcarFalasComAlvoProcessado.mockReset().mockResolvedValue();
     // Regra financeira 0/1/2+: a esmagadora maioria das conversas não está marcada para a reativação.
     getTriageReactivation.mockReset().mockResolvedValue(null);
     setorDeReativacao.mockReset().mockResolvedValue(null);
@@ -780,7 +794,7 @@ describe('ai-worker — triagem', () => {
         // Turno 1: buscar_cliente (dentro do turno) grava o escopo — aqui, o que a ferramenta faz de verdade.
         let gravado = null;
         getThirdPartyScope.mockImplementation(async () => gravado);
-        setThirdPartyScope.mockImplementation(async (_id, escopo) => { gravado = escopo; });
+        setThirdPartyScope.mockImplementation(async (_id, escopo) => { gravado = escopo; return true; });
         runAiTurn.mockImplementationOnce(async () => {
           gravado = { nome: 'Maria', contratos: [77], expiraEm: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
           return { texto: 'Localizei o contrato no CPF informado.', toolsExecutadas: [{ nome: 'buscar_cliente' }], erro: null, triagemConcluida: null, pedidoDeDocumento: null };
@@ -814,7 +828,7 @@ describe('ai-worker — triagem', () => {
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
       expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null }));
-      expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null);
+      expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
     });
 
     test('sem escopo: terceiro null, e nenhuma chamada de limpeza (não faz UPDATE à toa)', async () => {
@@ -826,13 +840,14 @@ describe('ai-worker — triagem', () => {
       expect(setThirdPartyScope).not.toHaveBeenCalled();
     });
 
-    test('leitura do escopo falhando: o turno acontece mesmo assim, com terceiro null', async () => {
+    test('leitura do escopo falhando: o turno acontece mesmo assim, com terceiro null — mas a cobrança do turno trava', async () => {
       const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       getThirdPartyScope.mockRejectedValue(new Error('banco fora'));
 
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null }));
+      // Revisão da F2: falha de leitura não prova que não havia terceiro nem dúvida gravada.
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: 'escopo_nao_lido' }));
       expect(setThirdPartyScope).not.toHaveBeenCalled();
       errorSpy.mockRestore();
     });
@@ -858,7 +873,7 @@ describe('ai-worker — triagem', () => {
 
         await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null);
+        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
         expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
       });
 
@@ -871,14 +886,209 @@ describe('ai-worker — triagem', () => {
         expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null }));
       });
 
-      test('"manda o meu e o dela": ambíguo — mantém o terceiro e trava a cobrança do turno', async () => {
+      test('"manda o meu e o dela": ambíguo — mantém o terceiro, trava a cobrança e grava a dúvida (revisão da F2)', async () => {
         getThirdPartyScope.mockResolvedValue(ESCOPO);
         findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o meu e o dela' });
 
         await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] }, alvoAmbiguo: true }));
-        expect(setThirdPartyScope).not.toHaveBeenCalled();
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+          terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }], alvoPendente: 'dois_lados' }, alvoAmbiguo: 'dois_lados',
+        }));
+        // O escopo não é limpo: só ganha a dúvida, com o mesmo prazo.
+        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'dois_lados' }), GRAVACAO_CONDICIONAL);
+      });
+
+      // F2 (30/09/2026): posse de coisa própria é o próprio — com terceiro registrado, é volta explícita.
+      test('"manda o boleto da minha internet": volta ao titular — limpa o escopo', async () => {
+        getThirdPartyScope.mockResolvedValue(ESCOPO);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da minha internet' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+      });
+
+      // Revisão da F2 (30/09/2026): a dúvida sobre o alvo fica gravada no escopo (alvoPendente) — não depende
+      // das mensagens lidas, sobrevive a qualquer número de mensagens e ao reinício do worker, e some com o
+      // prazo do escopo, que não é renovado.
+      describe('dúvida sobre o alvo gravada no escopo', () => {
+        const COM_DUVIDA = { ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado' };
+
+        test('"manda o boleto da minha mãe": grava a dúvida no mesmo escopo, sem mexer no prazo nem nos contratos', async () => {
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da minha mãe' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ nome: 'Beltrana', contratos: [77], expiraEm: FUTURO, alvoPendente: 'terceiro_nao_vinculado' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
+        });
+
+        test('reinício do worker: a dúvida vem do banco — "pode mandar" continua travado, sem ler histórico para isso', async () => {
+          getThirdPartyScope.mockResolvedValue(COM_DUVIDA);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+          listRecentMessagesByConversation.mockResolvedValue([]);
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+            terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }], alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado',
+          }));
+          expect(setThirdPartyScope).not.toHaveBeenCalled();
+        });
+
+        test('volta explícita ao próprio com a dúvida gravada: limpa o escopo', async () => {
+          getThirdPartyScope.mockResolvedValue(COM_DUVIDA);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+        });
+
+        test('dúvida fraca resolvida por "o dela": grava o escopo sem a dúvida e libera o turno', async () => {
+          getThirdPartyScope.mockResolvedValue({ ...ESCOPO, alvoPendente: 'referencia_incompleta' });
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o dela' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca(ESCOPO), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] }, alvoAmbiguo: false }));
+        });
+
+        test('sem terceiro, "manda o boleto da minha mãe": grava um escopo pendente, sem contrato, com a dúvida e prazo novo', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da minha mãe' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ nome: null, contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento', marca: expect.any(String) }), GRAVACAO_CONDICIONAL);
+          const [, gravado] = setThirdPartyScope.mock.calls[0];
+          expect(Date.parse(gravado.expiraEm) - Date.now()).toBeGreaterThan(29 * 60 * 1000);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'outra_pessoa_sem_documento' }));
+        });
+
+        test('gravar a dúvida falhou: o turno segue travado e registra', async () => {
+          const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'agora é de outra pessoa' });
+
+          runAiTurn.mockResolvedValue({ texto: 'De quem é a cobrança?', toolsExecutadas: [], erro: null });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          // Segunda revisão: transição não gravada não pode parecer concluída — nenhuma cobrança. Terceira
+          // revisão: a entrada fica sem a marca de processada, e o próximo turno a reaplica.
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'transicao_nao_gravada' }));
+          expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+          expect(enqueueOutboundMessage.mock.calls[0][0].metadata).toBeUndefined();
+          expect(errorSpy).toHaveBeenCalled();
+          errorSpy.mockRestore();
+        });
+
+        // Terceira revisão da F2 (30/09/2026): expiração encerra a autorização, não resolve a dúvida. O escopo
+        // vencido com dúvida NÃO é limpo; o turno recebe a dúvida sem autorização (nenhum contrato).
+        describe('escopo com a dúvida mas vencido', () => {
+          const VENCIDO = { ...COM_DUVIDA, expiraEm: PASSADO };
+          const SEM_AUTORIZACAO = { nome: null, contratos: [], pendente: true, alvoPendente: 'terceiro_expirado' };
+
+          test('"pode mandar": não limpa, não autoriza contrato nenhum e trava a cobrança', async () => {
+            getThirdPartyScope.mockResolvedValue(VENCIDO);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(setThirdPartyScope).not.toHaveBeenCalled();
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+              terceiro: SEM_AUTORIZACAO, alvoAmbiguo: 'terceiro_expirado', terceiroLocalizadoEm: null,
+            }));
+            // Nada a gravar: a entrada foi aplicada ao estado persistido.
+            expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-1']);
+          });
+
+          test('as falas pendentes são pedidas pelos últimos 30 minutos, não pela criação do escopo vencido', async () => {
+            getThirdPartyScope.mockResolvedValue(VENCIDO);
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+            const [, { desde }] = listarFalasSemAlvoConfirmado.mock.calls[0];
+            expect(Math.abs(desde.getTime() - (Date.now() - 30 * 60 * 1000))).toBeLessThan(5000);
+          });
+
+          test('"quero a minha fatura": limpa o escopo vencido e segue o titular', async () => {
+            getThirdPartyScope.mockResolvedValue(VENCIDO);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+          });
+
+          test('a limpeza falhou: nenhuma cobrança, e a entrada fica sem a marca', async () => {
+            const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+            getThirdPartyScope.mockResolvedValue(VENCIDO);
+            setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'transicao_nao_gravada' }));
+            expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+            errorSpy.mockRestore();
+          });
+
+          // Decisão gerencial (30/09/2026): o documento de terceiro não localizado também não se resolve pelo prazo.
+          describe('documento de terceiro não localizado (pendente, sem dúvida gravada) e vencido', () => {
+            const NAO_LOCALIZADO_VENCIDO = { nome: null, contratos: [], pendente: true, expiraEm: PASSADO };
+
+            test('"pode mandar": não limpa e trava a cobrança', async () => {
+              getThirdPartyScope.mockResolvedValue(NAO_LOCALIZADO_VENCIDO);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).not.toHaveBeenCalled();
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: SEM_AUTORIZACAO, alvoAmbiguo: 'terceiro_expirado' }));
+            });
+
+            test('a própria cobrança: limpa e segue o titular', async () => {
+              getThirdPartyScope.mockResolvedValue(NAO_LOCALIZADO_VENCIDO);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+            });
+
+            test('a limpeza falhou: nenhuma cobrança por suposição, e a entrada fica sem a marca', async () => {
+              const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+              getThirdPartyScope.mockResolvedValue(NAO_LOCALIZADO_VENCIDO);
+              setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'transicao_nao_gravada' }));
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+              errorSpy.mockRestore();
+            });
+          });
+
+          test('vencido SEM dúvida: a regra de 25/09 continua — limpa e segue o titular', async () => {
+            getThirdPartyScope.mockResolvedValue({ ...ESCOPO, expiraEm: PASSADO });
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+          });
+        });
       });
 
       test('a limpeza falhou: segue no terceiro (o lado seguro) e registra', async () => {
@@ -886,12 +1096,525 @@ describe('ai-worker — triagem', () => {
         getThirdPartyScope.mockResolvedValue(ESCOPO);
         setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
         findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'agora o meu' });
+        runAiTurn.mockResolvedValue({ texto: 'Não consegui seguir com a cobrança agora.', toolsExecutadas: [], erro: null });
 
         await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] } }));
+        // Segunda revisão: manter a Beltrana sem trava cobraria a pessoa anterior logo depois de ele pedir a
+        // própria cobrança. Nenhuma cobrança sai — nem dela, nem dele — e a entrada fica sem a marca.
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'transicao_nao_gravada' }));
+        expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+        expect(enqueueOutboundMessage.mock.calls[0][0].metadata).toBeUndefined();
         expect(errorSpy).toHaveBeenCalled();
         errorSpy.mockRestore();
+      });
+
+      // Segunda revisão da F2 (30/09/2026): o turno reaplica as falas ainda não confirmadas (registro durável:
+      // mensagens no banco + resposta marcada quando a transição não foi gravada).
+      describe('recuperação entre turnos', () => {
+        const fala = (id, content) => ({ id, direction: 'inbound', messageType: 'text', content, createdAt: new Date() });
+        afterEach(() => {
+          listarFalasSemAlvoConfirmado.mockReset();
+        });
+
+        test('pede as falas desde a criação do escopo (ou 30 minutos), em páginas (segurança final, 03/10/2026)', async () => {
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          const [conversa, { desde, limite, depoisDe }] = listarFalasSemAlvoConfirmado.mock.calls[0];
+          expect(conversa).toBe('c-1');
+          expect(desde.getTime()).toBe(Date.parse(FUTURO) - 30 * 60 * 1000);
+          expect(limite).toBe(200);
+          expect(depoisDe).toBeNull();
+        });
+
+        test('mensagem seguinte depois de a dúvida não ter sido gravada: a fala volta e a dúvida é gravada', async () => {
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-0', 'manda o boleto da minha mãe'), fala('m-1', 'pode mandar')]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
+        });
+
+        test('mensagem seguinte depois de a volta ao próprio não ter sido gravada: a volta se conclui', async () => {
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-0', 'quero a minha fatura'), fala('m-1', 'manda o boleto')]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+        });
+
+        test('falhou de novo na mensagem seguinte: continua travado e marcado', async () => {
+          const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+          listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-0', 'quero a minha fatura')]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto' });
+          runAiTurn.mockResolvedValue({ texto: 'Não consegui seguir agora.', toolsExecutadas: [], erro: null });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'transicao_nao_gravada' }));
+          expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+          expect(enqueueOutboundMessage.mock.calls[0][0].metadata).toBeUndefined();
+          errorSpy.mockRestore();
+        });
+
+        test('reinício do processamento: sem nada em memória, o escopo e as falas não confirmadas dão o mesmo estado', async () => {
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-0', 'não é da Beltrana'), fala('m-1', 'ok')]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'ok' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(runAiTurn.mock.calls.map(([a]) => a.alvoAmbiguo)).toEqual(['terceiro_nao_vinculado', 'terceiro_nao_vinculado']);
+        });
+
+        test('as falas não puderam ser lidas: nenhuma cobrança, nada gravado, resposta marcada', async () => {
+          const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          listarFalasSemAlvoConfirmado.mockRejectedValueOnce(new Error('banco fora'));
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+          runAiTurn.mockResolvedValue({ texto: 'Não consegui seguir agora.', toolsExecutadas: [], erro: null });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).not.toHaveBeenCalled();
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'escopo_nao_lido' }));
+          expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+          expect(enqueueOutboundMessage.mock.calls[0][0].metadata).toBeUndefined();
+          errorSpy.mockRestore();
+        });
+
+        // MUDANÇA DELIBERADA (segurança final, 03/10/2026): mais de 50 falas não confirmadas travavam a cobrança até o
+        // fim da triagem (nada era marcado nunca). Agora todas são lidas, em páginas, reaplicadas e marcadas.
+        test('mais de uma página de falas sem confirmação: todas são lidas (cursor), nenhuma é descartada, e são marcadas', async () => {
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          const primeira = Array.from({ length: 200 }, (_, i) => ({ ...fala(`m-${i}`, 'ok'), createdAt: new Date(1000 + i) }));
+          const segunda = [fala('m-200', 'ok'), fala('m-201', 'manda o boleto da minha mãe')];
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce(primeira).mockResolvedValueOnce(segunda);
+          findMessageById.mockResolvedValue({ id: 'm-201', messageType: 'text', content: 'manda o boleto da minha mãe' });
+          findLatestInboundMessageId.mockResolvedValue('m-201');
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-201' });
+
+          expect(listarFalasSemAlvoConfirmado).toHaveBeenCalledTimes(2);
+          expect(listarFalasSemAlvoConfirmado.mock.calls[1][1].depoisDe).toEqual({ createdAt: primeira[199].createdAt, id: 'm-199' });
+          // A fala da página 2 contou: a dúvida dela é gravada (nada foi descartado).
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
+          expect(marcarFalasComAlvoProcessado.mock.calls[0][0]).toHaveLength(202);
+          findLatestInboundMessageId.mockResolvedValue('m-1');
+        });
+
+        test('acima do teto patológico (10.000 falas sem confirmação): nenhuma cobrança, nada gravado nem marcado', async () => {
+          const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          let n = 0;
+          listarFalasSemAlvoConfirmado.mockImplementation(async () => Array.from({ length: 200 }, () => { n += 1; return { ...fala(`m-${n}`, 'ok'), createdAt: new Date(n) }; }));
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'ok' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(listarFalasSemAlvoConfirmado).toHaveBeenCalledTimes(50);
+          expect(setThirdPartyScope).not.toHaveBeenCalled();
+          expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'escopo_nao_lido' }));
+          listarFalasSemAlvoConfirmado.mockReset();
+          listarFalasSemAlvoConfirmado.mockResolvedValue([]);
+          errorSpy.mockRestore();
+        });
+
+        test('resposta automática do WhatsApp do cliente não entra na reaplicação', async () => {
+          getThirdPartyScope.mockResolvedValue(ESCOPO);
+          listarFalasSemAlvoConfirmado.mockResolvedValue([
+            { ...fala('m-0', 'fale com a minha mãe no outro número'), metadata: { autorrespostaProvavel: true } }, fala('m-1', 'pode mandar'),
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false }));
+        });
+
+        // Terceira revisão da F2 (30/09/2026): a confirmação é explícita, pelo id de cada entrada aplicada, depois
+        // da transição persistida (ou de nenhuma ser necessária) e antes do turno. Saída não confirma entrada.
+        describe('marca das entradas processadas', () => {
+          // Falha de gravação dentro da consulta (30/09/2026): a marca vem DEPOIS do turno — a ferramenta também pode
+          // ter uma transição a gravar, e a entrada só conta como concluída quando tudo do turno está gravado.
+          test('transição gravada: marca as lidas e a do turno, depois de gravar e depois do turno', async () => {
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-0', 'manda o boleto da minha mãe'), fala('m-1', 'pode mandar')]);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(marcarFalasComAlvoProcessado).toHaveBeenCalledTimes(1);
+            expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-0', 'm-1']);
+            const ordem = (fn) => fn.mock.invocationCallOrder[0];
+            expect(ordem(setThirdPartyScope)).toBeLessThan(ordem(runAiTurn));
+            expect(ordem(runAiTurn)).toBeLessThan(ordem(marcarFalasComAlvoProcessado));
+          });
+
+          // Persistência do alvo (03/10/2026): gravações condicionais ao estado conhecido, estado que mudou depois da
+          // leitura, documento em entrada anterior não confirmada e volta pelo próprio documento não gravada.
+          describe('persistência do alvo: gravação condicional (03/10/2026)', () => {
+            const COM_MARCA = { ...ESCOPO, marca: 'marca-lida' };
+            const silenciar = () => jest.spyOn(console, 'error').mockImplementation(() => {});
+            const ordem = (fn) => fn.mock.invocationCallOrder[0];
+
+            test('a transição exige o estado lido; o turno recebe o estado gravado como esperado', async () => {
+              getThirdPartyScope.mockResolvedValue(COM_MARCA);
+              listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-1', 'quero a minha fatura')]);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, { esperados: [{ marca: 'marca-lida' }], aceitaNulo: true });
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false, esperadosDoAlvo: [{ nulo: true }] }));
+            });
+
+            test('outro processamento gravou depois da leitura: a cobrança do turno trava e nada é marcado', async () => {
+              const errorSpy = silenciar();
+              getThirdPartyScope.mockResolvedValue(COM_MARCA);
+              setThirdPartyScope.mockResolvedValue(false);
+              listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-1', 'quero a minha fatura')]);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+              errorSpy.mockRestore();
+
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'transicao_nao_gravada' }));
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+            });
+
+            test('escopo vencido trocado por outro processamento antes da limpeza: a cobrança trava e nada é marcado', async () => {
+              const errorSpy = silenciar();
+              getThirdPartyScope.mockResolvedValue({ ...COM_MARCA, expiraEm: PASSADO });
+              setThirdPartyScope.mockResolvedValue(false);
+              listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-1', 'manda o boleto')]);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+              errorSpy.mockRestore();
+
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'transicao_nao_gravada' }));
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+            });
+
+            test('entrada ANTERIOR não confirmada com o CPF de outra pessoa: o pendente sem contrato é gravado antes do turno', async () => {
+              findContactById.mockResolvedValue({ id: 'ct-1', phoneNumber: '55989', sgpDocument: '52998224725' });
+              getThirdPartyScope.mockResolvedValue(null);
+              listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-0', '390.533.447-05'), fala('m-1', 'pode mandar')]);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ nome: null, contratos: [], pendente: true, marca: expect.any(String) }),
+                { esperados: [{ nulo: true }], aceitaNulo: false });
+              expect(ordem(setThirdPartyScope)).toBeLessThan(ordem(runAiTurn));
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: null, contratos: [], pendente: true } }));
+              expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-0', 'm-1']);
+            });
+
+            test('o CPF de outra pessoa na PRÓPRIA entrada do job não muda o alvo antes do turno (quem consulta é o modelo)', async () => {
+              findContactById.mockResolvedValue({ id: 'ct-1', phoneNumber: '55989', sgpDocument: '52998224725' });
+              getThirdPartyScope.mockResolvedValue(null);
+              listarFalasSemAlvoConfirmado.mockResolvedValue([fala('m-1', '390.533.447-05')]);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '390.533.447-05' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).not.toHaveBeenCalled();
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+            });
+
+            test('a recuperação do pendente exige os estados que o turno devolveu (inclusive a gravação que lançou erro)', async () => {
+              getThirdPartyScope.mockResolvedValue(null);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '39053344705' });
+              runAiTurn.mockResolvedValueOnce({ texto: 'Não consegui concluir a consulta agora.', toolsExecutadas: [], erro: null, alvoTerceiroNaoGravado: true, esperadosDoAlvo: [{ nulo: true }, { marca: 'tentada' }] });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ pendente: true }), { esperados: [{ nulo: true }, { marca: 'tentada' }] });
+              expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-1']);
+            });
+
+            test('a recuperação do pendente encontra outro estado: as entradas não são marcadas', async () => {
+              const errorSpy = silenciar();
+              getThirdPartyScope.mockResolvedValue(null);
+              setThirdPartyScope.mockResolvedValue(false);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '39053344705' });
+              runAiTurn.mockResolvedValueOnce({ texto: 'Não consegui concluir a consulta agora.', toolsExecutadas: [], erro: null, alvoTerceiroNaoGravado: true, esperadosDoAlvo: [{ nulo: true }] });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+              errorSpy.mockRestore();
+
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+            });
+
+            test('achado 3a: a identificação pelo próprio documento não terminou (SGP ou tempo): nada é gravado e as entradas não são marcadas', async () => {
+              getThirdPartyScope.mockResolvedValue(COM_MARCA);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '52998224725' });
+              runAiTurn.mockResolvedValueOnce({ texto: 'Não consegui consultar agora.', toolsExecutadas: [], erro: null, consultaPropriaPendente: true, esperadosDoAlvo: [{ marca: 'marca-lida' }] });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).not.toHaveBeenCalled();
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+            });
+
+            test('segurança final: a reserva de uma entrega encontrou o alvo mudado: as entradas não são marcadas', async () => {
+              getThirdPartyScope.mockResolvedValue(COM_MARCA);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+              runAiTurn.mockResolvedValueOnce({ texto: 'Não consegui enviar agora.', toolsExecutadas: [], erro: null, alvoMudouNaEntrega: true, esperadosDoAlvo: [{ marca: 'marca-lida' }] });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+            });
+
+            describe('volta ao titular pelo próprio documento não gravada (bloqueador 2)', () => {
+              const voltaNaoGravada = (esperadosDoAlvo) => runAiTurn.mockResolvedValueOnce({
+                texto: 'Pronto.', toolsExecutadas: [], erro: null, voltaAoTitularNaoGravada: true, esperadosDoAlvo,
+              });
+
+              test('o worker grava a volta depois do turno, com os estados que o turno conhece, e só então marca', async () => {
+                getThirdPartyScope.mockResolvedValue(COM_MARCA);
+                findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '52998224725' });
+                voltaNaoGravada([{ marca: 'marca-lida' }, { nulo: true }]);
+
+                await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+                expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+                expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, { esperados: [{ marca: 'marca-lida' }, { nulo: true }], aceitaNulo: true });
+                expect(ordem(runAiTurn)).toBeLessThan(ordem(setThirdPartyScope));
+                expect(ordem(setThirdPartyScope)).toBeLessThan(ordem(marcarFalasComAlvoProcessado));
+                expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-1']);
+              });
+
+              test('outro processamento gravou: a volta não é escrita e as entradas não são marcadas', async () => {
+                const errorSpy = silenciar();
+                getThirdPartyScope.mockResolvedValue(COM_MARCA);
+                setThirdPartyScope.mockResolvedValue(false);
+                findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '52998224725' });
+                voltaNaoGravada([{ marca: 'marca-lida' }]);
+
+                await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+                errorSpy.mockRestore();
+
+                expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+              });
+
+              test('a gravação da volta lança erro: as entradas não são marcadas', async () => {
+                const errorSpy = silenciar();
+                getThirdPartyScope.mockResolvedValue(COM_MARCA);
+                setThirdPartyScope.mockRejectedValue(new Error('banco fora'));
+                findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '52998224725' });
+                voltaNaoGravada([{ marca: 'marca-lida' }]);
+
+                await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+                errorSpy.mockRestore();
+
+                expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+              });
+            });
+          });
+
+          describe('consulta de terceiro que não gravou o pendente (aviso da ferramenta)', () => {
+            const PENDENTE = expect.objectContaining({ nome: null, contratos: [], pendente: true });
+
+            test('o worker grava o pendente depois do turno e só então marca as entradas', async () => {
+              getThirdPartyScope.mockResolvedValue(null);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '39053344705' });
+              runAiTurn.mockResolvedValueOnce({ texto: 'Não consegui concluir a consulta agora.', toolsExecutadas: [], erro: null, alvoTerceiroNaoGravado: true });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+              expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', PENDENTE, GRAVACAO_CONDICIONAL);
+              const ordem = (fn) => fn.mock.invocationCallOrder[0];
+              expect(ordem(runAiTurn)).toBeLessThan(ordem(setThirdPartyScope));
+              expect(ordem(setThirdPartyScope)).toBeLessThan(ordem(marcarFalasComAlvoProcessado));
+              expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-1']);
+            });
+
+            test('a gravação do worker também falhou: as entradas do turno NÃO são marcadas como concluídas', async () => {
+              const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+              getThirdPartyScope.mockResolvedValue({ ...ESCOPO });
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: '39053344705' });
+              runAiTurn.mockResolvedValueOnce({ texto: 'Não consegui concluir a consulta agora.', toolsExecutadas: [], erro: null, alvoTerceiroNaoGravado: true });
+              setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', PENDENTE, GRAVACAO_CONDICIONAL);
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+              expect(errorSpy).toHaveBeenCalled();
+              errorSpy.mockRestore();
+            });
+
+            test('sem o aviso, o worker não grava nada depois do turno', async () => {
+              getThirdPartyScope.mockResolvedValue({ ...ESCOPO });
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).not.toHaveBeenCalled();
+              expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-1']);
+            });
+
+            test('o turno lançou erro: nenhuma entrada é marcada', async () => {
+              const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+              getThirdPartyScope.mockResolvedValue({ ...ESCOPO });
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+              runAiTurn.mockRejectedValueOnce(new Error('turno caiu'));
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' }).catch(() => {});
+
+              expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+              errorSpy.mockRestore();
+            });
+          });
+
+          test('nenhuma transição necessária: marca a entrada do turno', async () => {
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(setThirdPartyScope).not.toHaveBeenCalled();
+            expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-1']);
+          });
+
+          test('entrada que chega durante o turno (depois da leitura) não é marcada e é aplicada no turno seguinte', async () => {
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            listarFalasSemAlvoConfirmado.mockResolvedValueOnce([fala('m-1', 'pode mandar')]);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+            // Durante o turno chega "quero a minha fatura" (m-2): a resposta deste turno é descartada.
+            runAiTurn.mockImplementationOnce(async () => {
+              findLatestInboundMessageId.mockResolvedValue('m-2');
+              return { texto: 'Enviei o boleto.', toolsExecutadas: [], erro: null };
+            });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+            // A marca vem logo depois do turno, antes de descartar a resposta: o que o turno aplicou está gravado.
+            expect(marcarFalasComAlvoProcessado.mock.calls).toEqual([[['m-1']]]);
+
+            listarFalasSemAlvoConfirmado.mockResolvedValueOnce([fala('m-2', 'quero a minha fatura')]);
+            findMessageById.mockResolvedValue({ id: 'm-2', messageType: 'text', content: 'quero a minha fatura' });
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-2' });
+
+            expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, VOLTA_CONDICIONAL);
+            expect(marcarFalasComAlvoProcessado).toHaveBeenLastCalledWith(['m-2']);
+            findLatestInboundMessageId.mockResolvedValue('m-1');
+          });
+
+          test('entrada mais nova que a do job já lida: a reaplicação segue a ordem do banco, não põe a do job por último', async () => {
+            // m-2 chegou depois da checagem "é a mais recente?" e antes da leitura das pendentes.
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            listarFalasSemAlvoConfirmado.mockResolvedValueOnce([fala('m-1', 'quero a minha fatura'), fala('m-2', 'manda o boleto da minha mãe')]);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            // Própria cobrança e, DEPOIS, outra pessoa sem documento: o titular não pode ficar liberado.
+            expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento', marca: expect.any(String) }), GRAVACAO_CONDICIONAL);
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'outra_pessoa_sem_documento' }));
+            expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-1', 'm-2']);
+          });
+
+          test('turno com ferramenta e cartão enviado: uma marca só, depois do turno, e só entradas são marcadas', async () => {
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+            runAiTurn.mockResolvedValueOnce({ texto: 'Pronto, enviei o PIX.', toolsExecutadas: [{ nome: 'gerar_pix' }], erro: null });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(marcarFalasComAlvoProcessado.mock.calls).toEqual([[['m-1']]]);
+            expect(runAiTurn.mock.invocationCallOrder[0]).toBeLessThan(marcarFalasComAlvoProcessado.mock.invocationCallOrder[0]);
+          });
+
+          test('reprocessamento de uma entrada já marcada: não é reaplicada sobre o estado que ela mesma gerou', async () => {
+            // O turno marcou "o boleto da minha mãe" e, depois, o documento consultado gravou o escopo da Beltrana;
+            // o processo caiu antes da resposta. O mesmo job de novo não pode travar a Beltrana por essa fala.
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da minha mãe', metadata: { alvoProcessado: true } });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(setThirdPartyScope).not.toHaveBeenCalled();
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] }, alvoAmbiguo: false }));
+            expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+          });
+
+          test('reprocessamento de uma entrada já marcada com a dúvida gravada: a dúvida continua valendo', async () => {
+            getThirdPartyScope.mockResolvedValue({ ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado' });
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da minha mãe', metadata: { alvoProcessado: true } });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
+            expect(setThirdPartyScope).not.toHaveBeenCalled();
+          });
+
+          test('áudio sem transcrição e nada pendente, com a dúvida gravada: a dúvida continua valendo', async () => {
+            getThirdPartyScope.mockResolvedValue({ ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado' });
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'audio', content: null, transcription: null });
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
+          });
+
+          test('a marca falhou: só registra; o turno segue com o estado gravado', async () => {
+            const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da minha mãe' });
+            marcarFalasComAlvoProcessado.mockRejectedValueOnce(new Error('banco fora'));
+
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
+            expect(enqueueOutboundMessage).toHaveBeenCalled();
+            expect(errorSpy).toHaveBeenCalled();
+            errorSpy.mockRestore();
+          });
+
+          test('falas não lidas ou acima do limite: nada é marcado', async () => {
+            const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+            getThirdPartyScope.mockResolvedValue(ESCOPO);
+            listarFalasSemAlvoConfirmado.mockRejectedValueOnce(new Error('banco fora'));
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+            getThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+            expect(runAiTurn.mock.calls.map(([a]) => a.alvoAmbiguo)).toEqual(['escopo_nao_lido', 'escopo_nao_lido']);
+            expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
+            errorSpy.mockRestore();
+          });
+        });
+
+        test('o nome da empresa, lido da configuração, não é referência de outra pessoa', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          getCompanyConfig.mockResolvedValueOnce({ name: 'DW Telecom' });
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da dw' });
+
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+          expect(setThirdPartyScope).not.toHaveBeenCalled();
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+        });
       });
     });
   });

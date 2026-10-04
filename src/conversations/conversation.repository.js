@@ -304,11 +304,39 @@ async function isPhoneContested(conversationId) {
  * uma). NUNCA guarda o documento do terceiro: os ids de contrato bastam para
  * as ferramentas de pagamento, e o CPF já não é necessário depois da consulta.
  */
-async function setThirdPartyScope(conversationId, escopo) {
-  await getPool().query(
-    `UPDATE conversations SET ai_triage_third_party = $2 WHERE id = $1`,
-    [conversationId, escopo ? JSON.stringify(escopo) : null]
+/** Os três parâmetros da condição sobre o escopo: coluna vazia aceita, marcas, e escopos legados (conteúdo). */
+function parametrosDaCondicaoDoEscopo(condicao) {
+  const esperados = Array.isArray(condicao && condicao.esperados) ? condicao.esperados.filter(Boolean) : [];
+  return {
+    aceitaNulo: Boolean(condicao && condicao.aceitaNulo) || esperados.some((e) => e.nulo === true),
+    marcas: esperados.filter((e) => typeof e.marca === 'string').map((e) => e.marca),
+    legados: esperados.filter((e) => e.legado).map((e) => JSON.stringify(e.legado)),
+  };
+}
+
+async function setThirdPartyScope(conversationId, escopo, condicao = null) {
+  if (!condicao) {
+    await getPool().query(
+      `UPDATE conversations SET ai_triage_third_party = $2 WHERE id = $1`,
+      [conversationId, escopo ? JSON.stringify(escopo) : null]
+    );
+    return true;
+  }
+  // Persistência do alvo (03/10/2026): gravação condicional. Só tem efeito se o banco ainda tiver um dos
+  // estados que quem grava conhece — a coluna vazia (`nulo`, ou `aceitaNulo`), a `marca` única de um escopo
+  // (third-party-scope.js), ou o conteúdo de um escopo de antes desta versão (`legado`). Devolve se gravou:
+  // false é "outro processamento mudou o estado" — nada foi escrito.
+  const { aceitaNulo, marcas, legados } = parametrosDaCondicaoDoEscopo(condicao);
+  const result = await getPool().query(
+    `UPDATE conversations SET ai_triage_third_party = $2
+      WHERE id = $1
+        AND (($3::boolean AND ai_triage_third_party IS NULL)
+          OR (ai_triage_third_party ->> 'marca') = ANY($4::text[])
+          OR ai_triage_third_party = ANY($5::jsonb[]))
+      RETURNING id`,
+    [conversationId, escopo ? JSON.stringify(escopo) : null, aceitaNulo, marcas, legados]
   );
+  return result.rowCount === 1;
 }
 
 async function getThirdPartyScope(conversationId) {
@@ -896,6 +924,7 @@ module.exports = {
   markPhoneContested,
   isPhoneContested,
   setThirdPartyScope,
+  parametrosDaCondicaoDoEscopo,
   getThirdPartyScope,
   setTriageReactivation,
   reserveTriageNightInvoice,

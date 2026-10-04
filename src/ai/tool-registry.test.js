@@ -56,6 +56,8 @@ const fs = require('fs');
 // testes exercitam. Quem testa a regra em si é regra-financeira.test.js.
 beforeEach(() => {
   sgpClient.listAllInvoices.mockResolvedValue({ faturas: [], total: 0, completo: true, motivo: null });
+  // Persistência do alvo (03/10/2026): a gravação condicional do escopo devolve se gravou; só `true` confirma.
+  setThirdPartyScope.mockResolvedValue(true);
 });
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
@@ -1383,7 +1385,11 @@ describe('escopo de terceiro', () => {
     expect(contexto.terceiro.contratos).toEqual([{ id: 77 }]);
     expect(contexto.identidade.primeiroNome).toBe('João');     // quem fala continua sendo quem fala
     expect(setContactSgpLink).not.toHaveBeenCalled();          // o terceiro nao vira dono do contato
-    expect(setThirdPartyScope).toHaveBeenCalledWith('c1', expect.objectContaining({ nome: 'Maria', contratos: [77] }));
+    // Persistência do alvo (03/10/2026): o escopo consultado só é gravado por cima do pendente que ESTA consulta
+    // gravou antes (a marca dele).
+    const pendenteDestaConsulta = setThirdPartyScope.mock.calls[0][1];
+    expect(setThirdPartyScope).toHaveBeenCalledWith('c1', expect.objectContaining({ nome: 'Maria', contratos: [77] }),
+      { esperados: [{ marca: pendenteDestaConsulta.marca }], aceitaNulo: false });
   });
 
   // Documento pendente (25/09/2026): a confirmação do terceiro é FATO DO SISTEMA. Ela é o escopo que
@@ -1406,16 +1412,19 @@ describe('escopo de terceiro', () => {
     test('grava ANTES de a trava do turno ganhar contrato; o escopo não tem documento e diz quando localizou', async () => {
       const contexto = contextoDoTurno();
       let travaNaHoraDeGravar = null;
-      setThirdPartyScope.mockImplementation(async () => { travaNaHoraDeGravar = contexto.alvoTerceiro; });
+      setThirdPartyScope.mockImplementation(async () => { travaNaHoraDeGravar = contexto.alvoTerceiro; return true; });
       const antes = Date.now();
 
       const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
 
       expect(r.ok).toBe(true);
-      expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+      // Falha de gravação dentro da consulta (30/09/2026): duas gravações — o pendente sem contrato ANTES de
+      // consultar, e o escopo consultado depois. Nenhuma das duas leva o documento.
+      expect(setThirdPartyScope).toHaveBeenCalledTimes(2);
+      expect(setThirdPartyScope.mock.calls[0][1]).toEqual(expect.objectContaining({ nome: null, contratos: [], pendente: true }));
       expect(travaNaHoraDeGravar).toEqual({ contratos: [] });
-      const escopo = setThirdPartyScope.mock.calls[0][1];
-      expect(JSON.stringify(escopo)).not.toMatch(/52998224725|529\.982/);
+      expect(JSON.stringify(setThirdPartyScope.mock.calls)).not.toMatch(/52998224725|529\.982/);
+      const escopo = setThirdPartyScope.mock.calls[1][1];
       const localizou = localizacaoDoTerceiro(escopo);
       expect(localizou.getTime()).toBeGreaterThanOrEqual(antes - 5);
       expect(localizou.getTime()).toBeLessThanOrEqual(Date.now() + 5);
@@ -1474,7 +1483,11 @@ describe('escopo de terceiro', () => {
     const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
 
     expect(r.ok).toBe(false);
-    expect(contexto.terceiro).toBeNull();
+    // Falha de gravação dentro da consulta (30/09/2026): a primeira gravação é a do pendente, antes de consultar.
+    // Sem ela, o SGP nem é consultado; no turno só vale o pendente sem contrato, e o worker é avisado.
+    expect(contexto.terceiro).toEqual({ nome: null, contratos: [], pendente: true });
+    expect(sgpClient.lookupClientByCpf).not.toHaveBeenCalled();
+    expect(contexto.alvoTerceiroNaoGravado).toBe(true);
   });
 
   test.each(['concluir_triagem', 'encerrar_atendimento', 'esquecer_identificacao'])(
@@ -1511,20 +1524,54 @@ describe('escopo de terceiro', () => {
     expect(r.resultado.contratos).toEqual([{ id: 77 }]);
   });
 
+  // MUDANÇA DELIBERADA (segurança final da F2, 03/10/2026): antes de concluir ou encerrar, o alvo é TRAVADO (pendente
+  // sem contrato), não liberado. Se a ação final falhar, nem o titular nem o terceiro anterior ficam cobráveis;
+  // concluída ou encerrada, a conversa sai da triagem e ninguém mais lê a coluna.
   test.each([
     ['concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }],
     ['encerrar_atendimento', {}],
-    ['esquecer_identificacao', {}],
-  ])('%s limpa o escopo de terceiro', async (nome, args) => {
+  ])('%s trava o alvo (pendente sem contrato) antes da ação final, e não o libera', async (nome, args) => {
     const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
     const r = await executeTool(nome, args, contexto);
-    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null);
-    // Caminho feliz de verdade, não só "não travou": a ferramenta precisa ter
-    // concluído a própria ação (não parado em algum mock desarmado por acaso) e
-    // deixado a limpeza refletida no contexto.
     expect(r.ok).toBe(true);
-    expect(contexto.terceiro).toBeNull();
     expect(ACAO_PRINCIPAL[nome]).toHaveBeenCalled();
+    expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, expect.objectContaining({ contratos: [], pendente: true, marca: expect.any(String) }));
+    expect(setThirdPartyScope.mock.invocationCallOrder[0]).toBeLessThan(ACAO_PRINCIPAL[nome].mock.invocationCallOrder[0]);
+    expect(contexto.terceiro).toEqual({ nome: null, contratos: [], pendente: true });
+    expect(contexto.alvoTerceiro).toEqual({ contratos: [] });
+  });
+
+  test('esquecer_identificacao trava o alvo antes e só o libera depois de a contestação estar gravada', async () => {
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    const r = await executeTool('esquecer_identificacao', {}, contexto);
+    expect(r.ok).toBe(true);
+    const [trava, liberacao] = setThirdPartyScope.mock.calls;
+    expect(trava[1]).toEqual(expect.objectContaining({ contratos: [], pendente: true }));
+    expect(liberacao).toEqual([contexto.conversationId, null, { esperados: [{ marca: trava[1].marca }], aceitaNulo: true }]);
+    expect(markPhoneContested.mock.invocationCallOrder[0]).toBeLessThan(setThirdPartyScope.mock.invocationCallOrder[1]);
+    expect(contexto.terceiro).toBeNull();
+  });
+
+  test('esquecer_identificacao com a contestação não gravada: o alvo continua travado', async () => {
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    markPhoneContested.mockRejectedValueOnce(new Error('banco fora'));
+    const silencio = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await executeTool('esquecer_identificacao', {}, contexto);
+    silencio.mockRestore();
+    expect(r.ok).toBe(true);
+    expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+    expect(contexto.terceiro).toEqual({ nome: null, contratos: [], pendente: true });
+    expect(contexto.alvoTerceiro).toEqual({ contratos: [] });
+  });
+
+  test('esquecer_identificacao sem terceiro e com a contestação não gravada: o alvo é travado (o contestado não volta pelo telefone)', async () => {
+    const contexto = contextoDeTriagemCom({});
+    markPhoneContested.mockRejectedValueOnce(new Error('banco fora'));
+    const silencio = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await executeTool('esquecer_identificacao', {}, contexto);
+    silencio.mockRestore();
+    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, expect.objectContaining({ contratos: [], pendente: true }));
   });
 
   test('buscar_cliente sem a marcação de terceiro limpa um escopo anterior', async () => {
@@ -1534,7 +1581,9 @@ describe('escopo de terceiro', () => {
     const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
     await executeTool('buscar_cliente', { cpf: '11122233344' }, contexto);
     expect(contexto.terceiro).toBeNull();
-    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null);
+    // Persistência do alvo (03/10/2026): a volta ao titular pelo próprio documento é condicional ao estado que o
+    // turno conhece, e aceita a coluna já vazia.
+    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null, expect.objectContaining({ aceitaNulo: true }));
   });
 });
 
@@ -3971,7 +4020,8 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
     await boleto({ contratoId: 17402 }, ctx());
     await pix({ contratoId: 17402 }, ctx());
     for (const [pedido] of claimDelivery.mock.calls) {
-      expect(Object.keys(pedido).sort()).toEqual(['contractId', 'conversationId', 'invoiceId', 'isResend', 'messageId', 'tool']);
+      // Segurança final da F2 (03/10/2026): a condição do alvo também vai à reserva — só marcas, nunca valores.
+      expect(Object.keys(pedido).sort()).toEqual(['condicaoDoAlvo', 'contractId', 'conversationId', 'invoiceId', 'isResend', 'messageId', 'tool']);
       const serializado = JSON.stringify(pedido);
       expect(serializado).not.toContain('836100000012');
       expect(serializado).not.toContain('000201-pix-emv');
@@ -4398,7 +4448,7 @@ describe('aviso de cidade como fato do turno', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '11122233344' }, contracts: [{ id: 5, statusCode: 1, address: 'RUA X, 10' }] });
-    setThirdPartyScope.mockResolvedValue(undefined);
+    setThirdPartyScope.mockResolvedValue(true); // gravação condicional confirmada (03/10/2026)
     findCityById.mockResolvedValue({ id: 'city-1', name: 'Maracaçumé' });
   });
 
@@ -4530,7 +4580,7 @@ describe('P1-1: contrato suspenso + aviso de cidade', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    setThirdPartyScope.mockResolvedValue(undefined);
+    setThirdPartyScope.mockResolvedValue(true); // gravação condicional confirmada (03/10/2026)
     findCityById.mockResolvedValue({ id: 'city-1', name: 'Maracaçumé' });
     selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO_DO_BANCO, lugarId: 'city-1' });
     enviarAvisoDeCidadeSePreciso.mockResolvedValue(null);

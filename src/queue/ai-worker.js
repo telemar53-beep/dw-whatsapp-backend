@@ -8,11 +8,18 @@ const {
 } = require('../conversations/conversation.repository');
 const { setorDeReativacao } = require('../sectors/reactivation-sector');
 const { descreverReativacao } = require('../ai/situacao-financeira');
-const { escopoValido, paraContexto } = require('../ai/third-party-scope');
+const {
+  escopoValido, paraContexto, montarEscopo, comPendenciaDeAlvo, criadoEm, duvidaSemAutorizacao, CONTEXTO_SEM_AUTORIZACAO, MINUTOS_DE_VIDA,
+  esperadoDoEscopo,
+} = require('../ai/third-party-scope');
 const { localizacaoDoTerceiro } = require('../ai/documento-pendente');
-const { resolverAlvoDoTurno } = require('../ai/financial-target');
+const { resolverAlvoDasMensagens, AMBIGUIDADE, documentosValidos } = require('../ai/financial-target');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const { findContactById } = require('../conversations/contact.repository');
-const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation, findLastMessageCreatedAt } = require('../conversations/message.repository');
+const {
+  findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation, findLastMessageCreatedAt, listarFalasSemAlvoConfirmado,
+  marcarFalasComAlvoProcessado,
+} = require('../conversations/message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { resolverIdentidade } = require('../ai/identity-resolver');
 const { findChannelById } = require('../channels/channel.repository');
@@ -281,6 +288,10 @@ async function avisoSaiuNesteTurno({ avisoEnviadoAgora, aviso, contact, mensagem
   }
 }
 
+// Segunda revisão da F2: acima disto, as falas não confirmadas não são reaplicadas — a cobrança do turno trava.
+const PAGINA_DE_FALAS_SEM_ALVO = 200;
+const TETO_DE_FALAS_SEM_ALVO = 10000;
+
 async function handleTriageTurn({ conversation, config, messageId }) {
   const channel = await findChannelById(conversation.channelId);
   if (!channel || !channel.aiEnabled || !channel.aiTriageEnabled) {
@@ -312,20 +323,51 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   const identidade = await resolverIdentidade({ contact, ignorarTelefone });
 
   // O escopo do boleto de terceiro sobrevive ao turno: o titular pode ter duas
-  // faturas e o cliente precisa escolher uma. Expirado, morre aqui e a coluna é
-  // limpa — nunca fica um resto autorizando um contrato alheio.
+  // faturas e o cliente precisa escolher uma. Expirado sem pendência, morre aqui e a
+  // coluna é limpa — nunca fica um resto autorizando um contrato alheio.
   let terceiro = null;
   let escopoDoTerceiro = null;
+  // Revisão da F2 (30/09/2026): falha de LEITURA não prova que não havia terceiro nem dúvida gravada — o
+  // turno acontece, mas a cobrança dele trava (logo abaixo, no alvo do turno).
+  let escopoIlegivel = false;
+  let escopo = null;
+  // Persistência do alvo (03/10/2026): os estados que este turno pode encontrar no banco, como as gravações
+  // condicionais os exigem (third-party-scope.js, esperadoDoEscopo). Normalmente um só: o lido, ou o último
+  // gravado com confirmação. Uma gravação que lançou erro pode ter sido efetivada (resposta perdida): o estado
+  // que ela tentou entra na lista. Toda gravação do escopo neste turno — a do worker e a das ferramentas — só
+  // tem efeito se o banco ainda estiver num deles. `estadoMudou`: outro processamento gravou depois da leitura;
+  // o que o turno leu está atrasado, e a cobrança dele trava.
+  let esperados = [];
+  let estadoMudou = false;
   try {
-    const escopo = await getThirdPartyScope(conversation.id);
+    escopo = await getThirdPartyScope(conversation.id);
+    esperados = [esperadoDoEscopo(escopo)];
+  } catch (err) {
+    escopoIlegivel = true;
+    console.error(`Failed to load the third party scope for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+  }
+  try {
     if (escopoValido(escopo)) {
       terceiro = paraContexto(escopo);
       escopoDoTerceiro = escopo;
+    } else if (duvidaSemAutorizacao(escopo)) {
+      // Terceira revisão da F2 (30/09/2026): expiração encerra a autorização, não resolve a dúvida. O escopo
+      // vencido com dúvida — ou pendente por documento não localizado — fica na coluna, sem prazo novo, e o turno
+      // parte da dúvida sem autorização (nenhum contrato). A afirmação da própria cobrança limpa a coluna (logo
+      // abaixo); o documento grava outro.
+      terceiro = { ...CONTEXTO_SEM_AUTORIZACAO, contratos: [] };
     } else if (escopo) {
-      await setThirdPartyScope(conversation.id, null);
+      if ((await setThirdPartyScope(conversation.id, null, { esperados, aceitaNulo: true })) === true) {
+        esperados = [esperadoDoEscopo(null)];
+      } else {
+        estadoMudou = true;
+      }
     }
   } catch (err) {
-    console.error(`Failed to load the third party scope for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+    // Vencido sem dúvida vale como coluna vazia: a falha só adia a limpeza. O banco pode ter ficado vazio
+    // (resposta perdida): os dois estados passam a ser esperados.
+    esperados = [...esperados, esperadoDoEscopo(null)];
+    console.error(`Failed to clear the expired third party scope for conversation ${conversation.id}: ${mensagemSegura(err)}`);
   }
 
   // A identificação pode ter acabado de descobrir a cidade do cliente no SGP:
@@ -363,16 +405,123 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // a própria cobrança volta ao titular sem pedir CPF (ele já está identificado); os dois lados
   // travam a cobrança até ele esclarecer. A identidade de quem fala nunca muda aqui.
   const textoDoCliente = mensagem ? (mensagem.messageType === 'audio' ? mensagem.transcription : mensagem.content) : null;
-  const alvoDoTurno = resolverAlvoDoTurno({ terceiro, texto: textoDoCliente });
-  const alvoAmbiguo = alvoDoTurno.alvoAmbiguo;
-  if (alvoDoTurno.voltarAoTitular) {
+  // Segunda revisão da F2 (30/09/2026) — a tabela de transições das seções 12.1 e 13.1 do relatório da F2. O
+  // turno parte do escopo gravado e REAPLICA, em ordem, as falas do cliente ainda não confirmadas. É registro
+  // durável — as mensagens já estão no banco antes do job —, sem estado em memória: reiniciar não perde nada.
+  // Terceira revisão: a confirmação é a marca de cada entrada aplicada (message.repository.js). Se a transição
+  // não é gravada (ou o estado não pôde ser lido), nenhuma cobrança sai neste turno e nada é marcado: o próximo
+  // turno reaplica as mesmas falas. A resposta da IA não confirma nada. Falha de gravação dentro da consulta do
+  // documento (30/09/2026): a marca vem DEPOIS do turno, porque a ferramenta também pode ter uma transição a
+  // gravar (logo depois de runAiTurn).
+  let alvoAmbiguo = false;
+  let empresa = null;
+  try {
+    const cartao = await getCompanyConfig();
+    empresa = (cartao && cartao.name) || null;
+  } catch (err) {
+    // Sem o nome da empresa, ele só deixa de ser complemento conhecido ("o boleto da DW" trava).
+    console.error(`Failed to read the company name for the financial target of conversation ${conversation.id}: ${mensagemSegura(err)}`);
+  }
+  let falas = null;
+  let documentos = [];
+  // As entradas que o turno aplicou, para marcar depois dele; null = não marcar (a transição não foi gravada).
+  let entradasDoTurno = null;
+  // As entradas deste turno: as lidas e a do job. A do job já marcada (reprocessamento) não é reaplicada:
+  // o efeito dela já está gravado, e um escopo gravado depois dela (documento) não pode ser desfeito por ela.
+  const entradaJaProcessada = Boolean(mensagem && mensagem.metadata && mensagem.metadata.alvoProcessado === true);
+  let aMarcar = [];
+  if (!escopoIlegivel) {
     try {
-      await setThirdPartyScope(conversation.id, null);
-      terceiro = null;
+      const desde = new Date(Math.max(Date.now() - MINUTOS_DE_VIDA * 60 * 1000, (criadoEm(escopoDoTerceiro) || new Date(0)).getTime()));
+      // Segurança final da F2 (03/10/2026): todas as entradas não confirmadas, em páginas, na ordem do banco. Antes,
+      // mais de 50 travavam a cobrança até o fim da triagem (nada era marcado nunca); agora nenhuma é descartada e
+      // todas são reaplicadas. O teto só existe contra um volume patológico, e acima dele a cobrança trava.
+      const lidas = [];
+      const jaLidas = new Set();
+      for (let cursor = null; ;) {
+        const pagina = (await listarFalasSemAlvoConfirmado(conversation.id, { desde, limite: PAGINA_DE_FALAS_SEM_ALVO, depoisDe: cursor })) || [];
+        // O cursor tem a precisão do JavaScript (milissegundos): na virada de página a última entrada pode voltar —
+        // nunca uma é pulada. A repetida não é reaplicada de novo.
+        for (const m of pagina) if (m && !jaLidas.has(m.id)) { jaLidas.add(m.id); lidas.push(m); }
+        if (pagina.length < PAGINA_DE_FALAS_SEM_ALVO) break;
+        if (lidas.length >= TETO_DE_FALAS_SEM_ALVO) throw new Error('unconfirmed_messages_over_limit');
+        const ultima = pagina[pagina.length - 1];
+        cursor = { createdAt: ultima.createdAt, id: ultima.id };
+      }
+      // A ordem é a do banco (created_at, id), com a entrada do job no lugar dela: uma entrada mais nova pode
+      // ter chegado entre a checagem "é a mais recente?" e esta leitura. Fora da lista (anterior ao limite), a
+      // do job vai por último.
+      const validas = lidas.filter(Boolean);
+      const jobNaLista = validas.some((m) => m.id === messageId);
+      aMarcar = [...validas.map((m) => m.id), ...(jobNaLista || entradaJaProcessada ? [] : [messageId])];
+      // Persistência do alvo (03/10/2026): CPF/CNPJ numa entrada ANTERIOR à do job ainda não confirmada — ver
+      // resolverAlvoDasMensagens. O documento de quem fala vem da memória do contato ou da identidade do turno;
+      // nada disso vai a log.
+      const proprio = String((contact && contact.sgpDocument) || (identidade && identidade.client && identidade.client.document) || '').replace(/\D/g, '');
+      const documentosDaEntrada = (texto) => {
+        const achados = documentosValidos(texto);
+        if (achados.length === 0) return null;
+        const semZeros = (d) => d.replace(/^0+/, '');
+        return { algum: true, deOutro: Boolean(proprio) && achados.some((d) => semZeros(d) !== semZeros(proprio)) };
+      };
+      const lidasComTexto = [];
+      const documentosLidos = [];
+      for (const m of validas) {
+        if (m.id !== messageId && m.metadata && m.metadata.autorrespostaProvavel === true) continue;
+        const texto = (m.id === messageId ? textoDoCliente : (m.messageType === 'audio' ? m.transcription : m.content)) || '';
+        if (!texto) continue;
+        lidasComTexto.push(texto);
+        documentosLidos.push(m.id === messageId ? null : documentosDaEntrada(texto));
+      }
+      if (!jobNaLista && !entradaJaProcessada && textoDoCliente) {
+        lidasComTexto.push(textoDoCliente);
+        documentosLidos.push(null);
+      }
+      falas = lidasComTexto;
+      documentos = documentosLidos;
     } catch (err) {
-      // Segue no terceiro, o lado seguro: nada de quem fala sai neste turno.
-      console.error(`Failed to switch the financial target back to the contact for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+      console.error(`Failed to read the unconfirmed customer messages for conversation ${conversation.id}: ${mensagemSegura(err)}`);
     }
+  }
+  if (falas === null) {
+    // Escopo ou falas não lidos: o estado pode estar atrasado. Nada é gravado nem marcado sobre o que não foi lido.
+    alvoAmbiguo = AMBIGUIDADE.ESCOPO_NAO_LIDO;
+  } else if (estadoMudou) {
+    // Outro processamento gravou o escopo depois da leitura: o que o turno leu está atrasado. Nada é gravado nem
+    // marcado sobre ele, e a cobrança do turno trava; o turno seguinte lê o estado novo e reaplica as entradas.
+    alvoAmbiguo = AMBIGUIDADE.TRANSICAO_NAO_GRAVADA;
+  } else {
+    const alvo = resolverAlvoDasMensagens({ terceiro, textos: falas, empresa, documentos });
+    ({ alvoAmbiguo } = alvo);
+    let gravado = true;
+    if (alvo.gravar) {
+      let novo = null;
+      if (alvo.gravar === 'criar') novo = comPendenciaDeAlvo(montarEscopo(null, [], new Date(), { pendente: true }), alvo.terceiro.alvoPendente);
+      else if (alvo.gravar === 'pendencia') novo = comPendenciaDeAlvo(escopoDoTerceiro, alvo.terceiro.alvoPendente || null);
+      try {
+        // Persistência do alvo (03/10/2026): só grava se o banco ainda estiver no estado que o turno leu. A volta
+        // ao titular aceita a coluna já vazia (o efeito pedido já vale).
+        if ((await setThirdPartyScope(conversation.id, novo, { esperados, aceitaNulo: novo === null })) === true) {
+          escopoDoTerceiro = novo;
+          terceiro = novo ? paraContexto(novo) : null;
+          esperados = [esperadoDoEscopo(novo)];
+        } else {
+          console.error(`The financial target of conversation ${conversation.id} changed after it was read; the transition was not stored`);
+          estadoMudou = true;
+          alvoAmbiguo = AMBIGUIDADE.TRANSICAO_NAO_GRAVADA;
+          gravado = false;
+        }
+      } catch (err) {
+        // Transição não gravada não pode parecer concluída: nem o estado anterior (a pessoa de antes), nem o
+        // novo valem para cobrança neste turno. Ela pode ter sido efetivada (resposta perdida): os dois estados
+        // passam a ser esperados.
+        console.error(`Failed to store the financial target transition for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+        alvoAmbiguo = AMBIGUIDADE.TRANSICAO_NAO_GRAVADA;
+        gravado = false;
+        esperados = [...esperados, esperadoDoEscopo(novo)];
+      }
+    }
+    if (gravado) entradasDoTurno = aMarcar;
   }
   // Documento pendente (25/09/2026): quando o terceiro foi LOCALIZADO — fato do sistema, lido do
   // escopo que buscar_cliente gravou antes de devolver. Não depende de a resposta daquele turno ter
@@ -412,9 +561,56 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // mensagem": um id por mensagem do cliente, o mesmo em todas as tool calls
     // dela.
     conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro, alvoAmbiguo, messageId,
-    terceiroLocalizadoEm, reativacao: reativacao || null,
+    terceiroLocalizadoEm, reativacao: reativacao || null, esperadosDoAlvo: esperados,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
+
+  // Falha de gravação dentro da consulta do documento (30/09/2026): buscar_cliente não conseguiu gravar o pendente
+  // antes de consultar, e avisou. O worker grava o mesmo pendente sem contrato; se também falhar, as entradas do
+  // turno não são marcadas como concluídas. Depois, a marca das entradas — antes de qualquer descarte da resposta.
+  // Persistência do alvo (03/10/2026): as duas recuperações gravam com a mesma condição das ferramentas — o banco
+  // ainda num dos estados que o turno conhece (`turno.esperadosDoAlvo`: o último confirmado e as gravações que
+  // lançaram erro). Se outro processamento gravou depois, nada é escrito e as entradas não são marcadas.
+  const esperadosDepoisDoTurno = (turno && Array.isArray(turno.esperadosDoAlvo)) ? turno.esperadosDoAlvo : esperados;
+  // A identificação pelo próprio documento, com terceiro no contexto, não terminou: nada a gravar, e as entradas não
+  // são marcadas — o documento delas segura o terceiro anterior no turno seguinte (achado 3a da revisão).
+  if (turno && turno.consultaPropriaPendente) entradasDoTurno = null;
+  // A reserva de uma entrega encontrou o alvo mudado por outro processamento: o estado deste turno estava atrasado.
+  if (turno && turno.alvoMudouNaEntrega) entradasDoTurno = null;
+  if (turno && turno.alvoTerceiroNaoGravado) {
+    try {
+      if ((await setThirdPartyScope(conversation.id, montarEscopo(null, [], new Date(), { pendente: true }), { esperados: esperadosDepoisDoTurno })) !== true) {
+        console.error(`The financial target of conversation ${conversation.id} changed during the turn; the pending third party request was not stored`);
+        entradasDoTurno = null;
+      }
+    } catch (err) {
+      console.error(`Failed to store the pending third party request after the turn for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+      entradasDoTurno = null;
+    }
+  } else if (turno && turno.voltaAoTitularNaoGravada) {
+    // Bloqueador 2: buscar_cliente identificou quem fala pelo próprio documento e não conseguiu gravar a volta ao
+    // titular. A cobrança do turno já travou na ferramenta; aqui a volta é gravada de novo. Se também falhar, as
+    // entradas ficam sem a marca, e o documento delas segura o terceiro anterior no turno seguinte
+    // (resolverAlvoDasMensagens).
+    try {
+      if ((await setThirdPartyScope(conversation.id, null, { esperados: esperadosDepoisDoTurno, aceitaNulo: true })) !== true) {
+        console.error(`The financial target of conversation ${conversation.id} changed during the turn; the return to the account holder was not stored`);
+        entradasDoTurno = null;
+      }
+    } catch (err) {
+      console.error(`Failed to store the return to the account holder after the turn for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+      entradasDoTurno = null;
+    }
+  }
+  if (entradasDoTurno && entradasDoTurno.length > 0) {
+    try {
+      await marcarFalasComAlvoProcessado(entradasDoTurno);
+    } catch (err) {
+      // Sem a marca, as mesmas entradas voltam no próximo turno; reaplicá-las sobre o estado que elas mesmas
+      // gravaram dá o mesmo estado.
+      console.error(`Failed to mark the customer messages applied to the financial target for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+    }
+  }
 
   // Nunca IA e humano ao mesmo tempo: relê antes de enviar. Se o próprio turno
   // concluiu a triagem, a conversa já está 'completed' e a frase final DEVE

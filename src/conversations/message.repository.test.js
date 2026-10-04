@@ -26,6 +26,8 @@ const {
   recordMessageWaId,
   findLastMessageCreatedAt,
   findAutoReplyContext,
+  listarFalasSemAlvoConfirmado,
+  marcarFalasComAlvoProcessado,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -46,6 +48,105 @@ describe('message repository', () => {
 
   afterAll(async () => {
     await closePool();
+  });
+
+  // Terceira revisão da F2 (30/09/2026): a confirmação é EXPLÍCITA — cada entrada aplicada com a transição
+  // persistida recebe metadata.alvoProcessado, pelo id. Saída da IA (resposta, cartão de ferramenta) não
+  // confirma nada; o horário de uma resposta não prova que uma entrada foi processada.
+  describe('falas sem alvo confirmado', () => {
+    const MINUTO = 60 * 1000;
+    const inicio = Date.now() - 20 * MINUTO;
+    const em = (minutos) => new Date(inicio + minutos * MINUTO);
+    const fala = (content, minutos, extra = {}) => createMessage({ conversationId, direction: 'inbound', content, whatsappMessageId: `wamid.al.${content}.${minutos}`, status: 'received', sentAt: em(minutos), ...extra });
+    const resposta = (content, minutos, extra = {}) => createMessage({ conversationId, direction: 'outbound', content, whatsappMessageId: null, status: 'sent', sentBy: 'ai', sentAt: em(minutos), ...extra });
+    const textosDe = (lista) => lista.map((m) => m.content);
+    const pendentes = (desde = em(0), limite = 10) => listarFalasSemAlvoConfirmado(conversationId, { desde, limite });
+
+    test('só as entradas não marcadas como processadas, em ordem', async () => {
+      const a = await fala('processada', 1);
+      await fala('primeira', 3);
+      await fala('segunda', 4);
+      await marcarFalasComAlvoProcessado([a.id]);
+      expect(textosDe(await pendentes())).toEqual(['primeira', 'segunda']);
+    });
+
+    test('resposta da IA ou cartão de ferramenta depois de uma entrada não a confirma', async () => {
+      await fala('manda o boleto da minha mãe', 1);
+      await resposta('De quem é a cobrança?', 2);
+      await resposta('cartão do pix', 3, { messageType: 'pix', metadata: { faturaId: 1 } });
+      expect(textosDe(await pendentes())).toEqual(['manda o boleto da minha mãe']);
+    });
+
+    test('duas entradas com o mesmo horário: confirmação por id, ordem estável', async () => {
+      const x = await fala('x', 5);
+      const y = await fala('y', 5);
+      const ordem = textosDe(await pendentes());
+      expect(ordem.sort()).toEqual(['x', 'y']);
+      expect(textosDe(await pendentes())).toEqual(textosDe(await pendentes()));
+      await marcarFalasComAlvoProcessado([x.id]);
+      expect(textosDe(await pendentes())).toEqual(['y']);
+      expect(y.id).toBeTruthy();
+    });
+
+    test('marcar não mexe em saída nem no resto da metadata', async () => {
+      const entrada = await fala('com metadata', 1, { metadata: { outra: 'coisa' } });
+      const saida = await resposta('saída', 2);
+      await marcarFalasComAlvoProcessado([entrada.id, saida.id]);
+      expect((await findMessageById(entrada.id)).metadata).toEqual({ outra: 'coisa', alvoProcessado: true });
+      expect((await findMessageById(saida.id)).metadata).toBeNull();
+    });
+
+    test('o limite `desde` corta o que é mais antigo; o limite de linhas vale', async () => {
+      // Com uma entrada marcada na conversa (o caso normal), `desde` corta a sem marca anterior a ela e a ele.
+      await fala('muito antiga', 1);
+      const marcada = await fala('marcada', 2);
+      await marcarFalasComAlvoProcessado([marcada.id]);
+      await fala('recente', 5);
+      expect(textosDe(await pendentes(em(3)))).toEqual(['recente']);
+      for (let i = 6; i <= 9; i += 1) await fala(`f${i}`, i);
+      expect(await pendentes(em(0), 3)).toHaveLength(3);
+    });
+
+    // Segurança final (03/10/2026): paginação por cursor (created_at, id), na mesma ordem, sem pular nem repetir.
+    test('cursor: a página seguinte começa depois da última da anterior, na mesma ordem', async () => {
+      for (let i = 1; i <= 5; i += 1) await fala(`p${i}`, i);
+      const primeira = await listarFalasSemAlvoConfirmado(conversationId, { desde: em(0), limite: 2 });
+      expect(textosDe(primeira)).toEqual(['p1', 'p2']);
+      const ultima = primeira[primeira.length - 1];
+      const segunda = await listarFalasSemAlvoConfirmado(conversationId, { desde: em(0), limite: 2, depoisDe: { createdAt: ultima.createdAt, id: ultima.id } });
+      expect(textosDe(segunda)).toEqual(['p3', 'p4']);
+      const u2 = segunda[segunda.length - 1];
+      const terceira = await listarFalasSemAlvoConfirmado(conversationId, { desde: em(0), limite: 2, depoisDe: { createdAt: u2.createdAt, id: u2.id } });
+      expect(textosDe(terceira)).toEqual(['p5']);
+    });
+
+    test('entrada sem marca posterior à última marcada continua pendente mesmo fora do limite `desde` (falha não expira)', async () => {
+      const a = await fala('aplicada', 1);
+      await fala('transicao falhou', 2);
+      await marcarFalasComAlvoProcessado([a.id]);
+      expect(textosDe(await pendentes(em(10)))).toEqual(['transicao falhou']);
+    });
+
+    // Persistência do alvo (03/10/2026): MUDANÇA DELIBERADA. Antes, sem nenhuma entrada marcada, só `desde` valia
+    // e a falha do primeiro turno da conversa expirava em 30 minutos (o titular voltava a ser cobrável). Agora,
+    // sem nenhuma marcada, valem todas as entradas sem a marca.
+    test('conversa sem nenhuma entrada marcada: todas as entradas sem marca valem, mesmo fora do limite `desde`', async () => {
+      await fala('antiga sem marca', 1);
+      await fala('nova sem marca', 5);
+      expect(textosDe(await pendentes(em(3)))).toEqual(['antiga sem marca', 'nova sem marca']);
+    });
+
+    test('entrada sem marca ANTERIOR à última marcada (gravação fora de ordem) só entra dentro do limite `desde`', async () => {
+      await fala('fora de ordem', 2);
+      const b = await fala('marcada depois', 4);
+      await marcarFalasComAlvoProcessado([b.id]);
+      expect(textosDe(await pendentes(em(0)))).toEqual(['fora de ordem']);
+      expect(textosDe(await pendentes(em(3)))).toEqual([]);
+    });
+
+    test('marcar nada não quebra', async () => {
+      await expect(marcarFalasComAlvoProcessado([])).resolves.toBeUndefined();
+    });
   });
 
   test('createMessage stores an inbound text message with messageType defaulting to text', async () => {

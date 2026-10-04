@@ -117,8 +117,12 @@ const NOVO_TERCEIRO = new RegExp(`\\b(?:d[aoe]|pr[ao]|para [ao]) (?:minha |meu |
 // verificável no histórico: que o documento já foi pedido, quantos pedidos seguidos do MESMO alvo a
 // cadeia já teve, se chegou número, e as regras preexistentes (irritação, mudança de assunto, alvo novo).
 // Com isso concede UM esclarecimento por cadeia: o segundo pedido é permitido (possibilidade, não ordem —
-// se ele cabe, quem decide é o modelo, lendo a conversa, orientado pelo prompt); o terceiro, nunca. Nada
-// disso identifica, muda o alvo, libera ferramenta ou anuncia encaminhamento.
+// se ele cabe, quem decide é o modelo, lendo a conversa, orientado pelo prompt); o terceiro é barrado.
+// ALCANCE (correção de 30/09/2026): o limite vale para os pedidos que `pedeDocumento` RECONHECE, na cadeia
+// que o histórico lido mostra (a janela do orquestrador), sem mudança relevante no meio. Não é garantia
+// para a conversa inteira: pedido com redação não reconhecida não é contado, cadeia fora da janela
+// recomeça e mudança relevante (alvo, número, assunto) permite pedir de novo. Nada disso identifica, muda
+// o alvo, libera ferramenta ou anuncia encaminhamento.
 const ESCLARECIMENTOS_POR_CADEIA = 1;
 const ehPedidoMarcado = (m) => Boolean(m && m.direction === 'outbound' && m.sentBy === 'ai'
   && m.metadata && m.metadata.pedidoDeDocumento);

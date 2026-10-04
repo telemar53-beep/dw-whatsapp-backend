@@ -3,6 +3,10 @@ const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery,
 } = require('./billing-delivery.repository');
 
+const { createChannel } = require('../channels/channel.repository');
+const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { createConversation, setThirdPartyScope, getThirdPartyScope } = require('../conversations/conversation.repository');
+
 const CONVERSA = '33333333-3333-3333-3333-333333333333';
 const OUTRA_CONVERSA = '44444444-4444-4444-4444-444444444444';
 
@@ -348,5 +352,95 @@ describe('billing delivery repository', () => {
     expect(r.rows.map((l) => l.column_name)).toEqual([
       'claimed_at', 'contract_id', 'conversation_id', 'enqueued_at', 'id', 'invoice_id', 'is_resend', 'message_id', 'tool',
     ]);
+  });
+});
+
+// Segurança final da F2 (03/10/2026): a reserva da entrega é o ponto de não retorno antes de qualquer efeito para o
+// cliente. Com `condicaoDoAlvo`, a MESMA instrução confere o alvo financeiro atual da conversa e trava a linha dela.
+describe('reserva condicionada ao alvo da conversa', () => {
+  let conversaId;
+  const ESCOPO = { nome: 'Fulana', contratos: [401], expiraEm: '2030-01-01T00:00:00.000Z', marca: 'marca-lida' };
+  const NOVO = { nome: null, contratos: [], expiraEm: '2030-01-01T00:00:00.000Z', pendente: true, marca: 'marca-nova' };
+  const comAlvo = (esperados, extra = {}) => pedido({ conversationId: conversaId, condicaoDoAlvo: { esperados }, ...extra });
+
+  beforeAll(async () => {
+    const canal = await createChannel({ type: 'meta_cloud', name: 'Canal da reserva', phoneNumber: `+55009${Date.now() % 1000000}`, config: {} });
+    const contato = await findOrCreateContactByPhoneNumber(`+55119${Date.now() % 10000000}`, null);
+    conversaId = (await createConversation(contato.id, canal.id)).id;
+  });
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE ai_billing_deliveries');
+    await setThirdPartyScope(conversaId, ESCOPO);
+  });
+  afterAll(async () => {
+    await getPool().query('TRUNCATE ai_billing_deliveries');
+    await closePool();
+  });
+
+  test('o alvo ainda é o que o turno conhece: reserva', async () => {
+    const r = await claimDelivery(comAlvo([{ marca: 'marca-lida' }]));
+    expect(r.obtido).toBe(true);
+    expect(r.alvoMudou).toBeUndefined();
+  });
+
+  test('outro processamento mudou o alvo antes: nada é reservado, e a resposta diz que o alvo mudou', async () => {
+    await setThirdPartyScope(conversaId, NOVO);
+    const r = await claimDelivery(comAlvo([{ marca: 'marca-lida' }]));
+    expect(r).toEqual({ obtido: false, registro: null, alvoMudou: true });
+    expect(await linhas()).toEqual([]);
+  });
+
+  test('titular: a coluna vazia esperada; um pendente gravado depois impede a reserva', async () => {
+    await setThirdPartyScope(conversaId, null);
+    expect((await claimDelivery(comAlvo([{ nulo: true }], { messageId: 'msg-titular' }))).obtido).toBe(true);
+    await setThirdPartyScope(conversaId, NOVO);
+    expect((await claimDelivery(comAlvo([{ nulo: true }], { messageId: 'msg-titular-2', invoiceId: '10' }))).alvoMudou).toBe(true);
+  });
+
+  test('sem estado conhecido (lista vazia): nunca reserva', async () => {
+    expect((await claimDelivery(comAlvo([]))).alvoMudou).toBe(true);
+  });
+
+  test('duplicata continua duplicata (o alvo confere): a resposta é a de sempre', async () => {
+    await claimDelivery(comAlvo([{ marca: 'marca-lida' }]));
+    const r = await claimDelivery(comAlvo([{ marca: 'marca-lida' }]));
+    expect(r.obtido).toBe(false);
+    expect(r.alvoMudou).toBeUndefined();
+    expect(r.registro).toEqual(expect.objectContaining({ messageId: 'msg-1' }));
+  });
+
+  test('mudança do alvo EM ANDAMENTO (sem commit): a reserva espera por ela e reavalia sobre o valor novo — não reserva', async () => {
+    const outro = await getPool().connect();
+    try {
+      await outro.query('BEGIN');
+      await outro.query('UPDATE conversations SET ai_triage_third_party = $2 WHERE id = $1', [conversaId, JSON.stringify(NOVO)]);
+      let terminou = false;
+      const reserva = claimDelivery(comAlvo([{ marca: 'marca-lida' }])).then((r) => { terminou = true; return r; });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(terminou).toBe(false);
+      await outro.query('COMMIT');
+      expect(await reserva).toEqual({ obtido: false, registro: null, alvoMudou: true });
+    } finally {
+      outro.release();
+    }
+  });
+
+  test('a reserva acontece primeiro: a mudança do alvo espera por ela e fica ordenada depois da entrega', async () => {
+    const outro = await getPool().connect();
+    try {
+      await outro.query('BEGIN');
+      // A reserva trava a linha (FOR SHARE) durante a própria instrução; aqui a mesma trava é segurada por uma
+      // transação, para a ordem ficar observável: a mudança do alvo só passa depois dela.
+      await outro.query('SELECT 1 FROM conversations WHERE id = $1 FOR SHARE', [conversaId]);
+      let mudou = false;
+      const mudanca = setThirdPartyScope(conversaId, NOVO).then(() => { mudou = true; });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(mudou).toBe(false);
+      await outro.query('COMMIT');
+      await mudanca;
+      expect(await getThirdPartyScope(conversaId)).toEqual(NOVO);
+    } finally {
+      outro.release();
+    }
   });
 });

@@ -1,5 +1,5 @@
 const { findTool, perfilTriagem, temEfeitoReal, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
-const { FERRAMENTAS_DE_COBRANCA, alvoFinanceiro } = require('./financial-target');
+const { FERRAMENTAS_DE_COBRANCA, alvoFinanceiro, AMBIGUIDADE } = require('./financial-target');
 const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
 const { mensagemSegura } = require('./safe-error-log');
@@ -43,13 +43,42 @@ const INSTRUCAO_TERCEIRO = 'Este contrato é de outra pessoa. Nesse caso você s
 
 // Caso Fulana/Beltrana (25/09/2026): o pedido de cobrança em andamento é de OUTRA pessoa e a
 // ferramenta veio com um contrato que não é dela. Nada é enviado.
-const INSTRUCAO_ALVO_TERCEIRO = 'O pedido de cobrança em andamento é da OUTRA pessoa (a do CPF/CNPJ informado). Só os contratos dela podem ser usados; o contrato de quem está falando NÃO pode, e nada foi enviado. Se o CPF/CNPJ dela não foi localizado, peça para conferir o número. Se não estiver claro de quem é a cobrança, pergunte, curto: "Você quer a sua cobrança ou a da outra pessoa?". NÃO peça o CPF de quem está falando: ele já está identificado — quando ele disser que quer a própria cobrança, ela volta a ser dele.';
+const INSTRUCAO_ALVO_TERCEIRO = 'O pedido de cobrança em andamento é da OUTRA pessoa (a do CPF/CNPJ informado). Só os contratos dela podem ser usados; o contrato de quem está falando NÃO pode, e nada foi enviado. Se o CPF/CNPJ dela não foi localizado, peça para conferir o número. Se não estiver claro de quem é a cobrança, pergunte, curto, se ele quer a própria cobrança ou a do titular localizado pelo CPF ou CNPJ informado, chamando esse titular pelo primeiro nome. NÃO peça o CPF de quem está falando: ele já está identificado — quando ele disser que quer a própria cobrança, ela volta a ser dele.';
 
 // Decisão do dono (25/09/2026): intenção de alvo dos dois lados na mensagem do cliente (ou
 // menção a outra pessoa sem o CPF dela). Nenhuma cobrança sai até ele esclarecer.
 const INSTRUCAO_ALVO_AMBIGUO = 'Não está claro de quem é a cobrança. NÃO envie nada. Pergunte, curto: "Você quer a sua cobrança ou a da outra pessoa?". Se for de outra pessoa, peça o CPF ou CNPJ do titular dela.';
+// F2 (decisão 4 do gerente, 30/09/2026): com um terceiro já registrado, o cliente citou uma pessoa por
+// relação ("minha mãe") e nada prova que é o titular registrado. Nenhum dos dois é cobrado por suposição;
+// só um documento consultado resolve. O sistema não conhece a relação entre as pessoas: a instrução não
+// a afirma nem a repete.
+// Revisão da F2 (30/09/2026): com terceiro localizado, a dúvida é entre a própria cobrança e a DELE — a
+// pergunta nomeia esse titular, para a resposta apontar para ele ("a da Beltrana", "a dela") e não para
+// "a outra pessoa", que agora significa alguém novo.
+const INSTRUCAO_ALVO_AMBIGUO_COM_TERCEIRO = 'Não está claro de quem é a cobrança. NÃO envie nada. Pergunte, curto, se ele quer a própria cobrança ou a do titular localizado pelo CPF ou CNPJ já informado, chamando esse titular pelo primeiro nome. Se for de uma terceira pessoa, peça o CPF ou CNPJ do titular dela.';
+// O worker não conseguiu ler o escopo do turno: não se sabe se há terceiro nem dúvida gravada.
+const INSTRUCAO_ALVO_NAO_CONFIRMADO = 'Não foi possível confirmar agora de quem é a cobrança. NÃO envie nada e não diga que enviou: diga, curto, que não dá para seguir com a cobrança neste momento e continue com o que não depende dela.';
+// Terceira revisão da F2 (30/09/2026): o escopo venceu com uma dúvida gravada. O prazo encerra a autorização,
+// não a dúvida: nenhum contrato vale (nem o de antes, nem o de quem fala) até ele dizer que é a própria
+// cobrança ou informar o documento.
+const INSTRUCAO_TERCEIRO_EXPIRADO = 'O pedido de cobrança de outra pessoa feito antes nesta conversa não vale mais, e ainda não ficou claro de quem é a cobrança. NÃO envie nada — nem da outra pessoa, nem de quem está falando. Pergunte, curto, se ele quer a própria cobrança ou a de outra pessoa; se for de outra pessoa, peça o CPF ou CNPJ do titular, mesmo que seja o mesmo já informado. Não diga que sabe quem é essa pessoa.';
+const INSTRUCAO_TERCEIRO_NAO_VINCULADO = 'Ele citou uma pessoa que não dá para ligar com segurança ao titular do CPF ou CNPJ já informado nesta conversa. NÃO envie nada — nem desse titular, nem de quem está falando. Pergunte, curto, de quem é a cobrança e peça o CPF ou CNPJ desse titular, mesmo que seja o mesmo já informado: só com o documento consultado a cobrança pode sair. Não diga que sabe quem é essa pessoa nem qual a relação dela com quem fala.';
 
 const soDigitos = (valor) => String(valor || '').replace(/\D/g, '');
+
+// A recusa por alvo em dúvida. O valor de alvoAmbiguo é o motivo (financial-target.js, AMBIGUIDADE): vai no
+// detalhe, que fica em ai_interactions, e escolhe a instrução.
+const DUVIDAS_ENTRE_PROPRIO_E_TERCEIRO = new Set([AMBIGUIDADE.DOIS_LADOS, AMBIGUIDADE.REFERENCIA_INCOMPLETA, AMBIGUIDADE.PROPRIO_NAO_AFIRMADO]);
+function recusaPorAlvoEmDuvida(contexto) {
+  const motivo = typeof contexto.alvoAmbiguo === 'string' ? contexto.alvoAmbiguo : null;
+  const terceiroLocalizado = Boolean(contexto.terceiro && Array.isArray(contexto.terceiro.contratos) && contexto.terceiro.contratos.length > 0);
+  let instrucao = INSTRUCAO_ALVO_AMBIGUO;
+  if (motivo === AMBIGUIDADE.TERCEIRO_NAO_VINCULADO) instrucao = INSTRUCAO_TERCEIRO_NAO_VINCULADO;
+  else if (motivo === AMBIGUIDADE.TERCEIRO_EXPIRADO) instrucao = INSTRUCAO_TERCEIRO_EXPIRADO;
+  else if (motivo === AMBIGUIDADE.ESCOPO_NAO_LIDO || motivo === AMBIGUIDADE.TRANSICAO_NAO_GRAVADA) instrucao = INSTRUCAO_ALVO_NAO_CONFIRMADO;
+  else if (terceiroLocalizado && DUVIDAS_ENTRE_PROPRIO_E_TERCEIRO.has(motivo)) instrucao = INSTRUCAO_ALVO_AMBIGUO_COM_TERCEIRO;
+  return recusa('financial_target_ambiguous', motivo, instrucao);
+}
 
 // O documento do titular DA CONVERSA: o vínculo gravado no contato, ou o da identidade forte
 // resolvida neste turno (a identificação pelo telefone também traz o documento).
@@ -156,7 +185,12 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     }
 
     const validacao = tool.validar(args);
-    if (!validacao.ok) return recusa('invalid_args', validacao.erro);
+    if (!validacao.ok) {
+      // Com o alvo em dúvida não há contrato para deduzir: a recusa certa é a do alvo, com a instrução de
+      // perguntar — não um erro de argumento que o modelo não sabe explicar.
+      if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto && contexto.alvoAmbiguo) return recusaPorAlvoEmDuvida(contexto);
+      return recusa('invalid_args', validacao.erro);
+    }
     let argsValidados = validacao.args;
 
     if (nome === 'buscar_cliente') {
@@ -241,9 +275,7 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     // para o documento informado. Contrato de quem fala, de um terceiro anterior, ou nenhum
     // (documento não encontrado): recusa antes de tocar o SGP. Sem fallback nenhum. Fica depois das
     // checagens de posse e de identidade (que continuam dando os motivos delas) e antes da execução.
-    if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto.alvoAmbiguo) {
-      return recusa('financial_target_ambiguous', null, INSTRUCAO_ALVO_AMBIGUO);
-    }
+    if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto.alvoAmbiguo) return recusaPorAlvoEmDuvida(contexto);
     if (FERRAMENTAS_DE_COBRANCA.includes(nome) && alvo.tipo === 'terceiro'
         && !alvo.contratos.includes(argsValidados.contratoId)) {
       return recusa('financial_target_mismatch', null, INSTRUCAO_ALVO_TERCEIRO);

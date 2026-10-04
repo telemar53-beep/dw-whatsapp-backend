@@ -1401,6 +1401,58 @@ describe('conversation repository', () => {
     expect(await getThirdPartyScope(conversation.id)).toBeNull();
   });
 
+  // Persistência do alvo (03/10/2026): a gravação condicional só tem efeito se o banco ainda tiver um dos estados
+  // esperados — a coluna vazia, a marca única de um escopo, ou o conteúdo de um escopo de antes da marca — e
+  // devolve se gravou. É o que barra o escritor antigo e reconhece a própria gravação de resposta perdida.
+  describe('gravação condicional do escopo de terceiro', () => {
+    const A = { nome: 'Maria', contratos: [10], expiraEm: '2026-09-17T23:00:00.000Z', marca: 'marca-a' };
+    const B = { nome: null, contratos: [], expiraEm: '2026-09-17T23:00:00.000Z', pendente: true, marca: 'marca-b' };
+
+    test('com a marca esperada grava e devolve true; com outra, não escreve nada e devolve false', async () => {
+      const conversation = await createConversation(contactId, channelId);
+      await setThirdPartyScope(conversation.id, A);
+      expect(await setThirdPartyScope(conversation.id, B, { esperados: [{ marca: 'outra' }] })).toBe(false);
+      expect(await getThirdPartyScope(conversation.id)).toEqual(A);
+      expect(await setThirdPartyScope(conversation.id, B, { esperados: [{ marca: 'marca-a' }] })).toBe(true);
+      expect(await getThirdPartyScope(conversation.id)).toEqual(B);
+    });
+
+    test('a coluna vazia só confere se for esperada (nulo) ou aceita (aceitaNulo)', async () => {
+      const conversation = await createConversation(contactId, channelId);
+      expect(await setThirdPartyScope(conversation.id, A, { esperados: [{ marca: 'marca-a' }] })).toBe(false);
+      expect(await getThirdPartyScope(conversation.id)).toBeNull();
+      expect(await setThirdPartyScope(conversation.id, A, { esperados: [{ nulo: true }] })).toBe(true);
+      expect(await setThirdPartyScope(conversation.id, null, { esperados: [{ marca: 'marca-a' }] })).toBe(true);
+      expect(await setThirdPartyScope(conversation.id, null, { esperados: [], aceitaNulo: true })).toBe(true);
+      expect(await getThirdPartyScope(conversation.id)).toBeNull();
+    });
+
+    test('uma limpeza esperando a marca antiga não apaga um escopo mais novo (mudou e voltou não engana)', async () => {
+      const conversation = await createConversation(contactId, channelId);
+      await setThirdPartyScope(conversation.id, A);
+      // Outro processamento: A → vazio → B. Quem leu A e só agora grava é barrado, mesmo com A tendo existido.
+      await setThirdPartyScope(conversation.id, null, { esperados: [{ marca: 'marca-a' }] });
+      await setThirdPartyScope(conversation.id, B, { esperados: [{ nulo: true }] });
+      expect(await setThirdPartyScope(conversation.id, null, { esperados: [{ marca: 'marca-a' }], aceitaNulo: true })).toBe(false);
+      expect(await getThirdPartyScope(conversation.id)).toEqual(B);
+    });
+
+    test('escopo de antes da marca: confere pelo conteúdo igual (só na transição de versão)', async () => {
+      const conversation = await createConversation(contactId, channelId);
+      const antigo = { nome: 'Maria', contratos: [10], expiraEm: '2026-09-17T23:00:00.000Z' };
+      await setThirdPartyScope(conversation.id, antigo);
+      expect(await setThirdPartyScope(conversation.id, B, { esperados: [{ legado: { ...antigo, contratos: [11] } }] })).toBe(false);
+      expect(await setThirdPartyScope(conversation.id, B, { esperados: [{ legado: antigo }] })).toBe(true);
+      expect(await getThirdPartyScope(conversation.id)).toEqual(B);
+    });
+
+    test('vários estados esperados: confere com qualquer um (a própria gravação de resposta perdida)', async () => {
+      const conversation = await createConversation(contactId, channelId);
+      await setThirdPartyScope(conversation.id, B);
+      expect(await setThirdPartyScope(conversation.id, null, { esperados: [{ marca: 'marca-a' }, { marca: 'marca-b' }] })).toBe(true);
+    });
+  });
+
   // Regra financeira 0/1/2+ (25/09/2026): o motivo de ir para a Reativação é fato do sistema e
   // vale nos turnos seguintes; o primeiro motivo gravado fica.
   test('guarda e lê o motivo de Reativação; o primeiro motivo não é trocado', async () => {

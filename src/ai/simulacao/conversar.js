@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { runAiTurn } = require('../ai-orchestrator');
+const { esperadoDoEscopo } = require('../third-party-scope');
 const { getAiConfig, isToolEnabled } = require('../ai-config.repository');
 const { recordAiInteraction } = require('../ai-interaction.repository');
 const { listRecentMessagesByConversation, findLatestInboundImage } = require('../../conversations/message.repository');
@@ -196,8 +197,20 @@ function prepararMundo({ config, conversa, contact, historico, entregas }) {
     return { ...conversa };
   });
   markPhoneContested.mockResolvedValue(undefined);
-  setThirdPartyScope.mockImplementation(async (id, escopo) => {
+  setThirdPartyScope.mockImplementation(async (id, escopo, condicao = null) => {
+    // Persistência do alvo (03/10/2026): a mesma condição da gravação real (conversation.repository.js), sobre o
+    // estado em memória, e o mesmo retorno — se gravou.
+    if (condicao) {
+      const atual = conversa.aiTriageThirdParty || null;
+      const esperados = Array.isArray(condicao.esperados) ? condicao.esperados.filter(Boolean) : [];
+      const confere = atual === null
+        ? Boolean(condicao.aceitaNulo) || esperados.some((e) => e.nulo === true)
+        : esperados.some((e) => (typeof e.marca === 'string' && atual.marca === e.marca)
+          || (e.legado && JSON.stringify(e.legado) === JSON.stringify(atual)));
+      if (!confere) return false;
+    }
     conversa.aiTriageThirdParty = escopo || null;
+    return true;
   });
   getThirdPartyScope.mockImplementation(async () => conversa.aiTriageThirdParty || null);
 
@@ -418,6 +431,9 @@ async function conversar(roteiro, anterior = null) {
       perfil: 'triagem',
       identidade,
       terceiro,
+      // Persistência do alvo (03/10/2026): como o worker, o turno recebe o estado do escopo que ele conhece (aqui,
+      // o gravado em memória); as gravações das ferramentas o exigem.
+      esperadosDoAlvo: [esperadoDoEscopo(conversa.aiTriageThirdParty || null)],
       messageId,
       origemMensagem: doCliente.audio ? 'áudio' : 'texto',
       avisoCidade: null,

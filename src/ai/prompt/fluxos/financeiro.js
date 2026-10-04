@@ -85,7 +85,12 @@ module.exports = {
     const contratos = estado.contratos || [];
     const l = [
       '',
-      'PEDIDO DE PAGAMENTO ("quero pagar", "quero o boleto", "quero o PIX", "quero quitar", "como faço para pagar") tem prioridade sobre qualquer roteiro de diagnóstico: entregue o boleto ou o PIX AGORA (enviar_boleto ou gerar_pix), mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo. NUNCA pergunte "você chegou a fazer esse pagamento?" a quem acabou de dizer que quer pagar.',
+      // Conclusão do atendimento (04/10/2026, decisão do proprietário): o pedido genérico continua o meio já escolhido; sem
+      // escolha, uma pergunta curta — antes, o modelo escolhia sozinho entre boleto e PIX.
+      // Reavaliação r2 (04/10/2026): a versão imperativa desta regra não fez o modelo perguntar (E3, 0/3) e regrediu "como eu
+      // pago?" sem meio disponível (E6 #6). Fica a redação avaliada na rodada inicial; a pergunta curta no pedido genérico
+      // sem escolha continua sem garantia (pendência registrada).
+      'PEDIDO DE PAGAMENTO ("quero pagar", "quero o boleto", "quero o PIX", "quero quitar", "como faço para pagar") tem prioridade sobre qualquer roteiro de diagnóstico, mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo. Se ele disse o meio (boleto ou PIX), entregue esse meio AGORA (enviar_boleto ou gerar_pix). Num pedido genérico de pagamento ("quero pagar", "manda pra eu pagar"), continue com o meio já escolhido nesta conversa (o que ele pediu ou recebeu antes); se nenhum foi escolhido, pergunte curto: "Prefere boleto ou PIX?". NUNCA pergunte "você chegou a fazer esse pagamento?" a quem acabou de dizer que quer pagar.',
       config.triageResolvedReasonId
         ? [
           'Identidade JÁ confirmada: NÃO peça CPF. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.',

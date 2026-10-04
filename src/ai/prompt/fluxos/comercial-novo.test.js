@@ -112,9 +112,11 @@ describe('módulo comercial-novo', () => {
     // parar em noturno.js, arriscando frases concorrentes). Agora as duas
     // metades vivem juntas aqui, ramificando em triagem.noturno.ativo.
     describe('frase-modelo de encaminhamento ao setor de vendas (dia x noite)', () => {
-      test('de dia, o modelo diz que um atendente continua por aqui, sem menção a horário', () => {
+      // Conclusão do atendimento (04/10/2026, revisão): fila, não atendimento que continua (item 6).
+      test('de dia, o modelo diz que o atendimento entrou na fila e que um atendente responde quando estiver disponível, sem horário', () => {
         const t = texto({ triagem: { noturno: { ativo: false }, forcarConclusao: false } });
-        expect(t).toMatch(/Vou encaminhar você\. Um atendente continuará o atendimento por aqui\./);
+        expect(t).toMatch(/Certo! 😊 Seu atendimento entrou na fila\. Um atendente responde por aqui assim que estiver disponível\./);
+        expect(t).not.toMatch(/continuará o atendimento/);
         expect(t).not.toMatch(/fora do horário de atendimento/);
       });
 
@@ -223,7 +225,7 @@ describe('módulo comercial-novo', () => {
     });
 
     test('o "Certo!" só responde a um pedido do cliente; sem pedido, começa direto no encaminhamento', () => {
-      expect(texto()).toMatch(/O "Certo!" é só quando ele pediu algo \(contratar, falar com atendente\); senão comece direto em "Vou encaminhar\.\.\."\./);
+      expect(texto()).toMatch(/O "Certo!" é só quando ele pediu algo \(contratar, falar com atendente\); senão comece direto em "Seu atendimento entrou na fila\.\.\."\./);
     });
 
     test('nunca nomeia um setor fixo como string literal', () => {

@@ -25,6 +25,12 @@ function recusa(motivo, detalhe, instrucao) {
 // C4 v2 (04/10/2026): erro e tempo esgotado de uma ferramenta que declara `instrucaoSemConfirmacao` (hoje só
 // concluir_triagem) chegam ao modelo com esse texto. Sem ele, a recusa seca fez o modelo inventar a causa da falha.
 // Nunca lança: uma falha aqui não pode trocar a recusa por uma exceção.
+// Conclusão do atendimento (04/10/2026): a recusa que levou essa instrução fica marcada (semConfirmacao). O orquestrador
+// grava a marca no registro das interações, e o turno seguinte sabe que o encaminhamento foi tentado e não concluído.
+function marcarSemConfirmacao(r) {
+  return r && r.instrucao ? { ...r, semConfirmacao: true } : r;
+}
+
 function instrucaoSemConfirmacao(nome, args) {
   try {
     const tool = findTool(nome);
@@ -299,7 +305,7 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     // aqui podia vencer com "timeout" enquanto o SGP ainda liberava o serviço
     // — ação real reportada ao modelo como falha.
     const resultado = await comTimeout(tool.executar(argsValidados, contexto), tool.timeoutMs || timeoutMs);
-    if (resultado === Symbol.for('timeout')) return recusa('timeout', nome, instrucaoSemConfirmacao(nome, argsValidados));
+    if (resultado === Symbol.for('timeout')) return marcarSemConfirmacao(recusa('timeout', nome, instrucaoSemConfirmacao(nome, argsValidados)));
     if (resultado && resultado.ok === false) return recusa('execution_error', resultado.erro);
     // Minimização: o resultado de um contrato de terceiro passa pela projeção antes
     // de chegar ao modelo. Aplicada aqui, e não em cada ferramenta, para que uma
@@ -308,7 +314,7 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     return { ok: true, resultado };
   } catch (err) {
     logFalha(nome, err);
-    return recusa('execution_error', err && err.message, instrucaoSemConfirmacao(nome, args));
+    return marcarSemConfirmacao(recusa('execution_error', err && err.message, instrucaoSemConfirmacao(nome, args)));
   }
 }
 

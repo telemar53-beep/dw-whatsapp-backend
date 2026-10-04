@@ -165,4 +165,22 @@ async function findLatestEnqueuedDelivery(conversationId) {
   return paraRegistro(resultado.rows[0]);
 }
 
-module.exports = { claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery };
+/**
+ * Conclusão do atendimento (04/10/2026): a entrega que de fato SAIU (enfileirada) de uma ferramenta para UMA fatura nesta
+ * conversa — é o que permite dizer "o boleto desta mesma fatura já foi enviado acima" quando o PIX dela não existe.
+ * Só leitura; null quando não saiu.
+ */
+async function findEnqueuedDeliveryOfInvoice({ conversationId, tool, invoiceId }) {
+  const resultado = await getPool().query(
+    `SELECT ${COLUNAS} FROM ai_billing_deliveries
+      WHERE conversation_id = $1 AND tool = $2 AND invoice_id = $3 AND enqueued_at IS NOT NULL
+      ORDER BY enqueued_at DESC
+      LIMIT 1`,
+    [conversationId, tool, String(invoiceId)]
+  );
+  return paraRegistro(resultado.rows[0]);
+}
+
+module.exports = {
+  claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery, findEnqueuedDeliveryOfInvoice,
+};

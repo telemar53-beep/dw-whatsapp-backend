@@ -45,7 +45,7 @@ const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
-const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
+const { claimDelivery, markDeliveryEnqueued, releaseDelivery, findEnqueuedDeliveryOfInvoice } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { listarPlanosDisponiveis } = require('../plans/plan.repository');
 const { listPlaces, findCityById } = require('../cities/city.repository');
@@ -132,6 +132,14 @@ beforeEach(() => {
   // enfileirada nunca volta a ser reivindicável, nem por um chamador enganado.
   releaseDelivery.mockImplementation(async (id) => {
     for (const [chave, { registro }] of entregas) if (registro.id === id && !registro.enqueuedAt) entregas.delete(chave);
+  });
+  // Conclusão do atendimento (04/10/2026): a entrega já enfileirada desta fatura nesta conversa, lida do mesmo armazenamento.
+  findEnqueuedDeliveryOfInvoice.mockImplementation(async ({ conversationId, tool, invoiceId }) => {
+    for (const { porFatura, registro } of entregas.values()) {
+      const [conversa, ferramenta, , fatura] = porFatura.split('|');
+      if (conversa === conversationId && ferramenta === tool && fatura === String(invoiceId) && registro.enqueuedAt) return { ...registro };
+    }
+    return null;
   });
 });
 
@@ -834,6 +842,26 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(r.instrucao).toContain('Já deixei seu atendimento na fila');
     expect(ctx.desbloqueioRealizado).toBe(true);
     expect(ctx.desbloqueioResultado).toEqual({ liberado: true, dias: 3 });
+  });
+
+  // Conclusão do atendimento (04/10/2026; avaliação de 01/10, C6): a frase dizia "com o comprovante" também a quem não
+  // tinha mandado comprovante nenhum — ação afirmada sem evidência.
+  test('(a2) a frase só cita o comprovante quando ele foi lido nesta conversa', async () => {
+    const com = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
+    expect(com.instrucao).toContain('Já deixei seu atendimento na fila com o comprovante para acompanhamento.');
+    jest.clearAllMocks();
+    listTrustUnlocksByContract.mockResolvedValue([]);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA_VENCIDA], paginacao: { total: 1 } });
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, protocolo: '9999', motivo: null });
+    recordTrustUnlock.mockResolvedValue({ id: 'l-1' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+    const sem = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno({ comprovante: null }));
+    expect(sem.instrucao).toContain('Já deixei seu atendimento na fila para acompanhamento.');
+    expect(sem.instrucao).not.toMatch(/comprovante para acompanhamento/);
+  });
+
+  test('(a3) a descrição diz que a liberação em confiança não exige comprovante (o modelo não pode inventar o requisito)', () => {
+    expect(findTool('desbloqueio_confianca').descricao).toMatch(/o sistema NÃO exige comprovante para ela — não peça comprovante como condição/);
   });
 
   // Revisão final do branch: entre o início do turno (a OpenAI, a visão do
@@ -1906,8 +1934,24 @@ describe('enviar_boleto', () => {
         duplicates: [{ id: '9', value: 135, dueDate: '2026-09-15', pixCode: null }],
       });
       const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
-      expect(r).toEqual({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
+      // Conclusão do atendimento (04/10/2026): a recusa agora traz a instrução com o que não foi feito e a alternativa real.
+      expect(r).toEqual({ sucesso: false, motivo: 'Fatura sem código PIX no SGP', instrucao: expect.stringMatching(/não tem código PIX/) });
       expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    // Revisão (04/10/2026): enviar_boleto exige o link do PDF — oferecer o boleto só com a linha digitável seria um próximo
+    // passo que falha.
+    test('(d2) PIX sem código e boleto com link: a instrução oferece o boleto da mesma fatura', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', value: 135, dueDate: '2026-09-15', pixCode: null, barCode: 'b', boletoLink: 'https://x/b.pdf' }] });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r.instrucao).toMatch(/ofereça enviar o boleto desta mesma fatura/);
+    });
+
+    test('(d3) PIX sem código e boleto sem link (só a linha digitável): não oferece o boleto', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', value: 135, dueDate: '2026-09-15', pixCode: null, barCode: 'b', boletoLink: null }] });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r.instrucao).not.toMatch(/ofereça enviar o boleto/);
+      expect(r.instrucao).toMatch(/não há outra forma de pagamento para oferecer por aqui/);
     });
 
     test('sem fatura em aberto: sucesso false', async () => {
@@ -2318,6 +2362,11 @@ describe('fatura entregue é sempre a mais antiga', () => {
   });
 });
 
+// Avaliação real (04/10/2026, E3 #1): "quero pagar minha fatura" levou o modelo a conferir_pagamento e, dali, à fila.
+test('conferir_pagamento: a descrição diz que quem QUER pagar ainda não pagou', () => {
+  expect(findTool('conferir_pagamento').descricao).toMatch(/Quem diz que QUER pagar ainda não pagou: não use esta ferramenta\./);
+});
+
 describe('concluir_triagem', () => {
   const SETOR = '11111111-1111-1111-1111-111111111111';
   const MOTIVO = '22222222-2222-2222-2222-222222222222';
@@ -2384,6 +2433,84 @@ describe('concluir_triagem', () => {
     const c = ctx({ registroFerramentas: [{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }] });
     await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu boleto.', confianca: 0.9, pendenciasObrigatorias: [] }, c);
     expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → enviado false, motivo Nenhuma fatura em aberto');
+  });
+
+  // Conclusão do atendimento (04/10/2026): depois de um encaminhamento que falhou, a nova tentativa pura exige a declaração
+  // do pedido renovado. Ficam isentas a conclusão pedida por outra ferramenta do turno (encerrar_atendimento não conta: a
+  // recusa dele manda concluir a quem só agradeceu) e a que o próprio código exige (contenção, liberação, limite).
+  describe('nova tentativa depois de um encaminhamento que não foi concluído', () => {
+    const ARGS = { setorId: SETOR, motivoId: null, resumo: 'Pediu atendente.', confianca: 0.9, pendenciasObrigatorias: [] };
+    const depoisDaFalha = (extra = {}) => ctx({ encaminhamentoNaoConcluido: { tentativas: 1 }, ferramentasDoTurno: ['concluir_triagem'], ultimaFalaDoCliente: 'Tudo bem, obrigado mesmo assim.', ...extra });
+    const concluir = (args, c) => findTool('concluir_triagem').executar({ ...ARGS, ...args }, c);
+
+    test('sem a declaração e sem outra ferramenta no turno: não tenta, e o modelo lê por quê', async () => {
+      const r = await concluir({}, depoisDaFalha());
+      expect(r).toMatchObject({ concluido: false });
+      expect(r.instrucao).toMatch(/não renovam o pedido/);
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    // Avaliação real (04/10/2026, E7 #1 e #2): depois de "Tudo bem, obrigado mesmo assim", o modelo declarou
+    // clientePediuAtendente: true (o resumo dele dizia "agradeceu e não trouxe nova solicitação"). A declaração do C4 não
+    // renova o pedido: a nova tentativa exige o trecho da mensagem ATUAL em que ele pede de novo, e o código confere que o
+    // trecho está lá.
+    test('clientePediuAtendente: true sem o trecho do pedido renovado não tenta de novo', async () => {
+      const r = await concluir({ clientePediuAtendente: true }, depoisDaFalha());
+      expect(r).toMatchObject({ concluido: false });
+      expect(r.instrucao).toMatch(/pedidoRenovadoNaMensagemAtual/);
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    test('com o trecho da mensagem atual em que ele pede de novo: tenta', async () => {
+      const c = depoisDaFalha({ ultimaFalaDoCliente: 'Pode tentar de novo, por favor? Quero mesmo falar com alguém.' });
+      expect(await concluir({ clientePediuAtendente: true, pedidoRenovadoNaMensagemAtual: 'Quero mesmo falar com alguém' }, c)).toMatchObject({ concluido: true });
+    });
+
+    test('o trecho vale com outra caixa, sem acento e sem a pontuação', async () => {
+      const c = depoisDaFalha({ ultimaFalaDoCliente: 'Pode tentar de novo? QUERO falar com alguém!' });
+      expect(await concluir({ pedidoRenovadoNaMensagemAtual: 'quero falar com alguem' }, c)).toMatchObject({ concluido: true });
+    });
+
+    test('trecho que não está na mensagem atual não vale', async () => {
+      const r = await concluir({ clientePediuAtendente: true, pedidoRenovadoNaMensagemAtual: 'quero falar com um atendente' }, depoisDaFalha());
+      expect(r).toMatchObject({ concluido: false });
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    test('trecho curto demais (menos de duas palavras) não vale', async () => {
+      const c = depoisDaFalha({ ultimaFalaDoCliente: 'Sim.' });
+      expect(await concluir({ pedidoRenovadoNaMensagemAtual: 'Sim' }, c)).toMatchObject({ concluido: false });
+    });
+
+    test('validar: o trecho é texto (aparado); outro tipo é invalid_args', () => {
+      const v = findTool('concluir_triagem').validar;
+      expect(v({ ...ARGS, pedidoRenovadoNaMensagemAtual: '  quero falar com alguém ' }).args.pedidoRenovadoNaMensagemAtual).toBe('quero falar com alguém');
+      expect(v({ ...ARGS }).args.pedidoRenovadoNaMensagemAtual).toBeNull();
+      expect(v({ ...ARGS, pedidoRenovadoNaMensagemAtual: true }).ok).toBe(false);
+    });
+
+    test('com outra ferramenta no turno (pedido novo tratado agora): tenta', async () => {
+      expect(await concluir({}, depoisDaFalha({ ferramentasDoTurno: ['enviar_boleto', 'concluir_triagem'] }))).toMatchObject({ concluido: true });
+    });
+
+    test('encerrar_atendimento no turno não conta como pedido novo (a recusa dele manda concluir)', async () => {
+      const r = await concluir({}, depoisDaFalha({ ferramentasDoTurno: ['encerrar_atendimento', 'concluir_triagem'] }));
+      expect(r).toMatchObject({ concluido: false });
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    test('a conclusão que o código exige (contenção ou liberação corrigida) passa', async () => {
+      expect(await concluir({}, depoisDaFalha({ conclusaoExigidaPeloCodigo: true }))).toMatchObject({ concluido: true });
+    });
+
+    test('o turno do limite de perguntas (forcarConclusao) passa', async () => {
+      const r = await concluir({}, depoisDaFalha({ triagem: { threshold: 0.8, maxQuestions: 2, attempts: 2, forcarConclusao: true } }));
+      expect(r).toMatchObject({ concluido: true });
+    });
+
+    test('sem falha anterior, a primeira tentativa não exige a declaração', async () => {
+      expect(await concluir({}, ctx({ encaminhamentoNaoConcluido: null, ferramentasDoTurno: ['concluir_triagem'] }))).toMatchObject({ concluido: true });
+    });
   });
 
   // Contenções operacionais (25/09/2026): a troca do Wi-Fi é feita por gente, a partir do resumo.
@@ -2538,7 +2665,9 @@ describe('concluir_triagem', () => {
 
     test('de dia, a frase final e o resumo seguem como hoje', async () => {
       const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95, pendenciasObrigatorias: [] }, ctx());
-      expect(r.instrucao).toMatch(/um atendente continua daqui/);
+      // Conclusão do atendimento (04/10/2026): de dia, a frase fala em fila (não em atendimento iniciado).
+      expect(r.instrucao).toMatch(/entrou na fila do setor/);
+      expect(r.instrucao).not.toMatch(/um atendente continua daqui/);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary.startsWith('Setor: Financeiro')).toBe(true);
       expect(summary).not.toMatch(/Modo noturno/);
@@ -3608,8 +3737,11 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       expect(primeira.enviado).toBe(true);
       expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
       expect(segunda.envioAnteriorIncerto).toBeUndefined();
-      expect(segunda.instrucao).toMatch(/já foi enviado nesta conversa/);
-      expect(segunda.instrucao).toMatch(/com todas as letras/);
+      // Conclusão do atendimento (04/10/2026, revisão): a duplicata da MESMA mensagem não manda chamar de novo — a
+      // nova chamada cairia na mesma restrição (laço até o teto do turno).
+      expect(segunda.instrucao).toMatch(/já saiu agora, para esta mesma mensagem dele/);
+      expect(segunda.instrucao).toMatch(/não chame esta ferramenta de novo/i);
+      expect(segunda.instrucao).not.toMatch(/reenviar: true/);
       expect(documentos()).toHaveLength(1);
       expect(identidadesPedidas()).toEqual(['msg-1', 'msg-1']);
     });
@@ -3658,6 +3790,10 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }))).enviado).toBe(true);
       const segunda = await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-2' }));
       expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      // Mensagem nova: enviado não é encontrado; se ele pediu para mandar de novo, o reenvio é pelo parâmetro.
+      expect(segunda.instrucao).toMatch(/já foi enviado nesta conversa/);
+      expect(segunda.instrucao).toMatch(/reenviar: true/);
+      expect(segunda.instrucao).toMatch(/Enviado não quer dizer que ele encontrou/);
       expect(documentos()).toHaveLength(1);
       expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2']);
     });
@@ -3677,8 +3813,30 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       const segunda = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
       expect(primeira.enviado).toBe(true);
       expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(segunda.instrucao).toMatch(/já saiu agora, para esta mesma mensagem dele/);
       expect(documentos()).toHaveLength(2);
       expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2+reenvio', 'msg-2+reenvio']);
+    });
+
+    // Avaliação real (04/10/2026, E4 #2): "me manda o boleto também" virou enviar_boleto com reenviar: true, e saiu
+    // "Reenviei acima o boleto" na primeira entrega dele. O verbo vem do envio anterior de verdade, não do parâmetro.
+    test('reenviar: true sem nenhuma entrega anterior desta fatura: a frase diz "Enviei", não "Reenviei"', async () => {
+      const r = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-1' }));
+      expect(r.enviado).toBe(true);
+      expect(r.instrucao).toContain('Enviei acima o boleto');
+      expect(r.instrucao).not.toMatch(/Reenviei/);
+      const p = await pix({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-1' }));
+      expect(p.instrucao).toContain('Enviei acima o PIX');
+      expect(p.instrucao).not.toMatch(/Reenviei/);
+    });
+
+    test('reenviar: true depois de uma entrega da mesma fatura: a frase diz "Reenviei"', async () => {
+      await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      const r = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      expect(r.instrucao).toContain('Reenviei acima o boleto');
+      await pix({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      const p = await pix({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      expect(p.instrucao).toContain('Reenviei acima o PIX');
     });
 
     test('7. outra mensagem futura pedindo reenvio passa de novo', async () => {
@@ -3821,7 +3979,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
 
     test('gerar_pix sem código PIX: libera, e com código a seguinte envia', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
-      expect(await pix({ contratoId: 17402 }, ctx())).toEqual({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
+      expect(await pix({ contratoId: 17402 }, ctx())).toEqual({ sucesso: false, motivo: 'Fatura sem código PIX no SGP', instrucao: expect.stringMatching(/não tem código PIX/) });
       expect(releaseDelivery).toHaveBeenCalledTimes(1);
 
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });
@@ -3932,7 +4090,8 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       // MINIMIZAÇÃO (Fase 3) intacta: jaEnviado não atravessa a projeção — o
       // que chega ao modelo continua sendo só enviado + instrucao.
       expect(Object.keys(segunda.resultado).sort()).toEqual(['enviado', 'instrucao']);
-      expect(segunda.resultado.instrucao).toMatch(/já foi enviado nesta conversa/);
+      // Revisão (04/10/2026): as duas chamadas são da MESMA mensagem — a instrução é a da mesma resposta.
+      expect(segunda.resultado.instrucao).toMatch(/já saiu agora, para esta mesma mensagem dele/);
     });
 
     test('o claim do terceiro e o do titular são entregas separadas', async () => {
@@ -4104,7 +4263,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       // A ausência já significa "não é reenvio": um default no schema faria o
       // modelo normalizar o campo.
       expect(parametros.properties.reenviar.default).toBeUndefined();
-      expect(parametros.properties.reenviar.description).toMatch(/com todas as letras/);
+      expect(parametros.properties.reenviar.description).toMatch(/pediu para mandar de novo/);
     });
 
     test('a descrição chega à OpenAI nas duas ferramentas', () => {

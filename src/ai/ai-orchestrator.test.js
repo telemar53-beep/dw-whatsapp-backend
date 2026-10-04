@@ -1216,7 +1216,7 @@ describe('perfil de triagem', () => {
 
       expect(executeTool).toHaveBeenCalledTimes(2);
       expect(r.triagemConcluida).toBeNull();
-      expect(r.texto).toBe('Qualquer dúvida, é só chamar. Ainda não consegui confirmar a sua transferência para um atendente.');
+      expect(r.texto).toBe('Qualquer dúvida, é só chamar. Ainda não consegui confirmar a sua transferência para um atendente. Se quiser, pode me pedir de novo por aqui.');
     });
 
     test('a segunda tentativa confirma: o anúncio sai como o modelo escreveu', async () => {
@@ -1224,7 +1224,7 @@ describe('perfil de triagem', () => {
         .mockResolvedValueOnce(CONCLUIR)
         .mockResolvedValueOnce({ message: { content: 'Vou encaminhar seu atendimento para o Financeiro.' }, usage: {} })
         .mockResolvedValueOnce(CONCLUIR)
-        .mockResolvedValueOnce({ message: { content: 'Seu atendimento vai para o setor Financeiro e um atendente continua daqui.' }, usage: {} });
+        .mockResolvedValueOnce({ message: { content: 'Seu atendimento entrou na fila do setor Financeiro. Um atendente responde por aqui assim que estiver disponível.' }, usage: {} });
       executeTool
         .mockResolvedValueOnce({ ok: false, motivo: 'timeout', detalhe: 'concluir_triagem' })
         .mockImplementationOnce(async (_nome, _args, ctx) => {
@@ -1235,7 +1235,7 @@ describe('perfil de triagem', () => {
       const r = await turnoDeTriagem();
 
       expect(r.triagemConcluida).toEqual({ setor: 'Financeiro' });
-      expect(r.texto).toBe('Seu atendimento vai para o setor Financeiro e um atendente continua daqui.');
+      expect(r.texto).toBe('Seu atendimento entrou na fila do setor Financeiro. Um atendente responde por aqui assim que estiver disponível.');
     });
 
     test('só o anúncio vira "não confirmado": sem anúncio, o texto do modelo fica inteiro', async () => {
@@ -1306,6 +1306,8 @@ describe('perfil de triagem', () => {
       // O turno não termina nela: a conclusão é exigida em seguida.
       expect(createChatCompletion.mock.calls[2][0].toolChoice).toBe('concluir_triagem');
       expect(executeTool).toHaveBeenCalledWith('concluir_triagem', expect.objectContaining({ resumo: 'comprovante' }), expect.anything());
+      // Conclusão do atendimento (04/10/2026, revisão): conclusão exigida pelo código — a trava da nova tentativa não a barra.
+      expect(executeTool.mock.calls.find(([n]) => n === 'concluir_triagem')[2].conclusaoExigidaPeloCodigo).toBe(true);
       expect(r.texto).toBe('Registrado, João. A equipe dá continuidade a partir das 08:00.');
       expect(r.erro).toBeFalsy();
     });
@@ -1954,10 +1956,13 @@ describe('aviso de cidade como fato do turno', () => {
       expect(r.texto).toMatch(/Não é preciso fazer nenhum teste/);
     });
 
+    // Conclusão do atendimento (04/10/2026): o exemplo anterior ("Vou deixar seu atendimento registrado para o suporte.")
+    // passou a ser anúncio de encaminhamento sem conclusão — a guarda exige a conclusão. O que este teste prova (o aviso não
+    // troca uma resposta que não o contradiz) segue com outra frase.
     test('aviso enviado neste turno + resposta que não contradiz: passa intacta', async () => {
-      createChatCompletion.mockResolvedValueOnce(final('Entendi! Vou deixar seu atendimento registrado para o suporte.'));
+      createChatCompletion.mockResolvedValueOnce(final('Entendi! Pode me contar um pouco mais sobre o que está acontecendo?'));
       const r = await turno({ avisoCidade: ENVIADO });
-      expect(r.texto).toBe('Entendi! Vou deixar seu atendimento registrado para o suporte.');
+      expect(r.texto).toBe('Entendi! Pode me contar um pouco mais sobre o que está acontecendo?');
     });
   });
 
@@ -2021,8 +2026,93 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
     return runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: DIA, origemMensagem: 'texto', ...extra });
   };
 
+  // Conclusão do atendimento (04/10/2026): o fato do encaminhamento não concluído (lido do registro das interações),
+  // a marca da conclusão que o código exige, o validador de horário e "entrou na fila" sem conclusão confirmada.
+  describe('conclusão do atendimento — fato, marca e validador no turno', () => {
+    const { listAiInteractionsByConversation } = require('./ai-interaction.repository');
+
+    test('a tentativa sem confirmação de um turno anterior vira o bloco do fato no prompt e chega às ferramentas', async () => {
+      listAiInteractionsByConversation.mockResolvedValueOnce([
+        { toolsRefused: [{ nome: 'concluir_triagem', motivo: 'timeout', semConfirmacao: true }] },
+        { toolsRefused: [{ nome: 'concluir_triagem', motivo: 'invalid_args' }] },
+      ]);
+      roteiro(chamada('consultar_status_todos_contratos'), final('Certo.'));
+      await turno(['obrigado mesmo assim']);
+      expect(vistas[0].sistema).toContain('ENCAMINHAMENTO TENTADO E NÃO CONCLUÍDO');
+      expect(vistas[0].sistema).toContain('já foi tentado 1 vez');
+      expect(executeTool.mock.calls[0][2].encaminhamentoNaoConcluido).toEqual({ tentativas: 1 });
+      expect(executeTool.mock.calls[0][2].ferramentasDoTurno).toEqual(['consultar_status_todos_contratos']);
+    });
+
+    test('sem tentativa marcada sem confirmação, nada de bloco nem de fato', async () => {
+      listAiInteractionsByConversation.mockResolvedValueOnce([{ toolsRefused: [{ nome: 'concluir_triagem', motivo: 'invalid_args' }] }]);
+      roteiro(chamada('consultar_status_todos_contratos'), final('Certo.'));
+      await turno(['oi']);
+      expect(vistas[0].sistema).not.toContain('ENCAMINHAMENTO TENTADO E NÃO CONCLUÍDO');
+      expect(executeTool.mock.calls[0][2].encaminhamentoNaoConcluido).toBeNull();
+    });
+
+    test('a conclusão exigida pela contenção vai marcada como exigida pelo código', async () => {
+      roteiro(final('Reinicie o roteador e faça um teste de velocidade.'), chamada('concluir_triagem'), final('Certo.'));
+      await turno(['meu roteador queimou']);
+      const ctx = executeTool.mock.calls.find(([n]) => n === 'concluir_triagem')[2];
+      expect(ctx.conclusaoExigidaPeloCodigo).toBe(true);
+    });
+
+    test('a conclusão exigida pelo anúncio do modelo NÃO vai marcada (continua sujeita à trava da nova tentativa)', async () => {
+      roteiro(final('Vou encaminhar seu atendimento para o setor Suporte.'), chamada('concluir_triagem'), final('Certo.'));
+      await turno(['quero falar com alguém']);
+      const ctx = executeTool.mock.calls.find(([n]) => n === 'concluir_triagem')[2];
+      expect(ctx.conclusaoExigidaPeloCodigo).toBeFalsy();
+    });
+
+    test('horário sem fonte: a frase dá lugar à de que não há informação confirmada', async () => {
+      roteiro(final('Atendemos até as 18h. Posso ajudar em algo mais?'));
+      const r = await turno(['até que horas vocês atendem?']);
+      expect(r.texto).toBe('Não tenho essa informação confirmada por aqui. Posso ajudar em algo mais?');
+    });
+
+    test('horário que está no prompt do turno (instruções do painel) fica', async () => {
+      getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente. Atendimento de segunda a sexta, das 8h às 18h.', maxToolsPerInteraction: 8, triageExtraInstructions: null, triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null });
+      roteiro(final('Atendemos até as 18h. Posso ajudar em algo mais?'));
+      const r = await turno(['até que horas vocês atendem?']);
+      expect(r.texto).toBe('Atendemos até as 18h. Posso ajudar em algo mais?');
+    });
+
+    // Avaliação real (04/10/2026, E7 #2): "vou deixar seu pedido registrado para um atendente" depois da falha.
+    test('"vou deixar seu pedido registrado" depois de uma conclusão que falhou sai, e entra a frase de transferência não confirmada', async () => {
+      roteiro(chamada('concluir_triagem'), final('Entendi, vou deixar seu pedido registrado para um atendente.'), chamada('concluir_triagem'), final('Entendi, vou deixar seu pedido registrado para um atendente.'));
+      executeTool.mockReset().mockResolvedValue({ ok: false, motivo: 'execution_error', detalhe: 'banco fora', semConfirmacao: true, instrucao: 'x' });
+      const r = await turno(['quero falar com um atendente']);
+      expect(r.texto).not.toMatch(/registrado/);
+      expect(r.texto).toMatch(/Ainda não consegui confirmar a sua transferência/);
+    });
+
+    // Autorrevisão: a linha da hora atual e da saudação (fatos.js: "agora são…", "até 11:59", "de 12:00 a 17:59") não é fonte
+    // de horário de atendimento.
+    test('a hora da saudação no prompt não vira fonte: "até as 12h" inventado sai', async () => {
+      roteiro(final('Atendemos até as 12h. Posso ajudar em algo mais?'));
+      const r = await turno(['até que horas vocês atendem?']);
+      expect(r.texto).toBe('Não tenho essa informação confirmada por aqui. Posso ajudar em algo mais?');
+    });
+
+    test('a última fala do cliente chega às ferramentas (o trecho do pedido renovado é conferido nela)', async () => {
+      roteiro(chamada('consultar_status_todos_contratos'), final('Certo.'));
+      await turno(['oi', 'pode tentar de novo? quero falar com alguém']);
+      expect(executeTool.mock.calls[0][2].ultimaFalaDoCliente).toBe('pode tentar de novo? quero falar com alguém');
+    });
+
+    test('"entrou na fila" depois de uma conclusão que falhou sai, e entra a frase de transferência não confirmada', async () => {
+      roteiro(chamada('concluir_triagem'), final('Seu atendimento entrou na fila do setor Suporte.'), chamada('concluir_triagem'), final('Seu atendimento entrou na fila do setor Suporte.'));
+      executeTool.mockReset().mockResolvedValue({ ok: false, motivo: 'execution_error', detalhe: 'banco fora', semConfirmacao: true, instrucao: 'x' });
+      const r = await turno(['quero falar com um atendente']);
+      expect(r.texto).not.toMatch(/entrou na fila/);
+      expect(r.texto).toMatch(/Ainda não consegui confirmar a sua transferência/);
+    });
+  });
+
   describe('A — equipamento com defeito físico', () => {
-    const SEGURA_DIA = 'Entendi. Não mexa no equipamento nem tente consertar. Seu atendimento vai para o setor Suporte e um atendente continua daqui.';
+    const SEGURA_DIA = 'Entendi. Não mexa no equipamento nem tente consertar. Seu atendimento entrou na fila do setor Suporte. Um atendente responde por aqui assim que estiver disponível.';
 
     test('1. "meu roteador queimou": o reinício e o teste de velocidade são barrados e o código exige a conclusão para o suporte', async () => {
       roteiro(
@@ -2195,7 +2285,7 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
 
   describe('C — explicação financeira sem fonte oficial', () => {
     const FATURAS = { faturas: [{ faturaId: 1, valorOriginal: 99.9, vencimentoOriginal: '2026-10-10' }] };
-    const SEM_FONTE = 'Não tenho essa informação confirmada no sistema. Seu atendimento vai para o setor Financeiro e um atendente continua daqui.';
+    const SEM_FONTE = 'Não tenho essa informação confirmada no sistema. Seu atendimento entrou na fila do setor Financeiro. Um atendente responde por aqui assim que estiver disponível.';
 
     test('13. "por que minha fatura veio esse valor?" sem fonte: a explicação inventada é barrada e vai para o financeiro', async () => {
       ferramentas({ setor: 'Financeiro' });

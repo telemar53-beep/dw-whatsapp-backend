@@ -318,7 +318,7 @@ describe('correção e resposta sem o pedido repetido', () => {
     const irritado = estado([entrada('caiu'), pedido(PEDIDO), entrada('já falei')]);
     expect(respostaSemRepetirDocumento(PEDIDO, ['documento_repetido'], { documento: irritado })).toBe('Entendi, desculpe a insistência.');
     expect(respostaSemRepetirDocumento('Me passa o CPF?', ['documento_apos_encaminhar'], { triagemConcluida: { setor: 'Suporte' }, triagem: { noturno: { ativo: false } } }))
-      .toBe('Seu atendimento vai para o setor Suporte e um atendente continua daqui.');
+      .toBe('Seu atendimento entrou na fila do setor Suporte. Um atendente responde por aqui assim que estiver disponível.');
   });
 });
 

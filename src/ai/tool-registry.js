@@ -31,7 +31,7 @@ const { getAiConfig } = require('./ai-config.repository');
 const { analisarComprovante } = require('./receipt-analysis');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const {
-  claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestEnqueuedDelivery,
+  claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestEnqueuedDelivery, findEnqueuedDeliveryOfInvoice,
 } = require('./billing-delivery.repository');
 const {
   hojeEmSaoPaulo, analisarSituacaoFinanceiraContrato, decidirCobranca, pagamentoConfirmadoDoTitulo, descreverReativacao,
@@ -100,9 +100,11 @@ function validarEntregaDeFatura(args) {
 // lá a ausência significaria "nada pendente" (permissão) e por isso tinha de
 // ser obrigatório; aqui a ausência significa "não é reenvio" (bloqueio), que é
 // o estado seguro. Obrigá-lo normalizaria o modelo escrever `reenviar: true`.
+// Conclusão do atendimento (04/10/2026, decisão do proprietário): "não encontrei, manda de novo" é pedido de reenvio;
+// "não achei", sozinho, é entendido pelo contexto — não vira regra por palavra.
 const PARAMETRO_REENVIAR = {
   type: 'boolean',
-  description: 'Só true quando, NESTA mensagem, o cliente pediu o reenvio com todas as letras ("não recebi, manda de novo", "reenvia por favor"). Confirmar, agradecer ou dizer "pode mandar" NÃO é pedido de reenvio. Em qualquer outro caso, omita.',
+  description: 'Só true quando, NESTA mensagem, o cliente pediu para mandar de novo ("não recebi, manda de novo", "não encontrei, manda novamente", "reenvia por favor"). Confirmar, agradecer ou dizer "pode mandar" NÃO é pedido de reenvio. "Não achei", sozinho, não é por si só pedido de reenvio: entenda pelo contexto. Em qualquer outro caso, omita.',
 };
 
 /** Total informado pela paginação do SGP, ou null quando não há como saber. */
@@ -569,7 +571,7 @@ async function bloqueioDaCobranca(decisao, contexto) {
     cobrancaBloqueada: 'humano',
     motivo: 'Não foi possível confirmar com segurança a situação das faturas deste contrato.',
     instrucao: triagem
-      ? 'NÃO houve envio: não foi possível confirmar com segurança a situação das faturas deste contrato agora. Não envie nada, não diga quantas faturas estão vencidas nem valores, e não tente outro contrato por conta própria. Diga ao cliente que vai encaminhar para um atendente conferir e chame concluir_triagem para o setor que cuidar de financeiro.'
+      ? 'NÃO houve envio: não foi possível confirmar com segurança a situação das faturas deste contrato agora. Não envie nada, não diga quantas faturas estão vencidas nem valores, e não tente outro contrato por conta própria. Chame concluir_triagem para o setor que cuidar de financeiro e, só depois de a conclusão confirmar (concluido: true), diga que um atendente vai conferir. Se não confirmar, diga que não conseguiu passar para a equipe agora.'
       : 'Não foi possível confirmar com segurança a situação das faturas deste contrato: não gere a cobrança pela IA; o atendente confere no SGP.',
   };
 }
@@ -756,12 +758,32 @@ function respostaDeAlvoMudou(item) {
   };
 }
 
-function respostaDeDuplicata(registro, item) {
-  if (registro && registro.enqueuedAt) {
+// Conclusão do atendimento (avaliação real de 04/10, E7): o trecho do pedido renovado tem de estar na mensagem atual do
+// cliente — conferência literal (sem caixa, acento nem pontuação), não leitura de sentido; quem interpreta é o modelo.
+const normalizarFala = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function trechoEstaNaFala(trecho, fala) {
+  const t = normalizarFala(trecho);
+  if (t.split(' ').filter(Boolean).length < 2) return false;
+  return ` ${normalizarFala(fala)} `.includes(` ${t} `);
+}
+
+function respostaDeDuplicata(registro, item, messageId) {
+  // Revisão (04/10/2026): a duplicata da MESMA mensagem do cliente (a mesma resposta tentou entregar duas vezes) não manda
+  // chamar de novo — a nova chamada cairia na mesma restrição, em laço até o teto do turno.
+  if (registro && registro.enqueuedAt && messageId && String(registro.messageId) === String(messageId)) {
     return {
       enviado: false,
       jaEnviado: true,
-      instrucao: `O ${item} desta fatura já foi enviado nesta conversa. Não envie de novo, a menos que o cliente peça o reenvio com todas as letras. Se ele apenas confirmou, agradeceu ou disse "pode mandar", só responda: o ${item} já está com ele, logo acima.`,
+      instrucao: `O ${item} desta fatura já saiu agora, para esta mesma mensagem dele. Não chame esta ferramenta de novo nesta resposta. Responda uma vez só, com a frase da entrega.`,
+    };
+  }
+  if (registro && registro.enqueuedAt) {
+    // Conclusão do atendimento (04/10/2026): a frase antiga mandava dizer "o boleto já está com ele" até a quem disse
+    // que não encontrou (micropiloto 2, E2) — enviado não é encontrado. E o texto da entrega não se repete.
+    return {
+      enviado: false,
+      jaEnviado: true,
+      instrucao: `O ${item} desta fatura já foi enviado nesta conversa (logo acima), e NADA foi enviado agora. Enviado não quer dizer que ele encontrou ou conseguiu usar. Se ele pediu para mandar de novo, chame esta ferramenta de novo com reenviar: true. Se disse que não encontrou, sem pedir o reenvio, entenda pelo contexto: diga onde está (a mensagem logo acima) ou pergunte, curto, se quer que você reenvie. Se só confirmou ou agradeceu, responda curto, sem reenviar. Não repita o texto da entrega.`,
     };
   }
   return {
@@ -769,6 +791,31 @@ function respostaDeDuplicata(registro, item) {
     envioAnteriorIncerto: true,
     instrucao: `Uma tentativa anterior de enviar o ${item} desta fatura nesta conversa ficou SEM confirmação. Não afirme que o cliente recebeu, porque não sabemos. Não repita o envio por conta própria: pergunte a ele se o ${item} chegou. Se ele disser que não e pedir o reenvio com todas as letras, aí sim chame esta ferramenta de novo com reenviar: true.`,
   };
+}
+
+/**
+ * Conclusão do atendimento (04/10/2026): o PIX sem código voltava ao modelo sem instrução nenhuma, e ele ofereceu "outro
+ * caminho" vago (micropiloto 2, E2). Agora a instrução diz o que não foi feito e a alternativa que EXISTE de fato, nesta
+ * ordem: o boleto desta mesma fatura já saiu nesta conversa (registro de entregas); o boleto dela existe e pode ser
+ * oferecido; ou não há outra forma de pagamento por aqui. Nada é enviado nem agendado. Falha ao ler o registro: a
+ * entrega anterior não é afirmada (cai na oferta, que só envia se ele aceitar).
+ */
+async function instrucaoDoPixSemCodigo(contexto, contratoId, fatura) {
+  const naoHouve = 'Esta fatura não tem código PIX disponível no sistema agora: NÃO houve envio de PIX. Não prometa gerar o PIX depois.';
+  let boletoSaiu = false;
+  try {
+    boletoSaiu = Boolean(await findEnqueuedDeliveryOfInvoice({ conversationId: contexto.conversationId, tool: 'enviar_boleto', invoiceId: fatura.id }));
+  } catch (err) {
+    console.error(`gerar_pix: entrega do boleto não lida na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+  }
+  if (boletoSaiu) {
+    return `${naoHouve} O boleto desta mesma fatura já foi enviado acima nesta conversa: diga, curto, que não há PIX para esta fatura agora e que ele pode pagar pelo boleto que está logo acima. Não reenvie o boleto sem ele pedir.`;
+  }
+  // Revisão (04/10/2026): enviar_boleto exige o link do PDF; só a linha digitável não basta para oferecer.
+  if (fatura.boletoLink) {
+    return `${naoHouve} Diga isso em uma frase e ofereça enviar o boleto desta mesma fatura; só envie (enviar_boleto${contratoId ? ` com contratoId ${contratoId}` : ''}) se ele aceitar.`;
+  }
+  return `${naoHouve} Também não há boleto desta fatura que eu consiga enviar agora. Diga isso com honestidade: não há outra forma de pagamento para oferecer por aqui agora. Se ele quiser, pode pedir para falar com um atendente. Não invente outro caminho.`;
 }
 
 /**
@@ -818,6 +865,17 @@ async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contex
     console.error(`${tool}: fatura sem id na conversa ${contexto.conversationId}; entrega recusada para não arriscar a duplicata.`);
     return { resposta: respostaSemIdentificador(item, 'faturaId') };
   }
+  // Avaliação real (04/10/2026, E4 #2): "Reenviei" só quando já saiu, antes, uma entrega desta fatura nesta conversa — o
+  // reenviar do modelo, sozinho, não prova o envio anterior. Só o verbo depende disto; a reserva é a mesma. Falha na
+  // leitura: "Enviei" (não afirma o que não foi lido).
+  let houveEnvioAnterior = false;
+  if (args && args.reenviar === true) {
+    try {
+      houveEnvioAnterior = Boolean(await findEnqueuedDeliveryOfInvoice({ conversationId: contexto.conversationId, tool, invoiceId }));
+    } catch (err) {
+      console.error(`${tool}: entrega anterior não lida na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    }
+  }
   const messageId = contexto && contexto.messageId;
   if (!messageId) {
     console.error(`${tool}: turno sem messageId na conversa ${contexto.conversationId}; entrega recusada para não arriscar a duplicata.`);
@@ -845,9 +903,9 @@ async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contex
     travarCobrancaDoTurno(contexto);
     return { resposta: respostaDeAlvoMudou(item) };
   }
-  if (!obtido) return { resposta: respostaDeDuplicata(registro, item) };
+  if (!obtido) return { resposta: respostaDeDuplicata(registro, item, messageId) };
   if (!registro || !registro.id) return { resposta: respostaDeDuplicata(null, item) };
-  return { claimId: registro.id };
+  return { claimId: registro.id, reenvio: houveEnvioAnterior };
 }
 
 /**
@@ -1701,7 +1759,7 @@ const TOOLS = [
         // Regra do Financeiro: sem código PIX no SGP, não há o que enviar.
         if (!primeira.pixCode) {
           await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix sem código PIX');
-          return { sucesso: false, motivo: 'Fatura sem código PIX no SGP' };
+          return { sucesso: false, motivo: 'Fatura sem código PIX no SGP', instrucao: await instrucaoDoPixSemCodigo(contexto, busca.contratoId, primeira) };
         }
 
         // Mesma guarda de enviar_boleto: entre a consulta ao SGP e este ponto,
@@ -1742,14 +1800,14 @@ const TOOLS = [
         // Print 2026-09-17: entrega inteira sem chamar o cliente pelo nome,
         // logo depois de identificar pelo CPF — "está muito robô".
         ...(reativacaoDepois ? { reativacaoDepois: true } : {}),
-        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo: "Enviei acima o PIX${reativacaoDepois ? ' da fatura vencida mais antiga' : ''}${endereco ? ' referente ao seu contrato do endereço ' + endereco : ''}. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco.${reativacaoDepois ? fraseDasDemaisVencidas(contexto) : ''} Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita o código nem o valor.${reativacaoDepois ? ' Não diga que a internet será liberada nem que ficou tudo regularizado.' : ''}`,
+        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo: "${entrega.reenvio ? 'Reenviei' : 'Enviei'} acima o PIX${reativacaoDepois ? ' da fatura vencida mais antiga' : ''}${endereco ? ' referente ao seu contrato do endereço ' + endereco : ''}. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco.${reativacaoDepois ? fraseDasDemaisVencidas(contexto) : ''} Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita o código nem o valor.${reativacaoDepois ? ' Não diga que a internet será liberada nem que ficou tudo regularizado.' : ''}`,
       };
     },
   },
   {
     nome: 'conferir_pagamento',
     categoria: 'CONSULTA',
-    descricao: 'Confere no sistema se a fatura enviada nesta conversa (boleto ou PIX) já consta como paga, relendo a MESMA fatura. Use quando o cliente disser que pagou ou perguntar se o pagamento caiu. É a única fonte para dizer que um pagamento foi confirmado: comprovante, "já paguei" ou aviso do banco não confirmam.',
+    descricao: 'Confere no sistema se a fatura enviada nesta conversa (boleto ou PIX) já consta como paga, relendo a MESMA fatura. Use quando o cliente disser que pagou ou perguntar se o pagamento caiu. É a única fonte para dizer que um pagamento foi confirmado: comprovante, "já paguei" ou aviso do banco não confirmam. Quem diz que QUER pagar ainda não pagou: não use esta ferramenta.',
     // Sem argumento nenhum do modelo: a fatura é a última cobrança que SAIU nesta conversa
     // (ai_billing_deliveries) e o contrato é o dela — que ainda precisa estar neste atendimento.
     isentoDeProprietario: true,
@@ -1768,7 +1826,7 @@ const TOOLS = [
       const naoConferiu = (motivo) => ({
         pagamentoConfirmado: false,
         motivo,
-        instrucao: 'Não foi possível conferir o pagamento agora. NÃO diga que o pagamento foi confirmado, compensado ou baixado, nem que a internet foi liberada. Diga que um atendente vai conferir e chame concluir_triagem para o setor que cuidar de financeiro.',
+        instrucao: 'Não foi possível conferir o pagamento agora. NÃO diga que o pagamento foi confirmado, compensado ou baixado, nem que a internet foi liberada. Chame concluir_triagem para o setor que cuidar de financeiro e, só depois de a conclusão confirmar (concluido: true), diga que um atendente vai conferir.',
       });
 
       const entrega = await findLatestEnqueuedDelivery(contexto.conversationId);
@@ -1776,7 +1834,7 @@ const TOOLS = [
         return {
           pagamentoConfirmado: false,
           motivo: 'Nenhum boleto ou PIX foi enviado nesta conversa.',
-          instrucao: 'Não há cobrança enviada nesta conversa para conferir. NÃO diga que o pagamento foi confirmado. Se o cliente pagou por outro meio, diga que a equipe vai conferir e chame concluir_triagem para o setor que cuidar de financeiro.',
+          instrucao: 'Não há cobrança enviada nesta conversa para conferir. NÃO diga que o pagamento foi confirmado. Se o cliente pagou por outro meio, chame concluir_triagem para o setor que cuidar de financeiro e, só depois de a conclusão confirmar (concluido: true), diga que a equipe vai conferir. Se ele ainda não pagou e quer pagar, não conclua: entregue o meio que ele escolheu ou pergunte curto se prefere boleto ou PIX.',
         };
       }
       const contratoId = entrega.contractId;
@@ -1851,7 +1909,7 @@ const TOOLS = [
   {
     nome: 'desbloqueio_confianca',
     categoria: 'ACAO_SENSIVEL',
-    descricao: `Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada ${DIAS_ENTRE_LIBERACOES} dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.`,
+    descricao: `Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada ${DIAS_ENTRE_LIBERACOES} dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida. Esta liberação é uma promessa de pagamento: o sistema NÃO exige comprovante para ela — não peça comprovante como condição.`,
     chaveProprietario: 'contratoId',
     // À noite esta ferramenta entra na lista da triagem: o gate de identidade
     // forte garante que só quem já teve o CPF confirmado pode liberar um
@@ -2120,7 +2178,7 @@ const TOOLS = [
         // deixar a frase passar. E o resultado vai para o resumo da fila.
         contexto.desbloqueioRealizado = true;
         contexto.desbloqueioResultado = { liberado: true, dias: resposta.dias || null };
-        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e ${concluirPara} NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
+        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila${contexto.comprovante ? ' com o comprovante' : ''} para acompanhamento. Você consegue testar se a internet voltou?" — e ${concluirPara} NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
       }
       return resposta;
     },
@@ -2351,7 +2409,8 @@ const TOOLS = [
       // envio real (teste real 2026-09-15: no prompt, o modelo copiava a frase
       // sem chamar a ferramenta e o cliente não recebia nada).
       const endereco = enderecoParaCitar(busca, contexto);
-      const frase = `Enviei acima o boleto${reativacaoDepois ? ' da fatura vencida mais antiga' : ''}${endereco ? ' referente ao seu contrato do endereço ' + endereco + ',' : ''} em PDF${linhaDigitavelEnviada ? ' e com a linha digitável' : ''}. É só pagar pelo aplicativo do seu banco${linhaDigitavelEnviada ? ', copiando a linha digitável,' : ''} ou em qualquer lotérica.${reativacaoDepois ? fraseDasDemaisVencidas(contexto) : ''} Se tiver alguma dificuldade, me avise que eu te ajudo!`;
+      // Conclusão do atendimento (04/10/2026): o reenvio pedido não repete o texto do primeiro envio (micropiloto 2, E1).
+      const frase = `${entrega.reenvio ? 'Reenviei' : 'Enviei'} acima o boleto${reativacaoDepois ? ' da fatura vencida mais antiga' : ''}${endereco ? ' referente ao seu contrato do endereço ' + endereco + ',' : ''} em PDF${linhaDigitavelEnviada ? ' e com a linha digitável' : ''}. É só pagar pelo aplicativo do seu banco${linhaDigitavelEnviada ? ', copiando a linha digitável,' : ''} ou em qualquer lotérica.${reativacaoDepois ? fraseDasDemaisVencidas(contexto) : ''} Se tiver alguma dificuldade, me avise que eu te ajudo!`;
       return {
         enviado: true,
         valor: primeira.value,
@@ -2387,6 +2446,12 @@ const TOOLS = [
           type: 'boolean',
           description: 'true SOMENTE quando o pedido mais recente do cliente é falar com um atendente (uma pessoa), ou ele aceitou seguir com um. Aí as pendências não impedem o encaminhamento: vão no resumo para o atendente. Não vale para o que você decidiu encaminhar por conta própria. Não libera consulta, cobrança, desbloqueio nem dado de ninguém.',
         },
+        // Conclusão do atendimento (avaliação real de 04/10/2026, E7): depois da falha, clientePediuAtendente foi declarado a
+        // quem só agradeceu. A nova tentativa pede a prova: o trecho da mensagem atual.
+        pedidoRenovadoNaMensagemAtual: {
+          type: 'string',
+          description: 'Só depois de um encaminhamento que já foi tentado e não foi concluído nesta conversa (o prompt avisa quando): copie aqui, palavra por palavra, o trecho da mensagem ATUAL do cliente em que ele pede de novo para falar com um atendente. Agradecimento ("obrigado", "tudo bem"), desistência ou outro assunto não são pedido: nesses casos não chame concluir_triagem. Fora desse caso, omita.',
+        },
       },
       required: ['setorId', 'resumo', 'confianca', 'pendenciasObrigatorias'],
     },
@@ -2402,7 +2467,9 @@ const TOOLS = [
         pediu
           ? 'Ele já pediu para falar com um atendente: reconheça esse pedido e não pergunte de novo se ele quer.'
           : 'Se ele já pediu atendente, não pergunte de novo se ele quer.',
-        'Diga só que você não conseguiu confirmar a transferência agora.',
+        // Conclusão do atendimento (04/10/2026): o próximo passo que existe de fato — ele pedir de novo (a nova tentativa
+        // passa pela mesma ferramenta) — e nenhum outro canal, que não existe.
+        'Diga que você não conseguiu confirmar a transferência agora e que, se ele quiser, pode pedir de novo por aqui numa nova mensagem. Não existe outro canal para oferecer: não invente um.',
         'Não diga que encaminhou, que ele entrou na fila, que um atendente já está com ele, que alguém vai continuar ou retornar, nem que você vai tentar de novo depois.',
         'Também não diga que nada foi feito ou registrado: o resultado não é conhecido.',
       ].join(' ');
@@ -2438,9 +2505,15 @@ const TOOLS = [
       // Outro valor que não é booleano é invalid_args: a declaração malformada não decide nada.
       const pedidoBruto = args && args.clientePediuAtendente;
       if (pedidoBruto != null && typeof pedidoBruto !== 'boolean') return erro('clientePediuAtendente must be a boolean');
+      const trechoBruto = args && args.pedidoRenovadoNaMensagemAtual;
+      if (trechoBruto != null && typeof trechoBruto !== 'string') return erro('pedidoRenovadoNaMensagemAtual must be a string');
+      const pedidoRenovadoNaMensagemAtual = typeof trechoBruto === 'string' && trechoBruto.trim() ? trechoBruto.trim().slice(0, 300) : null;
       return {
         ok: true,
-        args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca, pendenciasObrigatorias, clientePediuAtendente: pedidoBruto === true },
+        args: {
+          setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca, pendenciasObrigatorias,
+          clientePediuAtendente: pedidoBruto === true, pedidoRenovadoNaMensagemAtual,
+        },
       };
     },
     async executar(args, contexto) {
@@ -2448,6 +2521,28 @@ const TOOLS = [
       // esquecer_identificacao — concluir_triagem só existe para a
       // recepcionista da triagem, nunca para o assistente clássico.
       if (!perfilTriagem(contexto)) return erro('concluir_triagem is only available during AI triage');
+      // Conclusão do atendimento (04/10/2026; avaliação de 01/10, falha 4): depois de um encaminhamento que falhou em
+      // turno anterior (contexto.encaminhamentoNaoConcluido, lido pelo orquestrador do registro das interações), o
+      // modelo tentou de novo a quem só agradeceu, desistiu ou mudou de assunto — a regra estava só no prompt. Agora a
+      // nova tentativa PURA (nenhuma outra ferramenta neste turno) exige a declaração de que o pedido mais recente é de
+      // atendente. Quem interpreta é o modelo; nenhuma palavra do cliente é lida aqui. Ficam como antes: a primeira
+      // tentativa, a conclusão pedida por outra ferramenta no mesmo turno (pedido novo tratado agora, como a falha da
+      // cobrança) e a conclusão em código pelo limite de perguntas e pelo prazo, que não passam por esta ferramenta.
+      // Revisão (04/10/2026): encerrar_atendimento não conta como outra ferramenta — a recusa dele manda concluir a quem
+      // só agradeceu. E a conclusão que o próprio código exige (contenção, liberação corrigida, limite de perguntas) passa.
+      const naoConcluidoAntes = Boolean(contexto.encaminhamentoNaoConcluido && contexto.encaminhamentoNaoConcluido.tentativas > 0);
+      const outraFerramentaNoTurno = Array.isArray(contexto.ferramentasDoTurno)
+        && contexto.ferramentasDoTurno.some((nome) => nome !== 'concluir_triagem' && nome !== 'encerrar_atendimento');
+      const exigidaPeloCodigo = Boolean(contexto.conclusaoExigidaPeloCodigo || (contexto.triagem && contexto.triagem.forcarConclusao));
+      // Avaliação real (04/10/2026, E7): clientePediuAtendente não renova — a prova é o trecho da mensagem atual.
+      const pedidoRenovado = trechoEstaNaFala(args.pedidoRenovadoNaMensagemAtual, contexto.ultimaFalaDoCliente);
+      if (naoConcluidoAntes && !pedidoRenovado && !outraFerramentaNoTurno && !exigidaPeloCodigo) {
+        return {
+          concluido: false,
+          motivo: 'O encaminhamento já foi tentado nesta conversa e não foi concluído, e a mensagem atual não traz pedido novo de atendente.',
+          instrucao: 'NÃO tente encaminhar de novo agora. Só tente de novo se a mensagem ATUAL dele pedir de novo para falar com um atendente: aí chame concluir_triagem com pedidoRenovadoNaMensagemAtual igual ao trecho exato dessa mensagem em que ele pede (clientePediuAtendente não basta). Agradecimento, desistência ou outro assunto não renovam o pedido: responda ao que ele disse agora, sem nova ação e sem perguntar se ele quer atendente.',
+        };
+      }
       // GUARDA ESTRUTURAL (Task 20, cenários 16 e 20 da execução real): a IA
       // identifica SEMANTICAMENTE o que ainda falta; o CÓDIGO decide se a ação
       // terminal pode acontecer. Nada de ler o `resumo` com regex, nada de
@@ -2603,7 +2698,9 @@ const TOOLS = [
       // a hora em que a equipe volta, sem prometer atendimento imediato.
       const instrucao = noturno
         ? `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento ficou registrado para o setor ${setor.name} e que nossa equipe dá continuidade a partir das ${noturno.retornoAs}. Não faça mais perguntas.`
-        : `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento vai para o setor ${setor.name} e que um atendente continua daqui. Não faça mais perguntas.`;
+        // Conclusão do atendimento (04/10/2026, decisão do proprietário): entrar na fila não é atendimento iniciado nem
+        // atendente disponível. A frase antiga ("um atendente continua daqui") não distinguia as duas coisas.
+        : `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento entrou na fila do setor ${setor.name} e que um atendente vai responder por aqui assim que estiver disponível. Não diga que um atendente já está com ele ou já vai atendê-lo, e não dê horário nem prazo. Não faça mais perguntas.`;
       return { concluido: true, setor: setor.name, instrucao };
     },
   },

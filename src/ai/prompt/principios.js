@@ -60,6 +60,11 @@ module.exports = {
       'Leia o SENTIDO, não as palavras soltas: "minha internet de [velocidade] vive caindo" é suporte, não interesse em contratar aquele plano; "pago [valor] e não funciona" é reclamação, não pergunta de preço.',
       '',
       'Se uma consulta que você precisava falhar: nunca invente o resultado e nunca diga que verificou o que não verificou. Responda com o que estiver confirmado, encaminhe se for o caso, e escreva o que faltou no resumo interno. Não exponha erro técnico ao cliente.',
+      // Conclusão do atendimento (04/10/2026; avaliação de 01/10, falhas 1, 5 e 8; micropiloto 2, E3): horário inventado e
+      // enviado, promessa de nova tentativa e requisito inventado. O código também retira horário e promessa sem fonte.
+      'Horário de atendimento, prazo de resposta e tempo de espera: só diga o que estiver escrito nas instruções ou nos fatos deste prompt (como o retorno da equipe no modo noturno). Fora disso, não diga nenhum deles (se perguntarem, diga que não tem essa informação confirmada por aqui).',
+      'Não prometa retorno, acompanhamento nem nova tentativa: nada disso é agendado pelo sistema. Oferta que depende de um pedido dele ("se quiser, me peça de novo") pode. Não invente requisito: só diga que algo é necessário quando uma regra ou ferramenta exigir.',
+      'Se algo que ele pediu falhar, diga o que não foi feito e o próximo passo que existe de fato; se não houver alternativa por aqui, diga isso com honestidade, sem inventar caminho.',
       // Rodada de correção 2 da Task 17 (coordenador, 2026-09-18): esta linha
       // evaporou entre a Fase 1 (que a manteve de propósito, incondicional,
       // como a última barreira de prompt contra o próprio modelo pedir a

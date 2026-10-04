@@ -44,7 +44,13 @@ describe('módulo financeiro', () => {
       // Task 18 — antes: ai-orchestrator.test.js:1352. Print 2026-09-17
       // (16:32): a entrega tem de sair AGORA, inclusive com o contrato
       // suspenso — a pendência é justamente o que ele está resolvendo.
-      expect(t).toMatch(/entregue o boleto ou o PIX AGORA \(enviar_boleto ou gerar_pix\), mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo\./);
+      // Conclusão do atendimento (04/10/2026, decisão do proprietário): o meio pedido sai AGORA; o pedido genérico continua
+      // o meio já escolhido ou, sem escolha, uma pergunta curta.
+      expect(t).toMatch(/tem prioridade sobre qualquer roteiro de diagnóstico, mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo\./);
+      expect(t).toMatch(/Se ele disse o meio \(boleto ou PIX\), entregue esse meio AGORA \(enviar_boleto ou gerar_pix\)\./);
+      // Reavaliação r2 (04/10/2026): volta à redação avaliada na rodada inicial (a imperativa regrediu o E6 #6).
+      expect(t).toMatch(/Num pedido genérico de pagamento .* continue com o meio já escolhido nesta conversa .*; se nenhum foi escolhido, pergunte curto: "Prefere boleto ou PIX\?"/);
+      expect(t).not.toMatch(/NÃO escolha por ele/);
     });
 
     test('identidade já confirmada: não pede CPF, entrega direto por ferramenta', () => {

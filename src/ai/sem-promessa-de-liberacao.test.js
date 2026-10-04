@@ -30,3 +30,12 @@ test('a varredura cobre o prompt inteiro, as ferramentas, o orquestrador e o wor
 test.each(ARQUIVOS)('%s não promete liberação automática', (_nome, arquivo) => {
   expect(fs.readFileSync(arquivo, 'utf8')).not.toMatch(PROMESSA);
 });
+
+// Pendências do atendimento (04/10/2026, decisão do proprietário): a frase aprovada em 25/09 ("assim que o pagamento
+// constar no sistema", verificar a situação do contrato) prometia trabalho futuro que nenhum mecanismo faz. Saiu de todo
+// texto; esta varredura impede a volta por cópia.
+// guarda-pagamento.js entra só aqui: os padrões de detecção da liberação automática moram nele.
+const COM_A_GUARDA = [...ARQUIVOS, ['ai/guarda-pagamento.js', path.join(__dirname, 'guarda-pagamento.js')]];
+test.each(COM_A_GUARDA)('%s não promete verificar quando o pagamento constar', (_nome, arquivo) => {
+  expect(fs.readFileSync(arquivo, 'utf8')).not.toMatch(/assim que o pagamento constar/i);
+});

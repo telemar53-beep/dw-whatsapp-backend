@@ -49,7 +49,7 @@ describe('módulo financeiro', () => {
       expect(t).toMatch(/tem prioridade sobre qualquer roteiro de diagnóstico, mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo\./);
       expect(t).toMatch(/Se ele disse o meio \(boleto ou PIX\), entregue esse meio AGORA \(enviar_boleto ou gerar_pix\)\./);
       // Reavaliação r2 (04/10/2026): volta à redação avaliada na rodada inicial (a imperativa regrediu o E6 #6).
-      expect(t).toMatch(/Num pedido genérico de pagamento .* continue com o meio já escolhido nesta conversa .*; se nenhum foi escolhido, pergunte curto: "Prefere boleto ou PIX\?"/);
+      expect(t).toMatch(/Num pedido genérico de pagamento .* continue com o meio já escolhido nesta conversa .*; se nenhum foi escolhido, pergunte curto: "Você prefere boleto ou PIX\?" — sem meio escolhido, a entrega não sai\./);
       expect(t).not.toMatch(/NÃO escolha por ele/);
     });
 
@@ -175,7 +175,8 @@ describe('módulo financeiro', () => {
     test('cliente suspenso perguntando se a internet volta depois de pagar: sem promessa de liberação nem prazo', () => {
       const t = texto();
       expect(t).toMatch(/NÃO prometa que ela volta sozinha nem dê prazo/);
-      expect(t).toMatch(/"Assim que o pagamento constar no sistema, vou verificar a situação do contrato\."/);
+      expect(t).toMatch(/"Não consigo garantir que o acesso volta sozinho depois do pagamento\. Quando quiser, eu confiro o pagamento por aqui\."/);
+      expect(t).not.toMatch(/assim que o pagamento constar/i);
       expect(t).toMatch(/Pagamento confirmado sozinho não é liberação, e comprovante válido também não/);
       expect(t).not.toMatch(/liberad[oa] automaticamente|liberação é automática/);
     });

@@ -146,7 +146,7 @@ describe('promessa de liberação automática', () => {
   });
 
   test.each([
-    'Assim que o pagamento constar no sistema, vou verificar a situação do contrato.',
+    'Não consigo garantir que o acesso volta sozinho depois do pagamento. Quando quiser, eu confiro o pagamento por aqui.',
     'A liberação não é automática: a equipe confere o pagamento.',
     'O acesso não volta automaticamente com uma fatura só.',
   ])('não é promessa: %s', (texto) => {
@@ -157,11 +157,13 @@ describe('promessa de liberação automática', () => {
     expect(respostaSemAfirmacoes('Recebi seu comprovante. A liberação é automática quando o pagamento for confirmado.', ['promessa_de_liberacao'], {}))
       .toBe('Recebi seu comprovante.');
     expect(respostaSemAfirmacoes('Assim que o pagamento for confirmado, a liberação é automática.', ['promessa_de_liberacao'], {}))
-      .toBe('Assim que o pagamento constar no sistema, vou verificar a situação do contrato.');
+      .toBe('Não consigo garantir que o acesso volta sozinho depois do pagamento. Quando quiser, eu confiro o pagamento por aqui.');
   });
 
   test('a correção ao modelo dá a formulação segura', () => {
-    expect(correcaoDoPagamento(['promessa_de_liberacao'])).toMatch(/assim que o pagamento constar no sistema/i);
+    // Pendências do atendimento (04/10/2026): a frase aprovada em 25/09 prometia uma verificação que nenhum mecanismo faz.
+    expect(correcaoDoPagamento(['promessa_de_liberacao'])).toMatch(/Não consigo garantir que o acesso volta sozinho depois do pagamento\. Quando quiser, eu confiro o pagamento por aqui\./);
+    expect(correcaoDoPagamento(['promessa_de_liberacao'])).not.toMatch(/assim que o pagamento constar/i);
   });
 });
 

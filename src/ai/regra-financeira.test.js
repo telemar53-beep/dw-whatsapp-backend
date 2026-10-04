@@ -250,6 +250,18 @@ describe('DIA', () => {
     expect(markTriageResolvedByAi).not.toHaveBeenCalled();
   });
 
+  // Pendências do atendimento (04/10/2026, revisão 11): a trava do meio fica DEPOIS da regra 0/1/2+ — com 2 vencidas e sem
+  // meio escolhido, a resposta é a da reativação, não a pergunta do meio.
+  test('14c. 2 vencidas e nenhum meio escolhido: vale o bloqueio da regra, não a pergunta do meio', async () => {
+    titulosPorContrato[100] = leitura([titulo(1461, -40), titulo(1462, -10)]);
+    viasPorContrato[100] = segundaVia(titulo(1461, -40), titulo(1462, -10));
+    for (const nome of ['gerar_pix', 'enviar_boleto']) {
+      const r = await findTool(nome).executar({ contratoId: 100 }, ctx({ falasDoCliente: ['quero pagar'] }));
+      expect(r.cobrancaBloqueada).toBe('reativacao');
+      expect(r.meioNaoEscolhido).toBeUndefined();
+    }
+  });
+
   test('14b. o vencimento atualizado para hoje não esconde o atraso: 2 vencidas continuam 2', async () => {
     // As duas vencidas têm vencimento_atualizado = HOJE. Pela data atualizada seriam "do dia".
     titulosPorContrato[100] = leitura([titulo(1451, -35), titulo(1452, -5)]);

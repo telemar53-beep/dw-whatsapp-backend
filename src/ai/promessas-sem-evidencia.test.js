@@ -82,6 +82,30 @@ describe('promessas-sem-evidencia', () => {
       expect(promessasSemEvidencia(t, {})).toEqual([]);
     });
 
+    // Pendências do atendimento (04/10/2026): verificar "quando o pagamento constar" é trabalho futuro sem mecanismo.
+    test.each([
+      'Assim que o pagamento constar no sistema, vou verificar a situação do contrato.',
+      'Assim que o pagamento constar no sistema, a situação do contrato será verificada.',
+      'Assim que compensar, vou conferir seu contrato.',
+      'Quando o pagamento constar no sistema, vou verificar a situação do contrato.',
+      'Logo que o pagamento constar, vou verificar o contrato.',
+      // Revisão do incremento (04/10/2026): passado e pedido DEPOIS da promessa não são passo do cliente.
+      'Assim que o pagamento que você enviou for compensado, vou verificar a liberação.',
+      'Assim que o PIX que você me mandou cair, vou conferir o seu contrato.',
+      'Assim que o pagamento constar, vou conferir; me chama aqui se precisar.',
+    ])('"%s": verificação futura sem mecanismo sai', (t) => {
+      expect(promessasSemEvidencia(t, {})).toEqual(['promessa_da_ia']);
+    });
+
+    test.each([
+      'Depois de pagar, me avise por aqui que eu confiro o pagamento no sistema.',
+      'Assim que você me mandar o comprovante, eu confiro.',
+      'Assim que o pagamento for feito, me avise por aqui que eu vou conferir.',
+      'Assim que o PIX cair, me manda o comprovante que vamos verificar.',
+    ])('"%s": próximo passo que depende do cliente fica', (t) => {
+      expect(promessasSemEvidencia(t, {})).toEqual([]);
+    });
+
     test('a promessa da IA sai mesmo com o encaminhamento confirmado: nenhum trabalho da IA é agendado', () => {
       expect(promessasSemEvidencia('Vou tentar novamente depois.', { encaminhamentoConfirmado: true })).toEqual(['promessa_da_ia']);
     });

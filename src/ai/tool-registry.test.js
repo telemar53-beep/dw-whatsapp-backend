@@ -2987,6 +2987,109 @@ describe('tool-executor + concluir_triagem — guarda de pendência obrigatória
     expect(paraOModelo).toContain('o número do protocolo do outro atendimento');
     expect(r.resultado.motivo).toMatch(/pendente/i);
   });
+
+  // C4#3 (avaliação de 01/10/2026): o cliente pediu atendente três vezes e o modelo declarou o CPF como pendência;
+  // a recusa mandava perguntar, e o pedido de atendente virou pedido de CPF. Quem diz que o pedido é de atendente é
+  // a declaração do modelo — nada aqui lê o texto do cliente.
+  describe('C4#3 — pedido de atendente declarado (clientePediuAtendente)', () => {
+    test('true com lista cheia: conclui, e as pendências vão ao resumo para o atendente', async () => {
+      const contexto = contextoDeTriagemCom();
+
+      const r = await executeTool('concluir_triagem', conclusao(['CPF'], { clientePediuAtendente: true }), contexto);
+
+      expect(r.resultado).toMatchObject({ concluido: true, setor: 'Financeiro' });
+      expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+      expect(concludeAiTriage.mock.calls[0][1].summary).toMatch(/^Pediu atendente com informação pendente: CPF$/m);
+      expect(contexto.triagemConcluida).toEqual({ setor: 'Financeiro' });
+    });
+
+    test('true com lista vazia: conclui sem a linha de pendência', async () => {
+      const r = await executeTool('concluir_triagem', conclusao([], { clientePediuAtendente: true }), contextoDeTriagemCom());
+
+      expect(r.resultado.concluido).toBe(true);
+      expect(concludeAiTriage.mock.calls[0][1].summary).not.toMatch(/Pediu atendente com informação pendente/);
+    });
+
+    test.each([
+      ['ausente', undefined],
+      ['false', false],
+      ['null', null],
+    ])('%s: a lista cheia continua bloqueando, e a recusa diz como seguir se o pedido for de atendente', async (_nome, valor) => {
+      const args = conclusao(['CPF']);
+      if (valor !== undefined) args.clientePediuAtendente = valor;
+
+      const r = await executeTool('concluir_triagem', args, contextoDeTriagemCom());
+
+      expect(r.resultado.concluido).toBe(false);
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+      expect(r.resultado.instrucao).toMatch(/uma pergunta/i);
+      expect(r.resultado.instrucao).toMatch(/clientePediuAtendente: true/);
+    });
+
+    test.each([
+      ['string', 'true'],
+      ['número', 1],
+      ['objeto', {}],
+    ])('declaração malformada (%s): invalid_args, nunca true', async (_nome, valor) => {
+      const r = await executeTool('concluir_triagem', conclusao(['CPF'], { clientePediuAtendente: valor }), contextoDeTriagemCom());
+
+      expect(r).toMatchObject({ ok: false, motivo: 'invalid_args' });
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    test('a declaração não pula o resto da conclusão: setor inexistente é recusado', async () => {
+      const r = await executeTool('concluir_triagem', conclusao(['CPF'], {
+        clientePediuAtendente: true, setorId: '99999999-9999-4999-8999-999999999999',
+      }), contextoDeTriagemCom());
+
+      expect(r.ok).toBe(false);
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    test('a declaração não pula o setor de reativação: outro setor é recusado e aponta a reativação', async () => {
+      const SETOR_REAT = '55555555-5555-4555-8555-555555555555';
+      listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }, { id: SETOR_REAT, name: 'Reativação' }]);
+
+      const r = await executeTool('concluir_triagem', conclusao(['CPF'], { clientePediuAtendente: true }),
+        contextoDeTriagemCom({ reativacao: 'multiplas_vencidas_noturno' }));
+
+      expect(r.resultado.concluido).toBe(false);
+      expect(r.resultado.instrucao).toContain(SETOR_REAT);
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    test('a declaração não pula a trava do alvo de terceiro: trava antes de concluir, e a falha da trava impede a conclusão', async () => {
+      const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+      const ordem = [];
+      setThirdPartyScope.mockImplementationOnce(async () => { ordem.push('trava'); return true; });
+      concludeAiTriage.mockImplementationOnce(async () => { ordem.push('conclusão'); return { id: 'c-1', triageState: 'completed' }; });
+
+      const ok = await executeTool('concluir_triagem', conclusao(['CPF'], { clientePediuAtendente: true }), contextoDeTriagemCom({ terceiro }));
+
+      expect(ok.resultado.concluido).toBe(true);
+      expect(ordem).toEqual(['trava', 'conclusão']);
+      expect(setThirdPartyScope.mock.calls[0][1]).toMatchObject({ contratos: [], pendente: true });
+
+      jest.clearAllMocks();
+      listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+      setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora na trava'));
+      const silencio = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const falha = await executeTool('concluir_triagem', conclusao(['CPF'], { clientePediuAtendente: true }), contextoDeTriagemCom({ terceiro }));
+        expect(falha.ok).toBe(false);
+        expect(concludeAiTriage).not.toHaveBeenCalled();
+      } finally {
+        silencio.mockRestore();
+      }
+    });
+
+    test('a declaração não é obrigatória no schema e não tem default', () => {
+      const { parametros } = findTool('concluir_triagem');
+      expect(parametros.required).not.toContain('clientePediuAtendente');
+      expect(parametros.properties.clientePediuAtendente).toMatchObject({ type: 'boolean' });
+      expect(parametros.properties.clientePediuAtendente.default).toBeUndefined();
+    });
+  });
 });
 
 

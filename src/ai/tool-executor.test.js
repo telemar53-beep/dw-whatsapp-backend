@@ -904,3 +904,75 @@ describe('tool-executor — ações reais não produzem efeito no assistente', (
     expect(r.resultado).toEqual({ plano: '600 Mega', velocidade: '600 Mbps', loginPPPoE: 'cli17402' });
   });
 });
+
+// C4 v2 (04/10/2026, avaliação real de 04/10): erro ou tempo esgotado em concluir_triagem chegavam ao modelo como
+// { erro: 'execution_error' } ou { erro: 'timeout' }, sem instrução, e o modelo passou a prender a transferência ao
+// CPF. A definição real da ferramenta entra aqui; só o executar é trocado, para falhar ou travar.
+describe('tool-executor — concluir_triagem sem confirmação (erro ou tempo esgotado)', () => {
+  const real = jest.requireActual('./tool-registry');
+  const CONTEXTO_TRIAGEM = {
+    conversationId: 'c-1', contact: { id: 'ct-1', sgpDocument: null }, contracts: [],
+    identidade: { nivel: 'none', origem: 'none' }, ferramentasPermitidas: ['concluir_triagem', 'consultar_plano'],
+  };
+  const ARGS = {
+    setorId: '11111111-1111-1111-1111-111111111111', motivoId: null, resumo: 'Pediu atendente.', confianca: 0.9,
+    pendenciasObrigatorias: ['CPF'], clientePediuAtendente: true,
+  };
+  const concluirCom = (executar) => findTool.mockReturnValue({ ...real.findTool('concluir_triagem'), executar });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  const exigeOsElementos = (r) => {
+    expect(r.instrucao).toMatch(/NÃO teve confirmação/);
+    expect(r.instrucao).toMatch(/não tem relação com CPF nem com nenhum dado do cliente/);
+    expect(r.instrucao).toMatch(/CPF não é requisito para pedir atendimento humano/);
+    expect(r.instrucao).toMatch(/Não diga que encaminhou, que ele entrou na fila, que um atendente já está com ele, que alguém vai continuar ou retornar, nem que você vai tentar de novo depois/);
+    expect(r.instrucao).toMatch(/não diga que nada foi feito ou registrado: o resultado não é conhecido/);
+  };
+
+  test('erro: a recusa traz a instrução, e o detalhe interno fica só na auditoria', async () => {
+    concluirCom(jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432')));
+    const r = await executeTool('concluir_triagem', ARGS, CONTEXTO_TRIAGEM);
+    expect(r).toMatchObject({ ok: false, motivo: 'execution_error', detalhe: 'connect ECONNREFUSED 10.0.0.5:5432' });
+    exigeOsElementos(r);
+    expect(r.instrucao).toMatch(/Ele já pediu para falar com um atendente: reconheça esse pedido e não pergunte de novo se ele quer/);
+    expect(r.instrucao).not.toMatch(/ECONNREFUSED/);
+  });
+
+  test('tempo esgotado: a mesma instrução', async () => {
+    concluirCom(() => new Promise(() => {}));
+    const r = await executeTool('concluir_triagem', ARGS, CONTEXTO_TRIAGEM, { timeoutMs: 20 });
+    expect(r).toMatchObject({ ok: false, motivo: 'timeout' });
+    exigeOsElementos(r);
+  }, 10000);
+
+  test('sem a declaração do pedido: a instrução não afirma que ele pediu atendente', async () => {
+    concluirCom(jest.fn().mockRejectedValue(new Error('banco fora')));
+    const { clientePediuAtendente, ...semDeclaracao } = ARGS;
+    const r = await executeTool('concluir_triagem', { ...semDeclaracao, pendenciasObrigatorias: [] }, CONTEXTO_TRIAGEM);
+    exigeOsElementos(r);
+    expect(r.instrucao).toMatch(/Se ele já pediu atendente, não pergunte de novo se ele quer/);
+    expect(r.instrucao).not.toMatch(/Ele já pediu para falar com um atendente/);
+  });
+
+  test('outra ferramenta com erro ou tempo esgotado continua sem instrução (nada muda fora da conclusão)', async () => {
+    // O registro de verdade responde por nome (concluir_triagem inclusive): só o executar de consultar_plano é trocado.
+    let executar = jest.fn().mockRejectedValue(new Error('SGP down'));
+    findTool.mockImplementation((n) => (n === 'consultar_plano' ? { ...real.findTool('consultar_plano'), executar } : real.findTool(n)));
+    isToolEnabled.mockResolvedValue(true);
+    const erro = await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO);
+    expect(erro).toMatchObject({ motivo: 'execution_error', detalhe: 'SGP down' });
+    expect(erro.instrucao).toBeUndefined();
+    executar = () => new Promise(() => {});
+    const lento = await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO, { timeoutMs: 20 });
+    expect(lento.motivo).toBe('timeout');
+    expect(lento.instrucao).toBeUndefined();
+  }, 10000);
+
+  test('recusa devolvida pela própria ferramenta ({ ok: false }) não ganha a instrução: não é falha sem confirmação', async () => {
+    concluirCom(jest.fn().mockResolvedValue({ ok: false, erro: 'Unknown setorId' }));
+    const r = await executeTool('concluir_triagem', ARGS, CONTEXTO_TRIAGEM);
+    expect(r).toMatchObject({ ok: false, motivo: 'execution_error', detalhe: 'Unknown setorId' });
+    expect(r.instrucao).toBeUndefined();
+  });
+});

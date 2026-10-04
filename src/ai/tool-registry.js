@@ -2383,8 +2383,29 @@ const TOOLS = [
           items: { type: 'string' },
           description: 'O que você AINDA precisa saber DO CLIENTE para resolver ou encaminhar corretamente o que ele pediu POR ÚLTIMO. Só o que é tecnicamente necessário: se o setor consegue agir sem o dado, não entra. Dado que apenas enriquece o resumo, o cadastro ou o relatório NÃO entra. Lista VAZIA quando não falta nada. Recalcule a cada tentativa, olhando a intenção MAIS RECENTE: se o cliente mudou de assunto, pendência do assunto anterior não entra. Uma informação por item, em poucas palavras.',
         },
+        clientePediuAtendente: {
+          type: 'boolean',
+          description: 'true SOMENTE quando o pedido mais recente do cliente é falar com um atendente (uma pessoa), ou ele aceitou seguir com um. Aí as pendências não impedem o encaminhamento: vão no resumo para o atendente. Não vale para o que você decidiu encaminhar por conta própria. Não libera consulta, cobrança, desbloqueio nem dado de ninguém.',
+        },
       },
       required: ['setorId', 'resumo', 'confianca', 'pendenciasObrigatorias'],
+    },
+    // C4 v2 (avaliação real de 04/10/2026): erro ou tempo esgotado chegavam ao modelo só como { erro: 'execution_error' }
+    // ou 'timeout', e ele passou a prender a transferência ao CPF (numa conversa, disse que a falha era a falta dele).
+    // O executor junta este texto à recusa de erro e de tempo esgotado — nunca à recusa que a própria ferramenta
+    // devolve (setor inválido etc.). O resultado pode ser desconhecido: a gravação pode ter acontecido.
+    instrucaoSemConfirmacao(args) {
+      const pediu = Boolean(args && args.clientePediuAtendente === true);
+      return [
+        'O encaminhamento NÃO teve confirmação: o sistema não confirmou a transferência (falha ou demora ao registrar), e o resultado não é conhecido.',
+        'Isso não tem relação com CPF nem com nenhum dado do cliente: não diga nem dê a entender que faltou CPF ou outra informação. CPF não é requisito para pedir atendimento humano; não o peça como condição.',
+        pediu
+          ? 'Ele já pediu para falar com um atendente: reconheça esse pedido e não pergunte de novo se ele quer.'
+          : 'Se ele já pediu atendente, não pergunte de novo se ele quer.',
+        'Diga só que você não conseguiu confirmar a transferência agora.',
+        'Não diga que encaminhou, que ele entrou na fila, que um atendente já está com ele, que alguém vai continuar ou retornar, nem que você vai tentar de novo depois.',
+        'Também não diga que nada foi feito ou registrado: o resultado não é conhecido.',
+      ].join(' ');
     },
     validar(args) {
       const setorId = args && args.setorId;
@@ -2413,7 +2434,14 @@ const TOOLS = [
         if (typeof pendencia !== 'string' || !pendencia.trim()) return erro('pendenciasObrigatorias must be an array of strings');
         pendenciasObrigatorias.push(pendencia.trim());
       }
-      return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca, pendenciasObrigatorias } };
+      // C4#3 (03/10/2026): ausente (ou null) é false — a guarda de pendência continua valendo para quem não declarou.
+      // Outro valor que não é booleano é invalid_args: a declaração malformada não decide nada.
+      const pedidoBruto = args && args.clientePediuAtendente;
+      if (pedidoBruto != null && typeof pedidoBruto !== 'boolean') return erro('clientePediuAtendente must be a boolean');
+      return {
+        ok: true,
+        args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca, pendenciasObrigatorias, clientePediuAtendente: pedidoBruto === true },
+      };
     },
     async executar(args, contexto) {
       // I6 (revisão final do branch inteiro): mesma guarda de
@@ -2443,12 +2471,16 @@ const TOOLS = [
       // leitura mantém a mesma regra caso alguém chame executar() por fora.
       const pendencias = args.pendenciasObrigatorias;
       if (!Array.isArray(pendencias)) return erro('pendenciasObrigatorias is required');
-      if (pendencias.length > 0) {
+      // C4#3 (avaliação de 01/10/2026): o cliente pediu atendente três vezes, o modelo declarou o CPF como pendência,
+      // e esta recusa mandava perguntar o que falta — o pedido de atendente virava pedido de CPF. Quem decide que o
+      // pedido é de atendente é o MODELO, pela declaração (nenhuma leitura do texto do cliente aqui); com ela, a
+      // pendência vai para o resumo e o resto da conclusão (setor, reativação, alvo, posse) segue igual.
+      if (pendencias.length > 0 && args.clientePediuAtendente !== true) {
         return {
           concluido: false,
           motivo: 'Há informação obrigatória pendente: sem ela o setor não consegue resolver nem encaminhar o que o cliente pediu.',
           pendenciasObrigatorias: pendencias,
-          instrucao: 'NÃO conclua agora. Continue a conversa e pergunte ao cliente o que falta, no máximo UMA pergunta necessária por vez, começando pela primeira da lista.',
+          instrucao: 'NÃO conclua agora. Continue a conversa e pergunte ao cliente o que falta, no máximo UMA pergunta necessária por vez, começando pela primeira da lista. Exceção: se o pedido mais recente do cliente é falar com um atendente, não pergunte nada — chame concluir_triagem de novo com clientePediuAtendente: true e as mesmas pendências, que vão no resumo para o atendente.',
         };
       }
       // A entrega (boleto/PIX) pode ter sido num turno ANTERIOR, e
@@ -2499,6 +2531,7 @@ const TOOLS = [
         `Origem: ${contexto.origemMensagem || 'texto'}`,
         `Confiança: ${Math.round(args.confianca * 100)}%${baixa ? ' (BAIXA)' : ''}`,
       ];
+      if (pendencias.length > 0) linhas.push(`Pediu atendente com informação pendente: ${pendencias.join('; ')}`);
       // O titular aparece pelo primeiro nome e pelo contrato; o documento dele nunca
       // entra no resumo — não está nem guardado.
       if (contexto.terceiro) {

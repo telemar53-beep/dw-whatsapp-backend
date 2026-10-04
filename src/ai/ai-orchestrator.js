@@ -99,6 +99,16 @@ async function violacoesDoPagamentoNoTurno(texto, contexto) {
 }
 function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 
+// C4#3 (03/10/2026): sem a conclusão confirmada, as frases que anunciam o encaminhamento saem da resposta (as demais
+// ficam) e entra a frase de que a transferência ainda não foi confirmada.
+const ENCAMINHAMENTO_NAO_CONFIRMADO = 'Ainda não consegui confirmar a sua transferência para um atendente.';
+function respostaSemEncaminhamentoNaoConfirmado(texto) {
+  const resto = String(texto || '').split(/(?<=[.!?\n])\s*/).map((f) => f.trim()).filter(Boolean)
+    .filter((f) => !anunciaEncaminhamento(f) && !afirmaFila(f))
+    .join(' ').trim();
+  return resto ? `${resto} ${ENCAMINHAMENTO_NAO_CONFIRMADO}` : ENCAMINHAMENTO_NAO_CONFIRMADO;
+}
+
 // Teste real 2026-09-14: identificado o cliente, o modelo escreveu "Perfeito.
 // Vou seguir com o Pix do contrato em aberto." e não chamou gerar_pix — o
 // cliente teve de pedir "pode mandar" para receber o que já tinha pedido. A
@@ -851,6 +861,21 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       && contradizAviso(texto, contexto.avisoCidade)) {
     console.warn(`Resposta da IA contradizia o aviso de cidade na conversa ${conversation.id}; trocada pela resposta segura`);
     texto = respostaSeguraDoAviso(contexto.avisoCidade);
+  }
+
+  // C4#3 (03/10/2026): encaminhamento só se afirma com a conclusão confirmada. Quando concluir_triagem foi tentada
+  // neste turno e NÃO confirmou (erro ou tempo esgotado — o resultado pode ser desconhecido —, ou recusa), a guarda
+  // de anúncio exige a conclusão uma vez só, e o texto escrito depois de uma segunda tentativa sem sucesso saía como
+  // estava. Sai a frase do anúncio, e entra a de que a transferência ainda não foi confirmada — verdadeira na falha,
+  // na recusa e no desconhecido. Sem tentativa no turno, nada muda aqui.
+  const tentouConcluir = toolsRequested.some((t) => t.nome === 'concluir_triagem')
+    || toolsRefused.some((r) => r.nome === 'concluir_triagem');
+  if (
+    perfil === 'triagem' && texto && tentouConcluir && !contexto.triagemConcluida && !contexto.atendimentoEncerrado
+    && (anunciaEncaminhamento(texto) || afirmaFila(texto))
+  ) {
+    console.warn(`Resposta da IA afirmava encaminhamento sem conclusão confirmada na conversa ${conversation.id}; frase retirada`);
+    texto = respostaSemEncaminhamentoNaoConfirmado(texto);
   }
 
   await recordAiInteraction({

@@ -221,7 +221,8 @@ describe('o que a resposta não pode pedir', () => {
 
   // Desenho de 30/09/2026 (F1, terceira revisão): sem mudança relevante, UM esclarecimento por cadeia
   // de pedidos é permitido — se ele é necessário, quem decide é o modelo, lendo a conversa. O segundo
-  // repedido continua barrado: o caso real de 25/09 (três pedidos seguidos) segue impossível.
+  // repedido continua barrado: o caso real de 25/09 (três pedidos seguidos, sem mudança relevante) é barrado
+  // enquanto os pedidos forem reconhecidos e estiverem no histórico lido.
   test('2. sem avanço: o primeiro repedido é o esclarecimento permitido; depois dele, repetir é barrado', () => {
     expect(violacoesDoDocumento('Entendi! Para verificar, me informe seu CPF.', ctx())).toEqual([]);
     const esclarecido = estado([entrada('caiu a internet'), pedido(PEDIDO), entrada('é que nada funciona'), pedido('Para verificar, preciso do CPF ou CNPJ.'), entrada('continua sem funcionar')]);
@@ -503,6 +504,39 @@ describe('esclarecimento limitado (F1)', () => {
       expect(recuperacaoComprovada(depoisDoEsclarecimento('Na verdade só queria saber se vocês atendem meu bairro.'))).toBe(false);
       expect(recuperacaoComprovada(estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('98991234567'), pedido('Confere o CPF ou CNPJ?'), entrada('é esse mesmo')]))).toBe(false);
       expect(recuperacaoComprovada(null)).toBe(false);
+    });
+  });
+
+  // F2 (30/09/2026) na cadeia da F1: a cadeia reinicia quando uma fala do cliente troca o alvo
+  // (intencaoDeAlvo). "da minha internet" era lido como terceiro: reiniciava a contagem e contava como
+  // mudança relevante — a cada repetição da frase, um pedido a mais era permitido, sem limite.
+  describe('F2 na cadeia: posse de coisa própria não troca o alvo', () => {
+    const INTERNET = [entrada('quero pagar o boleto da minha internet'), pedido(PEDIDO), entrada('é o boleto da minha internet'), pedido(ESCLARECIMENTO), entrada('o boleto da minha internet, por favor')];
+
+    test('"da minha internet" repetido entre os pedidos: a cadeia conta os dois, e o terceiro pedido é barrado', () => {
+      const e = estado(INTERNET);
+      expect(e).toMatchObject({ alvo: 'principal', pedidosNaCadeia: 2, esclarecimentoUsado: true, mudancaRelevante: false });
+      expect(violacoesDoDocumento(REPEDIDO, ctx(e))).toEqual(['documento_repetido']);
+    });
+
+    test('fragmento incompleto ("é da minha") também não troca o alvo nem reinicia a cadeia', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('é da minha'), pedido(ESCLARECIMENTO), entrada('é da minha')]);
+      expect(e).toMatchObject({ pedidosNaCadeia: 2, mudancaRelevante: false });
+    });
+
+    // Revisão da F2: "vou pagar com o meu cartão" era lido como volta ao próprio — no pedido do documento de
+    // OUTRA pessoa, trocava o alvo e reiniciava a cadeia a cada repetição.
+    test('meio de pagamento no pedido do documento de outra pessoa não troca o alvo nem reinicia a cadeia', () => {
+      const e = estadoDoDocumento(
+        [entrada('quero o boleto da minha mãe'), pedido('Qual o CPF dela?', 'terceiro'), entrada('vou pagar com o meu cartão'), pedido('Me passa o CPF dela?', 'terceiro'), entrada('vou pagar com o meu cartão')],
+        { identidade: FULANA, documentoDeQuemFala: CPF_A },
+      );
+      expect(e).toMatchObject({ alvo: 'terceiro', pedidosNaCadeia: 2, esclarecimentoUsado: true, mudancaRelevante: false });
+    });
+
+    test('contraste: pessoa de verdade ("é da minha mãe") continua trocando o alvo, como em 25/09', () => {
+      const e = estado([entrada('manda o boleto'), pedido(PEDIDO), entrada('é da minha mãe')]);
+      expect(e).toMatchObject({ mudancaRelevante: true });
     });
   });
 });

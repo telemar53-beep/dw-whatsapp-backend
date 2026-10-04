@@ -1286,6 +1286,56 @@ describe('perfil de triagem', () => {
       expect(r.desbloqueioRealizado).toBe(true);
     });
 
+    // Falha de gravação dentro da consulta do documento (30/09/2026): o worker precisa saber que a ferramenta não
+    // conseguiu gravar o pendente antes de consultar, para gravá-lo ele mesmo e não marcar as entradas do turno.
+    test('o turno devolve alvoTerceiroNaoGravado quando a ferramenta marcou o contexto (e false sem marca)', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'buscar_cliente', arguments: '{"cpf":"39053344705","titularEOutraPessoa":true}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Não consegui concluir a consulta agora.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, contexto) => {
+        contexto.alvoTerceiroNaoGravado = true;
+        return { ok: false, motivo: 'execution_error', detalhe: 'third_party_scope_not_stored' };
+      });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(r.alvoTerceiroNaoGravado).toBe(true);
+
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Me manda o comprovante, João.' }, usage: {} });
+      const semMarca = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(semMarca.alvoTerceiroNaoGravado).toBe(false);
+    });
+
+    // Persistência do alvo (03/10/2026): as ferramentas recebem no contexto os estados do escopo que o worker
+    // conhece (uma cópia) e o turno devolve os do fim, com o aviso da volta ao titular não gravada.
+    test('o turno passa esperadosDoAlvo às ferramentas e devolve os do fim e voltaAoTitularNaoGravada (false sem marca)', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'buscar_cliente', arguments: '{"cpf":"52998224725"}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Não consegui concluir agora.' }, usage: {} });
+      const recebidos = [];
+      executeTool.mockImplementation(async (nome, args, contexto) => {
+        recebidos.push(contexto.esperadosDoAlvo.slice());
+        contexto.esperadosDoAlvo.push({ nulo: true });
+        contexto.voltaAoTitularNaoGravada = true;
+        contexto.consultaPropriaPendente = true;
+        contexto.alvoMudouNaEntrega = true;
+        return { ok: false, motivo: 'execution_error', detalhe: 'third_party_scope_not_cleared' };
+      });
+      const doWorker = [{ marca: 'marca-lida' }];
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto', esperadosDoAlvo: doWorker });
+      expect(recebidos).toEqual([[{ marca: 'marca-lida' }]]);
+      expect(doWorker).toEqual([{ marca: 'marca-lida' }]);
+      expect(r.voltaAoTitularNaoGravada).toBe(true);
+      expect(r.consultaPropriaPendente).toBe(true);
+      expect(r.alvoMudouNaEntrega).toBe(true);
+      expect(r.esperadosDoAlvo).toEqual([{ marca: 'marca-lida' }, { nulo: true }]);
+
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Me manda o comprovante, João.' }, usage: {} });
+      const semMarca = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(semMarca.voltaAoTitularNaoGravada).toBe(false);
+      expect(semMarca.esperadosDoAlvo).toEqual([]);
+      expect(semMarca.consultaPropriaPendente).toBe(false);
+      expect(semMarca.alvoMudouNaEntrega).toBe(false);
+    });
+
     test('sem liberação no turno, desbloqueioRealizado sai false (nunca undefined)', async () => {
       createChatCompletion.mockResolvedValueOnce({ message: { content: 'Me manda o comprovante, João.' }, usage: {} });
       const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
@@ -2274,7 +2324,8 @@ describe('documento pendente: não repetir o pedido de CPF/CNPJ', () => {
     // F1, terceira revisão (30/09/2026): o código já não separa "está explicando" de "tentou responder
     // sem o dado" por lista de frases. Ele concede UM esclarecimento por cadeia de pedidos, e o prompt
     // orienta o modelo a não usá-lo quando o cliente só explica — isso depende do modelo e fica para a
-    // avaliação com modelo real. O que continua determinístico: nunca três pedidos seguidos.
+    // avaliação com modelo real. O que continua determinístico: o terceiro pedido reconhecido da cadeia,
+    // sem mudança relevante e dentro do histórico lido, é barrado.
     const ESCLARECEU = 'Para eu ver o status da conexão, preciso do CPF ou CNPJ do titular.';
 
     test('1. turno 2 (áudio, sem CPF): o prompt não manda pedir quando ele só explica, e a resposta sem pedido passa intacta', async () => {

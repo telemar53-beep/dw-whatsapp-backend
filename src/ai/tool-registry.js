@@ -8,7 +8,7 @@ const {
   markPhoneContested, markTriageResolvedByAi, closeConversationByAi, setThirdPartyScope,
   setTriageReactivation, getTriageReactivation, reserveTriageNightInvoice, getTriageNightInvoice,
 } = require('../conversations/conversation.repository');
-const { montarEscopo, paraContexto } = require('./third-party-scope');
+const { montarEscopo, paraContexto, esperadoDoEscopo } = require('./third-party-scope');
 const {
   alvoFinanceiro, ehAlvoTerceiro, contratoNoAlvo, fixarAlvoTerceiro, liberarAlvoTerceiro,
 } = require('./financial-target');
@@ -297,21 +297,103 @@ async function contratoDoCache(contexto, contratoId) {
 }
 
 /**
- * Derruba a autorização sobre o contrato de terceiro. Falha FECHADO: se o banco
- * não confirmar a limpeza, quem chamou precisa abortar. Um escopo que sobrevive
- * a uma limpeza malsucedida é autorização viva sobre o contrato de um estranho,
- * e reapareceria no próximo turno como se nada tivesse acontecido.
+ * Persistência do alvo (03/10/2026): grava o escopo só se o banco ainda estiver num dos estados que o turno
+ * conhece (`contexto.esperadosDoAlvo`, preenchido pelo worker). Devolve 'gravado', 'mudou' (outro processamento
+ * gravou depois: nada foi escrito) ou 'falhou' (erro: pode ter sido efetivada, e o estado tentado passa a ser
+ * esperado também). É o que impede uma gravação antiga — a consulta que termina depois do tempo esgotado do
+ * executor — de desfazer a decisão de um turno mais novo.
  */
-async function limparEscopoDeTerceiro(contexto) {
+async function gravarEscopoCondicional(contexto, escopo, { esperados = contexto.esperadosDoAlvo, aceitaNulo = false } = {}) {
   try {
-    await setThirdPartyScope(contexto.conversationId, null);
+    const gravado = await setThirdPartyScope(contexto.conversationId, escopo, { esperados: esperados || [], aceitaNulo });
+    if (gravado !== true) {
+      console.error(`The third party scope of conversation ${contexto.conversationId} changed after it was read; nothing was stored`);
+      return 'mudou';
+    }
+    contexto.esperadosDoAlvo = [esperadoDoEscopo(escopo)];
+    // Uma gravação confirmada depois substitui a volta ao titular que ficou pendente no turno: o worker não pode
+    // regravar a coluna vazia por cima dela (achado 1 da revisão de 03/10/2026).
+    contexto.voltaAoTitularNaoGravada = false;
+    return 'gravado';
   } catch (err) {
-    console.error(`Failed to clear the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    console.error(`Failed to store the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    contexto.esperadosDoAlvo = [...(contexto.esperadosDoAlvo || []), esperadoDoEscopo(escopo)];
+    return 'falhou';
+  }
+}
+
+/**
+ * Segurança final da F2 (03/10/2026): antes de concluir, encerrar ou esquecer a identificação, o alvo é TRAVADO, não
+ * liberado — grava o pendente sem contrato (restritivo) e trava o turno. Se a ação final falhar, nem o titular nem o
+ * terceiro anterior ficam cobráveis. Concluída ou encerrada, a conversa sai da triagem e ninguém mais lê a coluna.
+ * Devolve false se a gravação falhar (quem chama não avança, como antes).
+ */
+async function travarAlvoAntesDeSair(contexto) {
+  const escopo = montarEscopo(null, [], new Date(), { pendente: true });
+  try {
+    await setThirdPartyScope(contexto.conversationId, escopo);
+  } catch (err) {
+    console.error(`Failed to lock the financial target for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
     return false;
   }
+  contexto.terceiro = paraContexto(escopo);
+  travarCobrancaDoTurno(contexto);
+  contexto.alvoTerceiroNaoGravado = false;
+  contexto.voltaAoTitularNaoGravada = false;
+  contexto.esperadosDoAlvo = [esperadoDoEscopo(escopo)];
+  return escopo;
+}
+
+/** Depois de a ação final confirmar, a trava sai — só por cima do pendente que ela gravou. Sem confirmação, fica. */
+async function liberarAlvoDepoisDeSair(contexto, pendente) {
+  if ((await gravarEscopoCondicional(contexto, null, { esperados: [esperadoDoEscopo(pendente)], aceitaNulo: true })) !== 'gravado') return false;
   contexto.terceiro = null;
   liberarAlvoTerceiro(contexto);
   return true;
+}
+
+/**
+ * Bloqueador 2 da F2 (03/10/2026): a volta ao titular pelo próprio documento de quem fala, gravada com a mesma
+ * condição. Sem a confirmação, nem o terceiro anterior nem o titular valem neste turno, e o worker grava a volta
+ * de novo depois do turno (voltaAoTitularNaoGravada).
+ */
+async function voltarAoTitularPeloDocumento(contexto) {
+  // Separação entre identificar quem fala e escolher de quem é a cobrança (achado 4 da revisão de 03/10/2026): com
+  // dúvida no turno, pendente sem contrato ou dúvida gravada, o próprio documento só identifica — o alvo continua
+  // travado até a própria cobrança afirmada ou uma consulta de terceiro gravada. Só um terceiro localizado, sem
+  // dúvida, volta ao titular pelo documento (regra que já vale na produção).
+  const t = contexto.terceiro;
+  const semContrato = Boolean(t && Array.isArray(t.contratos) && t.contratos.length === 0);
+  // Um terceiro consultado NESTE turno também não é desfeito pelo documento de quem fala, em qualquer ordem
+  // ("o cpf da minha mãe é … e o meu é …"; ressalva da segunda conferência de 03/10/2026).
+  if (contexto.alvoAmbiguo || contexto.terceiroConsultadoNoTurno || (t && (t.alvoPendente || semContrato))) {
+    // Trava só sobre pendente ou dúvida gravada. Sem terceiro, a dúvida do turno já trava a cobrança (a trava aqui só
+    // tiraria das outras ferramentas a dedução do contrato único); com o terceiro consultado agora, sem dúvida, a
+    // cobrança dele continua valendo — é o pedido.
+    if (t && (t.alvoPendente || semContrato)) travarCobrancaDoTurno(contexto);
+    // Terceiro localizado sem dúvida: continua o alvo; desfaz a trava de antes da consulta do documento (achado 3a).
+    else if (t) contexto.alvoTerceiro = { contratos: t.contratos.map((c) => c.id) };
+    return true;
+  }
+  if ((await gravarEscopoCondicional(contexto, null, { aceitaNulo: true })) === 'gravado') {
+    contexto.terceiro = null;
+    liberarAlvoTerceiro(contexto);
+    contexto.alvoTerceiroNaoGravado = false;
+    contexto.voltaAoTitularNaoGravada = false;
+    return true;
+  }
+  contexto.voltaAoTitularNaoGravada = true;
+  contexto.terceiro = { nome: null, contratos: [], pendente: true };
+  travarCobrancaDoTurno(contexto);
+  return false;
+}
+
+/**
+ * Nenhuma cobrança no resto do turno, sem mexer na dúvida do turno (alvoAmbiguo): fixarAlvoTerceiro a zera, porque
+ * é feita para o terceiro consultado agora, que resolve a dúvida; uma falha não resolve nada (achado 2 da revisão).
+ */
+function travarCobrancaDoTurno(contexto) {
+  contexto.alvoTerceiro = { contratos: [] };
 }
 
 /**
@@ -334,19 +416,18 @@ async function avisoAtivoDoContato(contact) {
 }
 
 /**
- * CPF/CNPJ de terceiro não encontrado (caso Fulana/Beltrana): grava o pedido de terceiro PENDENTE,
- * sem contrato. Ele não autoriza nada e segura a cobrança de quem fala nos turnos seguintes,
- * até a intenção explícita da própria cobrança, um novo CPF ou o prazo. Se a gravação falhar,
- * a trava do turno continua valendo neste turno.
+ * Pedido de terceiro PENDENTE, sem contrato (caso Fulana/Beltrana). Ele não autoriza nada e segura a
+ * cobrança de quem fala nos turnos seguintes, até a intenção explícita da própria cobrança ou um
+ * documento consultado (o prazo não resolve: third-party-scope.js). Falha de gravação dentro da
+ * consulta do documento (30/09/2026): é gravado ANTES de consultar o SGP — ver buscar_cliente — e
+ * devolve se gravou. Em memória, a trava do turno vale nos dois casos.
  */
 async function registrarTerceiroPendente(contexto) {
   const escopo = montarEscopo(null, [], new Date(), { pendente: true });
   contexto.terceiro = paraContexto(escopo);
-  try {
-    await setThirdPartyScope(contexto.conversationId, escopo);
-  } catch (err) {
-    console.error(`Failed to store the pending third party request for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-  }
+  // Persistência do alvo (03/10/2026): devolve o escopo gravado (a gravação do documento localizado exige a marca
+  // dele), ou null.
+  return (await gravarEscopoCondicional(contexto, escopo)) === 'gravado' ? escopo : null;
 }
 
 /**
@@ -666,6 +747,15 @@ function fraseDasDemaisVencidas(contexto) {
  *   confirmou → `envioAnteriorIncerto`, e a instrução NÃO pode afirmar que o
  *   cliente recebeu, porque não sabemos.
  */
+/** O alvo da cobrança mudou durante o turno (outro processamento): nada foi enviado. */
+function respostaDeAlvoMudou(item) {
+  return {
+    enviado: false,
+    alvoMudou: true,
+    instrucao: `O ${item} NÃO foi enviado: o pedido de cobrança mudou enquanto ele era preparado. Não diga que enviou. Confirme com o cliente de quem é a cobrança antes de qualquer envio.`,
+  };
+}
+
 function respostaDeDuplicata(registro, item) {
   if (registro && registro.enqueuedAt) {
     return {
@@ -734,14 +824,27 @@ async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contex
     return { resposta: respostaSemIdentificador(item, 'messageId') };
   }
 
-  const { obtido, registro } = await claimDelivery({
+  // Segurança final da F2 (03/10/2026): na triagem, a reserva só acontece se o alvo financeiro da conversa ainda
+  // for o que este turno conhece (contexto.esperadosDoAlvo). Outro processamento que mudou o alvo depois de este
+  // turno preparar a cobrança impede a entrega — a conferência é a própria reserva, não uma leitura antes dela.
+  // Falha fechado por construção: na triagem a condição sempre vai; sem estados conhecidos, a lista vazia recusa.
+  const condicaoDoAlvo = perfilTriagem(contexto)
+    ? { esperados: Array.isArray(contexto.esperadosDoAlvo) ? contexto.esperadosDoAlvo : [] } : null;
+  const { obtido, registro, alvoMudou } = await claimDelivery({
     conversationId: contexto.conversationId,
     tool,
     contractId: contratoId,
     invoiceId,
     messageId,
     isResend: args && args.reenviar === true,
+    condicaoDoAlvo,
   });
+  if (alvoMudou) {
+    console.error(`${tool}: o alvo financeiro da conversa ${contexto.conversationId} mudou durante o turno; nada foi enviado.`);
+    contexto.alvoMudouNaEntrega = true;
+    travarCobrancaDoTurno(contexto);
+    return { resposta: respostaDeAlvoMudou(item) };
+  }
   if (!obtido) return { resposta: respostaDeDuplicata(registro, item) };
   if (!registro || !registro.id) return { resposta: respostaDeDuplicata(null, item) };
   return { claimId: registro.id };
@@ -908,23 +1011,34 @@ const TOOLS = [
       // documento não for encontrado (a consulta lança), a trava fica vazia e nenhuma cobrança
       // sai neste turno — nem a de quem fala. Um novo terceiro substitui o anterior.
       const pedidoDeTerceiro = perfilTriagem(contexto) && args.titularEOutraPessoa;
+      let pendenteDestaConsulta = null;
       if (pedidoDeTerceiro) {
         fixarAlvoTerceiro(contexto, []);
-        // O pedido anterior de terceiro não sobrevive a este: a persistência é sobrescrita logo
-        // abaixo — pelo escopo do novo terceiro, ou pelo pendente se o documento não existir.
+        // O pedido anterior de terceiro não sobrevive a este.
         contexto.terceiro = null;
+        // Falha de gravação dentro da consulta do documento (30/09/2026): o pendente sem contrato é
+        // gravado ANTES de consultar. Se a gravação do resultado falhar depois (documento localizado),
+        // ou o processo cair no meio, o que fica no banco é o pendente — nunca o titular nem o terceiro
+        // anterior. Sem essa gravação prévia, o SGP não é consultado; o worker é avisado
+        // (alvoTerceiroNaoGravado) para gravar o pendente ele mesmo e não marcar as entradas do turno.
+        // Documento não encontrado (a consulta lança): o pendente já está gravado, sem prazo novo.
+        // O aviso vale até a confirmação: se o executor desistir no meio da gravação (tempo esgotado), o worker grava
+        // o pendente (achado 3b da revisão de 03/10/2026).
+        contexto.alvoTerceiroNaoGravado = true;
+        pendenteDestaConsulta = await registrarTerceiroPendente(contexto);
+        contexto.alvoTerceiroNaoGravado = !pendenteDestaConsulta;
+        if (!pendenteDestaConsulta) return erro('third_party_scope_not_stored');
       }
 
-      let achado;
-      try {
-        achado = await sgpClient.lookupClientByCpf(args.cpf);
-      } catch (err) {
-        // Documento de terceiro não encontrado (ou o SGP falhou): o pedido CONTINUA sendo de
-        // terceiro, pendente e sem contrato — nos próximos turnos, "manda o pix" não vira o PIX
-        // de quem fala. O documento nunca vai a log.
-        if (pedidoDeTerceiro) await registrarTerceiroPendente(contexto);
-        throw err;
+      // Achado 3a da revisão de 03/10/2026: identificação pelo próprio documento com um terceiro no contexto. Até o
+      // SGP responder, nenhuma cobrança sai; se ele falhar ou o executor desistir, o turno não confirma as entradas.
+      const consultaPropria = perfilTriagem(contexto) && !pedidoDeTerceiro && Boolean(contexto.terceiro);
+      if (consultaPropria) {
+        contexto.consultaPropriaPendente = true;
+        travarCobrancaDoTurno(contexto);
       }
+      // O documento nunca vai a log.
+      const achado = await sgpClient.lookupClientByCpf(args.cpf);
       const { client, contracts } = achado;
 
       // No perfil de triagem, o CPF digitado já deixa a identidade forte,
@@ -950,14 +1064,15 @@ const TOOLS = [
           // persistência não há autorização — nem agora nem no turno seguinte. Deixar o
           // turno seguir com um escopo que o banco não conhece é o começo de um escopo
           // órfão. O documento nunca entra no log.
-          try {
-            await setThirdPartyScope(contexto.conversationId, escopo);
-          } catch (err) {
-            console.error(`Failed to store the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+          // Persistência do alvo (03/10/2026): só por cima do pendente que ESTA consulta gravou (a marca dele). Se
+          // outro processamento gravou depois — inclusive quando a consulta termina depois do tempo esgotado do
+          // executor e o turno seguinte já decidiu —, o resultado é descartado e fica a decisão mais nova.
+          if ((await gravarEscopoCondicional(contexto, escopo, { esperados: [esperadoDoEscopo(pendenteDestaConsulta)] })) !== 'gravado') {
             return erro('third_party_scope_not_stored');
           }
           contexto.terceiro = paraContexto(escopo);
           fixarAlvoTerceiro(contexto, contracts);
+          contexto.terceiroConsultadoNoTurno = true;
 
           return {
             titular: { nome },
@@ -966,7 +1081,9 @@ const TOOLS = [
           };
         }
         contexto.contracts = contracts;
-        if (!(await limparEscopoDeTerceiro(contexto))) return erro('third_party_scope_not_cleared');
+        if (!(await voltarAoTitularPeloDocumento(contexto))) return erro('third_party_scope_not_cleared');
+        // Só agora a identificação própria terminou (a volta gravada, ou só a identificação): o worker pode marcar.
+        if (consultaPropria) contexto.consultaPropriaPendente = false;
         contexto.identidade = {
           nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
           client: { id: client.id, document: args.cpf }, contestado: false,
@@ -2076,13 +2193,12 @@ const TOOLS = [
       // permissões do assistente clássico bastaria para alcançar uma
       // ferramenta pensada só para a recepcionista da triagem.
       if (!perfilTriagem(contexto)) return erro('esquecer_identificacao is only available during AI triage');
-      // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
-      // atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
-      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
-      // da triagem.
-      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
-        return erro('third_party_scope_not_cleared');
-      }
+      // Antes de concluir/encerrar/esquecer, e não depois: se a gravação falhar, o atendimento NÃO avança. Segurança
+      // final da F2 (03/10/2026): a autorização de terceiro é TRAVADA (pendente sem contrato) e só sai depois de a
+      // contestação estar gravada; se o vínculo do contato ou a contestação falharem, o titular contestado e o
+      // terceiro anterior continuam sem cobrança.
+      const travaDoTerceiro = contexto.terceiro ? await travarAlvoAntesDeSair(contexto) : null;
+      if (contexto.terceiro && !travaDoTerceiro) return erro('third_party_scope_not_cleared');
       contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, contestado: true };
       contexto.contracts = [];
       if (contexto.contact) {
@@ -2097,10 +2213,19 @@ const TOOLS = [
       // cumprimentaria a mesma pessoa errada de novo. Try/catch de propósito:
       // a limpeza em memória e do vínculo já aconteceu e não pode falhar por
       // causa disto.
+      let contestacaoGravada = true;
       try {
         await markPhoneContested(contexto.conversationId);
       } catch (err) {
+        contestacaoGravada = false;
         console.error(`Failed to mark phone contested for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+      }
+      if (travaDoTerceiro && contestacaoGravada) {
+        await liberarAlvoDepoisDeSair(contexto, travaDoTerceiro);
+      } else if (!travaDoTerceiro && !contestacaoGravada) {
+        // Sem a contestação gravada, o turno seguinte identificaria de novo, pelo telefone, quem disse não ser o titular:
+        // o alvo fica travado (melhor esforço) até ele dizer de quem é a cobrança.
+        await travarAlvoAntesDeSair(contexto);
       }
       return { esquecido: true };
     },
@@ -2302,7 +2427,7 @@ const TOOLS = [
       // entrada é o que o próprio modelo declarou em pendenciasObrigatorias.
       //
       // Fica AQUI, no topo, antes de TODO efeito colateral — e por isso ANTES
-      // de limparEscopoDeTerceiro, lá embaixo. Uma conclusão recusada significa
+      // de travarAlvoAntesDeSair, lá embaixo. Uma conclusão recusada significa
       // que a conversa CONTINUA: destruir o escopo temporário do terceiro numa
       // recusa faria quem pediu o boleto do cônjuge perder a autorização no
       // meio do atendimento e ter de informar o CPF do titular de novo. Seria a
@@ -2426,11 +2551,10 @@ const TOOLS = [
       // antecipadas ACIMA (pendência obrigatória declarada, setor/motivo
       // inválidos) preservam contexto.terceiro de propósito: a triagem
       // continua e a cliente não precisa informar de novo o CPF do titular.
-      // Antes de concluir, e não depois: se a limpeza falhar, a triagem NÃO
-      // conclui. Concluir com uma autorização de terceiro ainda viva deixaria
-      // o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
-      // da triagem.
-      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+      // Antes de concluir, e não depois: se a gravação falhar, a triagem NÃO conclui. Segurança final da F2
+      // (03/10/2026): a autorização de terceiro é TRAVADA (pendente sem contrato), não liberada — se a conclusão
+      // falhar, nem o titular nem o terceiro anterior ficam cobráveis; concluída, ninguém mais lê a coluna.
+      if (contexto.terceiro && !(await travarAlvoAntesDeSair(contexto))) {
         return erro('third_party_scope_not_cleared');
       }
       const conversa = await concludeAiTriage(contexto.conversationId, {
@@ -2502,11 +2626,10 @@ const TOOLS = [
       // entregue) preservam contexto.terceiro de propósito: o atendimento
       // continua na triagem e a cliente não precisa informar de novo o CPF do
       // titular.
-      // Antes de encerrar, e não depois: se a limpeza falhar, o encerramento
-      // NÃO acontece. Encerrar com uma autorização de terceiro ainda viva
-      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que
-      // já saiu da triagem.
-      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+      // Antes de encerrar, e não depois: se a gravação falhar, o encerramento NÃO acontece. Segurança final da F2
+      // (03/10/2026): a autorização de terceiro é TRAVADA (pendente sem contrato), não liberada — se o encerramento
+      // falhar, nem o titular nem o terceiro anterior ficam cobráveis; encerrada, ninguém mais lê a coluna.
+      if (contexto.terceiro && !(await travarAlvoAntesDeSair(contexto))) {
         return erro('third_party_scope_not_cleared');
       }
       const conversa = await closeConversationByAi(contexto.conversationId, {

@@ -256,6 +256,53 @@ async function listRecentMessagesByConversation(conversationId, limit) {
   return result.rows.map(toMessageWithReplyPreview).reverse();
 }
 
+// As falas do cliente cujo efeito sobre o alvo financeiro ainda não foi confirmado (F2). O worker as reaplica
+// em ordem sobre o escopo gravado. Terceira revisão (30/09/2026): a confirmação é EXPLÍCITA — o worker marca
+// cada entrada aplicada (metadata.alvoProcessado), pelo id, depois de gravar a transição. A resposta da IA
+// não confirma nada: o horário dela não prova que uma entrada foi processada. Fica pendente a entrada sem a
+// marca que seja posterior a `desde` (criação do escopo, ou os últimos 30 minutos) OU à última entrada
+// marcada da conversa — assim uma transição que não foi gravada não expira com o tempo. Persistência do alvo
+// (03/10/2026): sem nenhuma marcada na conversa, valem todas as entradas sem a marca. Antes, só `desde` valia, e
+// a falha do PRIMEIRO turno da conversa expirava em 30 minutos (o titular voltava a ser cobrável). Numa conversa
+// de antes desta versão, as entradas dela são reaplicadas uma vez; o efeito só restringe (dúvida ou pendente).
+// Ordem estável (created_at, id). Quem chama pede `limite` + 1 para saber se estourou.
+async function listarFalasSemAlvoConfirmado(conversationId, { desde, limite, depoisDe = null }) {
+  const result = await getPool().query(
+    `SELECT ${MESSAGE_COLUMNS} FROM messages m
+     WHERE m.conversation_id = $1 AND m.direction = 'inbound'
+       AND COALESCE(m.metadata->>'alvoProcessado', 'false') <> 'true'
+       AND (m.created_at > $2::timestamptz
+         OR NOT EXISTS (
+           SELECT 1 FROM messages q
+           WHERE q.conversation_id = $1 AND q.direction = 'inbound' AND q.metadata->>'alvoProcessado' = 'true'
+         )
+         OR (m.created_at, m.id) > (
+         SELECT p.created_at, p.id FROM messages p
+         WHERE p.conversation_id = $1 AND p.direction = 'inbound' AND p.metadata->>'alvoProcessado' = 'true'
+         ORDER BY p.created_at DESC, p.id DESC
+         LIMIT 1
+       ))
+       -- Paginação (segurança final, 03/10/2026): depois da última entrada da página anterior, na mesma ordem.
+       AND ($4::timestamptz IS NULL OR (m.created_at, m.id) > ($4::timestamptz, $5::uuid))
+     ORDER BY m.created_at ASC, m.id ASC
+     LIMIT $3`,
+    [conversationId, desde, limite, depoisDe ? depoisDe.createdAt : null, depoisDe ? depoisDe.id : null],
+  );
+  return result.rows.map(toMessage);
+}
+
+// A marca de "efeito sobre o alvo já gravado", só em entradas e só nas ids pedidas. Não mexe no resto da
+// metadata.
+async function marcarFalasComAlvoProcessado(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  await getPool().query(
+    `UPDATE messages
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"alvoProcessado": true}'::jsonb
+      WHERE id = ANY($1::uuid[]) AND direction = 'inbound'`,
+    [ids],
+  );
+}
+
 async function findMessageById(id) {
   const result = await getPool().query(`SELECT ${MESSAGE_COLUMNS} FROM messages WHERE id = $1`, [id]);
   if (result.rowCount === 0) return null;
@@ -545,6 +592,8 @@ async function recordMessageWaId(messageId, waId) {
 }
 
 module.exports = {
+  listarFalasSemAlvoConfirmado,
+  marcarFalasComAlvoProcessado,
   recordMessageWaId,
   createMessage,
   updateMessageStatus,

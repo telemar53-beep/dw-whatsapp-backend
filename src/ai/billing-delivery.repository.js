@@ -1,4 +1,12 @@
 const { getPool } = require('../db/pool');
+const { parametrosDaCondicaoDoEscopo } = require('../conversations/conversation.repository');
+
+// Segurança final da F2 (03/10/2026): a condição sobre o alvo financeiro da conversa — o escopo de terceiro
+// (conversations.ai_triage_third_party) tem de estar num dos estados que o turno conhece: coluna vazia, a marca
+// de um escopo, ou o conteúdo de um escopo de antes da marca. O mesmo critério da gravação condicional.
+const CONDICAO_DO_ALVO = `(($7::boolean AND c.ai_triage_third_party IS NULL)
+          OR (c.ai_triage_third_party ->> 'marca') = ANY($8::text[])
+          OR c.ai_triage_third_party = ANY($9::jsonb[]))`;
 
 // A entrega de uma fatura é reivindicada ANTES de qualquer efeito externo, e a
 // reivindicação é atômica: `INSERT ... ON CONFLICT DO NOTHING RETURNING`. Duas
@@ -51,18 +59,48 @@ function paraRegistro(linha) {
  * `registro` pode vir null no caso raro de a linha concorrente ainda não estar
  * visível; quem chama trata isso como o caso incerto (falha fechado).
  */
-async function claimDelivery({ conversationId, tool, contractId, invoiceId, messageId, isResend }) {
+async function claimDelivery({ conversationId, tool, contractId, invoiceId, messageId, isResend, condicaoDoAlvo = null }) {
   const alvo = [conversationId, tool, contractId, String(invoiceId), String(messageId)];
   // `ON CONFLICT DO NOTHING` NU, sem alvo nomeado: com duas restrições não dá
   // para nomear uma só, e nomear uma deixaria a outra estourar como erro 23505
   // em vez de virar "já existe". O DO NOTHING sem alvo cobre as duas.
-  const inserido = await getPool().query(
-    `INSERT INTO ai_billing_deliveries (conversation_id, tool, contract_id, invoice_id, message_id, is_resend)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT DO NOTHING
-     RETURNING ${COLUNAS}`,
-    [...alvo, Boolean(isResend)]
-  );
+  let inserido;
+  if (!condicaoDoAlvo) {
+    inserido = await getPool().query(
+      `INSERT INTO ai_billing_deliveries (conversation_id, tool, contract_id, invoice_id, message_id, is_resend)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT DO NOTHING
+       RETURNING ${COLUNAS}`,
+      [...alvo, Boolean(isResend)]
+    );
+  } else {
+    // Segurança final da F2 (03/10/2026): a autorização vale NA RESERVA, que é o ponto de não retorno antes de
+    // qualquer efeito para o cliente. A mesma instrução confere o alvo atual e trava a linha da conversa (FOR SHARE).
+    // Uma mudança do alvo já gravada faz a reserva não acontecer; uma em andamento a faz esperar, e a condição é
+    // reavaliada sobre o valor novo; a mudança que chega depois da reserva espera por ela e fica ordenada depois
+    // da entrega. Não há leitura separada seguida de envio.
+    const { aceitaNulo, marcas, legados } = parametrosDaCondicaoDoEscopo(condicaoDoAlvo);
+    inserido = await getPool().query(
+      `WITH autorizado AS (
+         SELECT c.id FROM conversations c
+          WHERE c.id = $1::uuid AND ${CONDICAO_DO_ALVO}
+          FOR SHARE
+       )
+       INSERT INTO ai_billing_deliveries (conversation_id, tool, contract_id, invoice_id, message_id, is_resend)
+       SELECT $1::uuid, $2::text, $3::integer, $4::text, $5::text, $6::boolean FROM autorizado
+       ON CONFLICT DO NOTHING
+       RETURNING ${COLUNAS}`,
+      [...alvo, Boolean(isResend), aceitaNulo, marcas, legados]
+    );
+    if (inserido.rowCount === 0) {
+      // Só para escolher a resposta (a autorização já foi decidida acima): o alvo mudou, ou é duplicata.
+      const vale = await getPool().query(
+        `SELECT EXISTS (SELECT 1 FROM conversations c WHERE c.id = $1::uuid AND ${CONDICAO_DO_ALVO.split('$7').join('$2').split('$8').join('$3').split('$9').join('$4')}) AS vale`,
+        [conversationId, aceitaNulo, marcas, legados]
+      );
+      if (!vale.rows[0].vale) return { obtido: false, registro: null, alvoMudou: true };
+    }
+  }
   if (inserido.rowCount === 1) return { obtido: true, registro: paraRegistro(inserido.rows[0]) };
 
   // Perdeu. A linha que bloqueou pode ser a da MESMA mensagem (restrição 1) ou

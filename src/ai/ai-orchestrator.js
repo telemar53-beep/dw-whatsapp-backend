@@ -346,7 +346,7 @@ function ferramentasDaTriagem(triagem, config) {
   return lista;
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, messageId = null, terceiroLocalizadoEm = null, reativacao = null }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -399,6 +399,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // Caso Fulana/Beltrana: a mensagem do cliente não deixou claro de quem é a cobrança (o worker
       // decide, em financial-target.js). O executor trava as ferramentas de cobrança do turno.
       alvoAmbiguo,
+      // Persistência do alvo (03/10/2026): os estados do escopo que este turno conhece (worker). As gravações do
+      // escopo pelas ferramentas exigem um deles na própria instrução e atualizam a lista.
+      esperadosDoAlvo: Array.isArray(esperadosDoAlvo) ? esperadosDoAlvo.slice() : [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
       // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
       // gravam aqui (buscar_cliente pode descobri-lo no meio do turno).
@@ -874,6 +877,18 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // O worker usa isto para saber se pode mandar a frase de sucesso por
     // código quando o turno estoura o tempo antes da resposta final.
     desbloqueioRealizado: Boolean(contexto.desbloqueioRealizado),
+    // Falha de gravação dentro da consulta do documento (30/09/2026): a consulta de terceiro não conseguiu
+    // gravar o pendente. O worker o grava e só então marca as entradas do turno como concluídas.
+    alvoTerceiroNaoGravado: Boolean(contexto.alvoTerceiroNaoGravado),
+    // Persistência do alvo (03/10/2026): a volta ao titular pelo próprio documento não foi gravada (o worker a
+    // grava de novo), e os estados do escopo que o turno conhece no fim, para a gravação do worker.
+    voltaAoTitularNaoGravada: Boolean(contexto.voltaAoTitularNaoGravada),
+    // A identificação pelo próprio documento, com terceiro no contexto, não terminou (SGP falhou ou o executor
+    // desistiu): o worker não marca as entradas.
+    consultaPropriaPendente: Boolean(contexto.consultaPropriaPendente),
+    // A reserva de uma entrega encontrou o alvo mudado por outro processamento: o worker não marca as entradas.
+    alvoMudouNaEntrega: Boolean(contexto.alvoMudouNaEntrega),
+    esperadosDoAlvo: Array.isArray(contexto.esperadosDoAlvo) ? contexto.esperadosDoAlvo : null,
     identidade: contexto.identidade || null,
     // O harness de simulação encadeia roteiros e precisa do escopo de saída; o
     // worker ignora este campo, porque quem persiste é a própria ferramenta.

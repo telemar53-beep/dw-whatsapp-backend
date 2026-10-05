@@ -2200,6 +2200,43 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
       expect(ctx.mensagensDaJanela.every((m) => m.id)).toBe(true);
     });
 
+    // Comportamento da IA (05/10/2026; E15 #1): a janela traz a marca da oferta do boleto nas respostas da IA; o turno
+    // devolve a oferta feita por ele só quando a resposta final de fato cita o boleto.
+    test('a janela traz a oferta do boleto marcada; o turno devolve a oferta só quando a resposta cita o boleto', async () => {
+      roteiro(chamada('consultar_status_todos_contratos'), final('Certo.'));
+      const oferta = { ...saida('Não há PIX agora. Posso enviar o boleto?'), id: 'out-8', metadata: { ofertaDoBoleto: { faturaId: '9' } } };
+      await turno(['manda o pix', oferta, 'pode ser']);
+      const janela = executeTool.mock.calls[0][2].mensagensDaJanela;
+      expect(janela[1].ofertaDoBoleto).toEqual({ faturaId: '9' });
+      expect(janela[0].ofertaDoBoleto).toBeNull();
+
+      const marcando = async (_nome, _args, c) => { c.ofertaDoBoleto = { faturaId: '9' }; return { ok: true, resultado: { sucesso: false } }; };
+      roteiro(chamada('gerar_pix'), final('Esta fatura não tem PIX agora. Posso te enviar o boleto dela?'));
+      executeTool.mockReset().mockImplementation(marcando);
+      expect((await turno(['manda o pix'])).ofertaDoBoleto).toEqual({ faturaId: '9' });
+
+      roteiro(chamada('gerar_pix'), final('Esta fatura não tem PIX agora.'));
+      executeTool.mockReset().mockImplementation(marcando);
+      expect((await turno(['manda o pix'])).ofertaDoBoleto).toBeNull();
+    });
+
+    // Revisão da entrega 1: no turno sem ferramenta ("por que não tem PIX?"), a resposta que repete a oferta herda a marca da
+    // última resposta; o boleto entregue no turno consome a oferta (a ferramenta apaga a marca) e nada é herdado.
+    test('a oferta é herdada da última resposta no turno sem ferramenta, e não depois do boleto entregue', async () => {
+      const oferta = { ...saida('Esta fatura não tem PIX agora. Posso te enviar o boleto?'), id: 'out-9', metadata: { ofertaDoBoleto: { faturaId: '9' } } };
+      roteiro(final('O PIX desta fatura não está disponível no sistema agora. Se quiser, posso te enviar o boleto dela.'));
+      ferramentas();
+      expect((await turno(['manda o pix', oferta, 'por que não tem pix?'])).ofertaDoBoleto).toEqual({ faturaId: '9' });
+
+      roteiro(chamada('enviar_boleto'), final('Prontinho! Enviei acima o boleto.'));
+      executeTool.mockReset().mockImplementation(async (_n, _a, c) => { c.ofertaDoBoleto = null; return { ok: true, resultado: { enviado: true } }; });
+      expect((await turno(['manda o pix', oferta, 'pode mandar'])).ofertaDoBoleto).toBeNull();
+
+      roteiro(final('Tudo bem! Posso ajudar em algo mais?'));
+      ferramentas();
+      expect((await turno(['manda o pix', oferta, 'deixa pra lá'])).ofertaDoBoleto).toBeNull();
+    });
+
     test('"entrou na fila" depois de uma conclusão que falhou sai, e entra a frase de transferência não confirmada', async () => {
       roteiro(chamada('concluir_triagem'), final('Seu atendimento entrou na fila do setor Suporte.'), chamada('concluir_triagem'), final('Seu atendimento entrou na fila do setor Suporte.'));
       executeTool.mockReset().mockResolvedValue({ ok: false, motivo: 'execution_error', detalhe: 'banco fora', semConfirmacao: true, instrucao: 'x' });

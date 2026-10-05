@@ -1984,6 +1984,92 @@ describe('enviar_boleto', () => {
       expect(r.instrucao).toMatch(/não há outra forma de pagamento para oferecer por aqui/);
     });
 
+    // Comportamento da IA (05/10/2026; avaliação real E15 #1): o cliente aceitou a oferta do boleto e o modelo chamou o PIX
+    // de novo; a recusa mandava oferecer outra vez. Quando a resposta anterior da IA é a oferta marcada desta fatura, a
+    // instrução diz que a oferta já foi feita: se a mensagem atual aceita, enviar_boleto; se recusa ou insiste no PIX, não
+    // repetir a oferta. Quem interpreta a mensagem é o modelo; a ferramenta do PIX não envia nada.
+    const SEM_PIX_COM_BOLETO = { id: '9', value: 135, dueDate: '2026-09-15', pixCode: null, barCode: 'b', boletoLink: 'https://x/b.pdf' };
+    const janelaComOferta = (oferta) => ({ mensagensDaJanela: [
+      { id: 'm1', de: 'cliente', texto: 'Oi, manda o pix da minha internet.', ofertaDoBoleto: null },
+      { id: 'm2', de: 'ia', texto: 'Não consegui gerar o PIX desta fatura agora. Se quiser, posso te enviar o boleto desta mesma fatura.', ofertaDoBoleto: oferta },
+      { id: 'm3', de: 'cliente', texto: 'Pode ser, manda sim.', ofertaDoBoleto: null },
+    ] });
+
+    test('(d4) reprodução E15 #1 — a oferta do boleto desta fatura já foi feita: a instrução manda enviar o boleto se ele aceitou, sem oferecer de novo', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, { ...ctx(), ...janelaComOferta({ faturaId: '9' }) });
+      expect(r).toMatchObject({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
+      expect(r.instrucao).toMatch(/Você já ofereceu o boleto desta mesma fatura na resposta anterior/);
+      expect(r.instrucao).toMatch(/chame enviar_boleto com contratoId 17402 agora/);
+      expect(r.instrucao).toMatch(/não repita a oferta/);
+      expect(r.instrucao).not.toMatch(/ofereça enviar o boleto/);
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['a oferta marcada é de outra fatura', janelaComOferta({ faturaId: '8' })],
+      ['a resposta anterior não tem a marca', janelaComOferta(null)],
+      ['a oferta marcada não é a última resposta da IA', { mensagensDaJanela: [
+        { id: 'm1', de: 'ia', texto: 'Posso te enviar o boleto?', ofertaDoBoleto: { faturaId: '9' } },
+        { id: 'm2', de: 'cliente', texto: 'depois eu vejo' }, { id: 'm3', de: 'ia', texto: 'Tudo bem. Posso ajudar em algo mais?' }, { id: 'm4', de: 'cliente', texto: 'manda o pix' },
+      ] }],
+    ])('(d5) %s: a primeira oferta segue como antes', async (_nome, extra) => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, { ...ctx(), ...extra });
+      expect(r.instrucao).toMatch(/ofereça enviar o boleto desta mesma fatura/);
+      expect(r.instrucao).not.toMatch(/Você já ofereceu/);
+    });
+
+    test('(d6) a oferta (primeira ou repetida) marca a fatura no contexto do turno, para a marca da mensagem', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      const c = ctx();
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '9' });
+      const repetida = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, repetida);
+      expect(repetida.ofertaDoBoleto).toEqual({ faturaId: '9' });
+    });
+
+    test('(d7) sem boleto com link, nem a oferta nem a marca', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...SEM_PIX_COM_BOLETO, boletoLink: null }] });
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      expect(r.instrucao).toMatch(/não há outra forma de pagamento para oferecer por aqui/);
+      expect(c.ofertaDoBoleto).toBeUndefined();
+    });
+
+    // Revisão do delta da entrega 1 (05/10/2026): o boleto sem link também diz o que existe na fatura — a instrução do
+    // conferir_pagamento manda a ferramenta de cobrança dizer, e as duas precisam saber.
+    test.each([
+      ['só o PIX existe', { pixCode: '000201-pix-emv' }, null, /ofereça o PIX desta mesma fatura; só gere \(gerar_pix com contratoId 17402\) se ele aceitar/],
+      ['nem PIX nem boleto', { pixCode: null }, null, /não há outra forma de pagamento para oferecer por aqui/],
+      ['o PIX desta fatura já saiu', { pixCode: '000201-pix-emv' }, 'gerar_pix', /O PIX desta mesma fatura já foi enviado acima/],
+    ])('(e1) boleto sem link, %s: a recusa diz o que existe', async (_nome, campos, jaSaiu, esperado) => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', value: 135, dueDate: '2026-09-15', barCode: 'b', boletoLink: null, ...campos }] });
+      findEnqueuedDeliveryOfInvoice.mockImplementation(async ({ tool }) => (jaSaiu && tool === jaSaiu ? { id: 'e-1', enqueuedAt: new Date() } : null));
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r).toMatchObject({ enviado: false, motivo: 'Boleto sem link para download' });
+      expect(r.instrucao).toMatch(/NÃO houve envio de boleto/);
+      expect(r.instrucao).toMatch(esperado);
+    });
+
+    test('(d8) o boleto desta fatura já saiu: vale o "já foi enviado acima", mesmo com a oferta marcada na última resposta', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      findEnqueuedDeliveryOfInvoice.mockImplementation(async ({ tool }) => (tool === 'enviar_boleto' ? { id: 'e-1', enqueuedAt: new Date() } : null));
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, { ...ctx(), ...janelaComOferta({ faturaId: '9' }) });
+      expect(r.instrucao).toMatch(/O boleto desta mesma fatura já foi enviado acima/);
+      expect(r.instrucao).not.toMatch(/Você já ofereceu/);
+    });
+
+    test('(d9) o boleto entregue consome a oferta: a marca do turno é apagada', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+      const c = { ...ctx(), ofertaDoBoleto: { faturaId: '9' } };
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+      expect(r.enviado).toBe(true);
+      expect(c.ofertaDoBoleto).toBeNull();
+    });
+
     test('sem fatura em aberto: sucesso false', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
       const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
@@ -4245,7 +4331,10 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   describe('6. falha na Zona A libera o claim', () => {
     test('boleto sem link: libera, e com link a chamada seguinte envia', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, boletoLink: null }] });
-      expect(await boleto({ contratoId: 17402 }, ctx())).toEqual({ enviado: false, motivo: 'Boleto sem link para download' });
+      // Revisão da entrega 1 (05/10/2026): a recusa traz a instrução do que existe (aqui, o PIX desta fatura).
+      const semLink = await boleto({ contratoId: 17402 }, ctx());
+      expect(semLink).toMatchObject({ enviado: false, motivo: 'Boleto sem link para download' });
+      expect(semLink.instrucao).toMatch(/ofereça o PIX desta mesma fatura/);
       expect(releaseDelivery).toHaveBeenCalledTimes(1);
 
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });

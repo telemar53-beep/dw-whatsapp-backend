@@ -243,6 +243,22 @@ describe('ai-worker — triagem', () => {
   // mensagem inbound mais recente.
   // Documento pendente (25/09/2026): o registro do pedido é a própria mensagem — a metadata diz de
   // quem é o documento pedido (o de quem fala, ou o de outra pessoa). Nada além disso no banco.
+  // Comportamento da IA (05/10/2026; avaliação real E15 #1): a oferta do boleto (PIX sem código) fica marcada na própria
+  // mensagem, com a fatura — é por ela que o turno seguinte sabe que a oferta já foi feita.
+  describe('oferta do boleto marcada na própria mensagem', () => {
+    test('a resposta que ofereceu o boleto sai com a marca da fatura', async () => {
+      runAiTurn.mockResolvedValue({ texto: 'Não há PIX para esta fatura agora. Posso te enviar o boleto dela?', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: null, ofertaDoBoleto: { faturaId: '9' } });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ sentBy: 'ai', metadata: { ofertaDoBoleto: { faturaId: '9' } } }));
+    });
+
+    test('com o pedido de documento no mesmo turno, as duas marcas saem juntas', async () => {
+      runAiTurn.mockResolvedValue({ texto: 'Posso te enviar o boleto? E me informe o CPF do titular.', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: { alvo: 'principal' }, ofertaDoBoleto: { faturaId: '9' } });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ metadata: { pedidoDeDocumento: { alvo: 'principal' }, ofertaDoBoleto: { faturaId: '9' } } }));
+    });
+  });
+
   describe('pedido de documento marcado na própria mensagem', () => {
     test('a resposta que pede o documento sai com a marca de quem é o documento', async () => {
       runAiTurn.mockResolvedValue({ texto: 'Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor.', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: { alvo: 'principal' } });
@@ -1982,6 +1998,17 @@ describe('ai-worker — triagem', () => {
 
         expect(enqueueOutboundMessage).not.toHaveBeenCalled();
         expect(concludeAiTriage).not.toHaveBeenCalled();
+      });
+
+      test('a mensagem composta pelos fatos não leva a marca da oferta do boleto calculada sobre o texto do modelo', async () => {
+        runAiTurn.mockResolvedValue({ ...CONCLUIU_NO_TURNO, ofertaDoBoleto: { faturaId: '9' } });
+        getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, triageState: 'completed' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+        expect(enqueueOutboundMessage.mock.calls[0][0].content.endsWith(FRASE)).toBe(true);
+        expect(enqueueOutboundMessage.mock.calls[0][0]).not.toHaveProperty('metadata');
       });
 
       test('liberação de um turno anterior (não deste): o texto do modelo segue como está', async () => {

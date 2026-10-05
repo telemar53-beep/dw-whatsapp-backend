@@ -50,6 +50,8 @@ describe('módulo financeiro', () => {
       expect(t).toMatch(/Se ele disse o meio \(boleto ou PIX\), entregue esse meio AGORA \(enviar_boleto ou gerar_pix\)\./);
       // Reavaliação r2 (04/10/2026): volta à redação avaliada na rodada inicial (a imperativa regrediu o E6 #6).
       expect(t).toMatch(/Num pedido genérico de pagamento .* continue com o meio já escolhido nesta conversa .*; se nenhum foi escolhido, pergunte curto: "Você prefere boleto ou PIX\?" — sem meio escolhido, a entrega não sai\./);
+      // Fechamento limitado (04/10/2026): o meio de outra fatura não conta.
+      expect(t).toMatch(/continue com o meio já escolhido nesta conversa para esta mesma fatura \(o que ele pediu ou recebeu antes; o meio usado em outra fatura não conta\)/);
       expect(t).not.toMatch(/NÃO escolha por ele/);
     });
 

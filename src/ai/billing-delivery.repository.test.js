@@ -1,6 +1,7 @@
 const { getPool, closePool } = require('../db/pool');
 const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery,
+  findLatestEnqueuedDeliveryOfOtherInvoice,
 } = require('./billing-delivery.repository');
 
 const { createChannel } = require('../channels/channel.repository');
@@ -340,6 +341,36 @@ describe('billing delivery repository', () => {
 
     const ultima = await findLatestEnqueuedDelivery(CONVERSA);
     expect(ultima).toMatchObject({ invoiceId: '102', tool: 'gerar_pix', contractId: 17402 });
+  });
+
+  // Fechamento limitado (04/10/2026): o meio escolhido para OUTRA fatura não vale para esta. A trava do meio precisa da
+  // última entrega que de fato saiu de uma fatura diferente — e da mensagem do cliente que a pediu.
+  test('findLatestEnqueuedDeliveryOfOtherInvoice devolve a última entrega enfileirada de outra fatura, com a mensagem que a pediu', async () => {
+    expect(await findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId: CONVERSA, invoiceId: '102' })).toBeNull();
+
+    const antiga = await claimDelivery(pedido({ invoiceId: '101', messageId: 'msg-1' }));
+    await markDeliveryEnqueued(antiga.registro.id);
+    await getPool().query("UPDATE ai_billing_deliveries SET enqueued_at = now() - interval '1 hour' WHERE id = $1", [antiga.registro.id]);
+    const outra = await claimDelivery(pedido({ tool: 'gerar_pix', invoiceId: '100', messageId: 'msg-2' }));
+    await markDeliveryEnqueued(outra.registro.id);
+    await getPool().query("UPDATE ai_billing_deliveries SET enqueued_at = now() - interval '30 minutes' WHERE id = $1", [outra.registro.id]);
+    // A própria fatura (mais recente) não conta.
+    const propria = await claimDelivery(pedido({ invoiceId: '102', messageId: 'msg-3' }));
+    await markDeliveryEnqueued(propria.registro.id);
+    // Um claim de outra fatura que nunca foi enfileirado não conta.
+    await claimDelivery(pedido({ invoiceId: '103', messageId: 'msg-4' }));
+    // Outra conversa não conta.
+    const alheia = await claimDelivery(pedido({ conversationId: OUTRA_CONVERSA, invoiceId: '999', messageId: 'msg-9' }));
+    await markDeliveryEnqueued(alheia.registro.id);
+
+    expect(await findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId: CONVERSA, invoiceId: '102' }))
+      .toMatchObject({ invoiceId: '100', tool: 'gerar_pix', messageId: 'msg-2' });
+    // O id da fatura chega como número ou texto: a comparação é a do texto gravado.
+    expect(await findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId: CONVERSA, invoiceId: 100 }))
+      .toMatchObject({ invoiceId: '102', messageId: 'msg-3' });
+    // As entregas pedidas pela mensagem do turno atual não contam.
+    expect(await findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId: CONVERSA, invoiceId: '102', exceptoMensagem: 'msg-2' }))
+      .toMatchObject({ invoiceId: '101', messageId: 'msg-1' });
   });
 
   // MINIMIZAÇÃO (Fase 3): a tabela guarda só ids. Nenhum valor, nenhuma linha

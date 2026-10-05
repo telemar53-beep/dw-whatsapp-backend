@@ -491,6 +491,54 @@ describe('PAGAMENTO — conferir_pagamento relê o MESMO título no SGP', () => 
     expect(r.instrucao).toMatch(/Se ele ainda não pagou e quer pagar, não conclua/);
   });
 
+  // Fechamento limitado (04/10/2026; avaliação real r4 E13 #6): "manda o boleto da minha internet, ela está cortada" foi
+  // para conferir_pagamento, e a instrução sem cobrança enviada levou a IA a perguntar o meio a quem já tinha pedido o
+  // boleto. O pedido explícito da mensagem atual vale: a instrução manda entregar esse meio.
+  test('20c. sem cobrança enviada e com o boleto pedido na mensagem atual: manda entregar o boleto, sem perguntar o meio', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'Oi, manda o boleto da minha internet, ela está cortada.' }));
+    expect(r.pagamentoConfirmado).toBe(false);
+    expect(r.instrucao).toMatch(/chame enviar_boleto agora/);
+    expect(r.instrucao).not.toMatch(/prefere boleto ou PIX/);
+    expect(r.instrucao).toMatch(/NÃO diga que o pagamento foi confirmado/);
+  });
+
+  test('20d. sem cobrança enviada e com o PIX pedido na mensagem atual: manda gerar o PIX', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'me manda o pix pra eu pagar' }));
+    expect(r.instrucao).toMatch(/chame gerar_pix agora/);
+    expect(r.instrucao).not.toMatch(/prefere boleto ou PIX/);
+  });
+
+  test.each([
+    ['sem meio na mensagem', 'quero pagar minha fatura'],
+    ['os dois meios na mesma mensagem (não é escolha)', 'pode ser boleto ou pix, tanto faz'],
+  ])('20e. sem cobrança enviada, %s: a pergunta curta continua', async (_nome, fala) => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: fala }));
+    expect(r.instrucao).toMatch(/pergunte curto se prefere boleto ou PIX/);
+    expect(r.instrucao).not.toMatch(/agora, sem perguntar/);
+  });
+
+  // Revisão do delta (04/10/2026): citar o meio não é pedir. "Já paguei o boleto" cita o boleto; a instrução não afirma que
+  // ele pediu, e o caminho de quem pagou vem antes. E o turno é o que ele disse depois da última resposta da IA.
+  test('20f. "já paguei o boleto": a instrução não afirma pedido, e o caminho de quem pagou vem antes da entrega condicional', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'Já paguei o boleto e a internet continua cortada.' }));
+    expect(r.instrucao).not.toMatch(/ele pediu o boleto nesta mensagem/);
+    expect(r.instrucao).toMatch(/Se ele pediu o boleto e ainda não pagou/);
+    expect(r.instrucao.indexOf('Se o cliente pagou por outro meio, chame concluir_triagem')).toBeGreaterThan(-1);
+    expect(r.instrucao.indexOf('Se o cliente pagou por outro meio')).toBeLessThan(r.instrucao.indexOf('Se ele pediu o boleto'));
+  });
+
+  test('20g. com a janela em ordem, vale o que ele disse no turno (depois da última resposta da IA)', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'quero o boleto', mensagensDaJanela: [
+      { id: 'm1', de: 'cliente', texto: 'quero o boleto' }, { id: 'm2', de: 'ia', texto: 'Posso ajudar em algo mais?' }, { id: 'm3', de: 'cliente', texto: 'já paguei, pode ver?' },
+    ] }));
+    expect(r.instrucao).toMatch(/pergunte curto se prefere boleto ou PIX/);
+  });
+
   test('21. cliente diz "paguei" e o título continua Gerado: NÃO confirma', async () => {
     titulosPorContrato[100] = leitura([titulo(3001, -5)]);
     const c = ctx({ ultimaFala: 'paguei agora pelo pix' });

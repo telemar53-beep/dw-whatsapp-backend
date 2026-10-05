@@ -467,6 +467,14 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       falasDoCliente: historico.filter((m) => m && m.direction === 'inbound').map((m) => conteudoParaModelo(m, perfil)).filter(Boolean),
       ultimaFalaDaIa: historico.filter((m) => m && m.direction === 'outbound' && m.sentBy === 'ai')
         .map((m) => conteudoParaModelo(m, perfil)).filter(Boolean).slice(-1)[0] || null,
+      // Fechamento limitado (04/10/2026): a mesma janela EM ORDEM, com quem falou, o id de cada mensagem e a marca do pedido
+      // de documento das respostas da IA. A origem do documento confere o que veio antes de cada fala; a trava do meio
+      // separa o que veio depois da entrega de outra fatura.
+      mensagensDaJanela: historico.filter((m) => m && (m.direction === 'inbound' || (m.direction === 'outbound' && m.sentBy === 'ai')))
+        .map((m) => ({
+          id: m.id, de: m.direction === 'inbound' ? 'cliente' : 'ia', texto: conteudoParaModelo(m, perfil) || '',
+          pediuDocumento: Boolean(m.metadata && m.metadata.pedidoDeDocumento),
+        })),
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
       // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
       // gravam aqui (buscar_cliente pode descobri-lo no meio do turno).
@@ -993,6 +1001,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // O worker usa isto para saber se pode mandar a frase de sucesso por
     // código quando o turno estoura o tempo antes da resposta final.
     desbloqueioRealizado: Boolean(contexto.desbloqueioRealizado),
+    // Fechamento limitado (04/10/2026): a liberação confirmada NESTE turno pela ferramenta — a marca gravada só no sucesso e
+    // nunca apagada (desbloqueioRealizado também vale para a liberação de um turno anterior, lida do banco).
+    desbloqueioNoTurno: contexto.desbloqueioConfirmadoNoTurno === true,
     // Falha de gravação dentro da consulta do documento (30/09/2026): a consulta de terceiro não conseguiu
     // gravar o pendente. O worker o grava e só então marca as entradas do turno como concluídas.
     alvoTerceiroNaoGravado: Boolean(contexto.alvoTerceiroNaoGravado),

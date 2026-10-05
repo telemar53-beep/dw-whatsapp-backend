@@ -181,6 +181,25 @@ async function findEnqueuedDeliveryOfInvoice({ conversationId, tool, invoiceId }
   return paraRegistro(resultado.rows[0]);
 }
 
+/**
+ * Fechamento limitado (04/10/2026): a última entrega que de fato SAIU (enfileirada) de uma fatura DIFERENTE desta, nesta
+ * conversa — com a mensagem do cliente que a pediu (message_id). A trava do meio usa isto para não deixar o meio escolhido
+ * para outra fatura valer para esta. `exceptoMensagem`: as entregas pedidas por esta mensagem (o turno atual) não contam.
+ * Só leitura; null quando não há.
+ */
+async function findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId, invoiceId, exceptoMensagem = null }) {
+  const resultado = await getPool().query(
+    `SELECT ${COLUNAS} FROM ai_billing_deliveries
+      WHERE conversation_id = $1 AND invoice_id <> $2 AND enqueued_at IS NOT NULL
+        AND ($3::text IS NULL OR message_id <> $3::text)
+      ORDER BY enqueued_at DESC, claimed_at DESC
+      LIMIT 1`,
+    [conversationId, String(invoiceId), exceptoMensagem == null ? null : String(exceptoMensagem)]
+  );
+  return paraRegistro(resultado.rows[0]);
+}
+
 module.exports = {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery, findEnqueuedDeliveryOfInvoice,
+  findLatestEnqueuedDeliveryOfOtherInvoice,
 };

@@ -1937,6 +1937,95 @@ describe('ai-worker — triagem', () => {
       });
     });
 
+    // Fechamento limitado (04/10/2026; avaliação real r4 E11 #5): o desbloqueio foi confirmado e a conclusão da triagem veio
+    // no mesmo turno; a instrução da conclusão prevaleceu e a mensagem final não disse que a internet foi liberada. Agora a
+    // mensagem sai pelos fatos do turno: a liberação confirmada nele e a fila relida depois dele. Sem nova liberação, sem
+    // nova conclusão; atendente, encerramento ou silenciamento durante o turno continuam em silêncio.
+    describe('desbloqueio confirmado e conclusão da triagem no mesmo turno', () => {
+      const NOTURNO = { mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true, nightStartTime: '20:00', nightEndTime: '08:00' };
+      const OMITIU = 'Prontinho, Beltrano! O atendimento ficou registrado para o Financeiro e nossa equipe dá continuidade a partir das 08:00.';
+      const CONCLUIU_NO_TURNO = {
+        texto: OMITIU, toolsExecutadas: [{ nome: 'desbloqueio_confianca' }, { nome: 'concluir_triagem' }], erro: null,
+        triagemConcluida: { setor: 'Financeiro' }, desbloqueioRealizado: true, desbloqueioNoTurno: true,
+      };
+      const FRASE = 'Prontinho, Beltrano! O desbloqueio em confiança foi realizado. Seu atendimento ficou registrado para o setor Financeiro e nossa equipe dá continuidade a partir das 08:00.';
+
+      beforeEach(() => {
+        isNightModeActive.mockReturnValue(true);
+        getAiConfig.mockResolvedValue(NOTURNO);
+        resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Beltrano', contracts: [] });
+      });
+
+      test('reprodução — a mensagem final informa a liberação confirmada e a fila efetiva; o texto que a omitia não sai', async () => {
+        runAiTurn.mockResolvedValue(CONCLUIU_NO_TURNO);
+        getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, triageState: 'completed' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+        const [{ content }] = enqueueOutboundMessage.mock.calls[0];
+        expect(content.endsWith(FRASE)).toBe(true);
+        expect(runAiTurn).toHaveBeenCalledTimes(1);
+        expect(concludeAiTriage).not.toHaveBeenCalled();
+        expect(incrementTriageAttempts).not.toHaveBeenCalled();
+      });
+
+      test.each([
+        ['um atendente assumiu', { status: 'assigned', assignedAgentId: 'a-1' }],
+        ['a conversa foi encerrada por fora', { status: 'closed' }],
+        ['a conversa foi silenciada', { status: 'silent' }],
+      ])('%s durante o turno: silêncio', async (_nome, estado) => {
+        runAiTurn.mockResolvedValue(CONCLUIU_NO_TURNO);
+        getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, triageState: 'completed', ...estado });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+        expect(concludeAiTriage).not.toHaveBeenCalled();
+      });
+
+      test('liberação de um turno anterior (não deste): o texto do modelo segue como está', async () => {
+        runAiTurn.mockResolvedValue({ ...CONCLUIU_NO_TURNO, desbloqueioNoTurno: false });
+        getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, triageState: 'completed' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+        expect(enqueueOutboundMessage.mock.calls[0][0].content).toMatch(/O atendimento ficou registrado para o Financeiro/);
+        expect(enqueueOutboundMessage.mock.calls[0][0].content).not.toMatch(/desbloqueio em confiança foi realizado/);
+      });
+
+      test('liberação confirmada sem conclusão neste turno: a composição não entra (quem fala é o turno, com as guardas de sempre)', async () => {
+        runAiTurn.mockResolvedValue({ ...CONCLUIU_NO_TURNO, texto: 'Prontinho, Beltrano! O desbloqueio em confiança foi realizado.', triagemConcluida: null });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+        expect(enqueueOutboundMessage.mock.calls[0][0].content).not.toMatch(/ficou registrado para o setor/);
+      });
+
+      test('de dia (sem o modo noturno), nada muda: o texto do turno segue', async () => {
+        isNightModeActive.mockReturnValue(false);
+        runAiTurn.mockResolvedValue(CONCLUIU_NO_TURNO);
+        getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, triageState: 'completed' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+        expect(enqueueOutboundMessage.mock.calls[0][0].content).toMatch(/O atendimento ficou registrado para o Financeiro/);
+      });
+
+      test('o próprio turno encerrou o atendimento: a despedida do turno segue', async () => {
+        runAiTurn.mockResolvedValue({ ...CONCLUIU_NO_TURNO, texto: 'Imagina! Qualquer dúvida, é só chamar.', atendimentoEncerrado: true });
+        getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'closed', triageState: 'completed' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+        expect(enqueueOutboundMessage.mock.calls[0][0].content).toMatch(/Qualquer dúvida, é só chamar/);
+      });
+    });
+
     test('sem modo noturno, noturno.ativo é false e o limite é o configurado', async () => {
       isNightModeActive.mockReturnValue(false);
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });

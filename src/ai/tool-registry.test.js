@@ -45,7 +45,9 @@ const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
-const { claimDelivery, markDeliveryEnqueued, releaseDelivery, findEnqueuedDeliveryOfInvoice } = require('./billing-delivery.repository');
+const {
+  claimDelivery, markDeliveryEnqueued, releaseDelivery, findEnqueuedDeliveryOfInvoice, findLatestEnqueuedDeliveryOfOtherInvoice,
+} = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { listarPlanosDisponiveis } = require('../plans/plan.repository');
 const { listPlaces, findCityById } = require('../cities/city.repository');
@@ -140,6 +142,17 @@ beforeEach(() => {
       if (conversa === conversationId && ferramenta === tool && fatura === String(invoiceId) && registro.enqueuedAt) return { ...registro };
     }
     return null;
+  });
+  // Fechamento limitado (04/10/2026): a última entrega enfileirada de OUTRA fatura nesta conversa, do mesmo armazenamento.
+  findLatestEnqueuedDeliveryOfOtherInvoice.mockImplementation(async ({ conversationId, invoiceId, exceptoMensagem = null }) => {
+    let ultima = null;
+    for (const { porFatura, registro } of entregas.values()) {
+      const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
+      if (conversa === conversationId && fatura !== String(invoiceId) && registro.enqueuedAt
+        && (exceptoMensagem == null || registro.messageId !== String(exceptoMensagem))
+        && (!ultima || registro.enqueuedAt >= ultima.enqueuedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
+    }
+    return ultima;
   });
 });
 
@@ -842,6 +855,20 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(r.instrucao).toContain('Já deixei seu atendimento na fila');
     expect(ctx.desbloqueioRealizado).toBe(true);
     expect(ctx.desbloqueioResultado).toEqual({ liberado: true, dias: 3 });
+  });
+
+  // Fechamento limitado (04/10/2026, revisão do delta): a liberação confirmada fica marcada no turno; uma recusa seguinte no
+  // mesmo turno (outra tentativa) não a apaga — é por esta marca que o worker sabe o que dizer.
+  test('(a3) a liberação confirmada fica marcada no turno, e a recusa de outra tentativa no mesmo turno não a apaga', async () => {
+    const ativo = { id: 17402, statusCode: 1, status: 'Ativo', plan: '600MB', address: 'RUA X', paymentPromisesThisMonth: 0 };
+    const ctx = noturno({ contracts: [SUSPENSO, ativo], comprovante: null });
+    expect((await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx)).liberado).toBe(true);
+    expect(ctx.desbloqueioConfirmadoNoTurno).toBe(true);
+    const segunda = await findTool('desbloqueio_confianca').executar({ contratoId: 17402 }, ctx);
+    expect(segunda.liberado).toBe(false);
+    expect(sgpClient.requestTrustUnlock).toHaveBeenCalledTimes(1);
+    expect(ctx.desbloqueioResultado.liberado).toBe(false);
+    expect(ctx.desbloqueioConfirmadoNoTurno).toBe(true);
   });
 
   // Conclusão do atendimento (04/10/2026; avaliação de 01/10, C6): a frase dizia "com o comprovante" também a quem não
@@ -4007,6 +4034,147 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
     ])('%s: "%s" é pedido explícito do meio', async (nome, fala) => {
       const r = await (nome === 'gerar_pix' ? pix : boleto)({ contratoId: 17402 }, comFalas([fala]));
       expect(r.enviado).toBe(true);
+    });
+
+    // Fechamento limitado (04/10/2026): o meio escolhido para OUTRA fatura não estabelece a escolha desta. Vale o que o
+    // cliente disse depois da mensagem que pediu a outra fatura (e o pedido da mensagem atual); a fala da IA só vale se
+    // veio depois de uma fala dele posterior àquela entrega — a confirmação da própria entrega não vale.
+    describe('o meio de outra fatura não vale para esta', () => {
+      const FATURA_B = { ...FATURA, id: '10' };
+      const janela = (itens) => itens.map(([id, de, texto]) => ({ id, de, texto }));
+      // msg-1 pediu o boleto da fatura 9, que saiu; depois a IA confirmou a entrega.
+      const CONFIRMACAO_A = 'Prontinho, Willemberg! Enviei acima o boleto em PDF e com a linha digitável.';
+      // semTrava: a fatura 9 sai sem as falas no contexto (a trava não age), para a fala do cliente não citar o meio.
+      const entregarA = async (fala = 'quero o boleto', semTrava = false) => {
+        const doTurno = semTrava ? ctx({ messageId: 'msg-1' }) : comFalas([fala], { messageId: 'msg-1' });
+        expect((await boleto({ contratoId: 17402 }, doTurno)).enviado).toBe(true);
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA_B] });
+      };
+      const depoisDeA = (itensDepois, falaDeA = 'quero o boleto') => {
+        const itens = [['msg-1', 'cliente', falaDeA], ['m-ia-1', 'ia', CONFIRMACAO_A], ...itensDepois];
+        const falas = itens.filter(([, de]) => de === 'cliente').map(([, , t]) => t);
+        const ultimaIa = itens.filter(([, de]) => de === 'ia').map(([, , t]) => t).slice(-1)[0];
+        return comFalas(falas, {
+          mensagensDaJanela: janela(itens), ultimaFalaDaIa: ultimaIa, ultimaFalaDoCliente: falas[falas.length - 1], messageId: itens[itens.length - 1][0],
+        });
+      };
+
+      test('reprodução — a menção "boleto" que serviu à fatura 9 não estabelece o meio da fatura 10: nada sai e o modelo lê a pergunta', async () => {
+        await entregarA();
+        const r = await boleto({ contratoId: 17402 }, depoisDeA([['msg-3', 'cliente', 'e a outra fatura?']]));
+        expect(r).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+        expect(r.instrucao).toMatch(/outra fatura/);
+        expect(r.instrucao).toMatch(/Você prefere boleto ou PIX\?/);
+        expect(documentos()).toHaveLength(1);
+      });
+
+      test('reprodução — a fala da IA que confirmou a entrega da fatura 9 não estabelece o meio da fatura 10', async () => {
+        await entregarA('manda a segunda via', true);
+        const r = await boleto({ contratoId: 17402 }, depoisDeA([['msg-3', 'cliente', 'e a da outra casa, como faço?']], 'manda a segunda via'));
+        expect(r).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+        expect(documentos()).toHaveLength(1);
+      });
+
+      test('preservado — pedido explícito na mensagem atual ("manda o boleto da outra também")', async () => {
+        await entregarA();
+        expect((await boleto({ contratoId: 17402 }, depoisDeA([['msg-3', 'cliente', 'manda o boleto da outra também']]))).enviado).toBe(true);
+      });
+
+      test('preservado — escolha feita depois da entrega da fatura 9 (a IA perguntou e ele respondeu)', async () => {
+        await entregarA();
+        const r = await pix({ contratoId: 17402 }, depoisDeA([
+          ['msg-3', 'cliente', 'e a outra fatura?'], ['m-ia-2', 'ia', 'Você prefere boleto ou PIX?'], ['msg-5', 'cliente', 'pode ser pix'],
+        ]));
+        expect(r.enviado).toBe(true);
+      });
+
+      test('preservado — oferta da IA feita depois da entrega da fatura 9, aceita (só o boleto existe na fatura 10)', async () => {
+        await entregarA();
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA_B, pixCode: null }] });
+        const r = await boleto({ contratoId: 17402 }, depoisDeA([
+          ['msg-3', 'cliente', 'e a outra fatura?'], ['m-ia-2', 'ia', 'Essa fatura não tem PIX agora. Posso mandar o boleto dela?'], ['msg-5', 'cliente', 'pode ser'],
+        ]));
+        expect(r.enviado).toBe(true);
+      });
+
+      test('preservado — as duas faturas pedidas na mesma mensagem ("os boletos das duas casas")', async () => {
+        const fala = 'quero os boletos das duas casas';
+        const ctxDoTurno = comFalas([fala], { mensagensDaJanela: janela([['msg-1', 'cliente', fala]]), ultimaFalaDoCliente: fala, messageId: 'msg-1' });
+        expect((await boleto({ contratoId: 17402 }, ctxDoTurno)).enviado).toBe(true);
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA_B] });
+        expect((await boleto({ contratoId: 17402 }, ctxDoTurno)).enviado).toBe(true);
+        expect(documentos()).toHaveLength(2);
+      });
+
+      test('preservado — reenvio da própria fatura 10 depois de ela ter saído (continuidade da mesma fatura)', async () => {
+        await entregarA();
+        // Revisão do delta: a fatura 10 sai sem a trava, e nada depois da fatura 9 cita o meio (nem a fala da IA) — quem
+        // estabelece o meio é só a entrega anterior desta mesma fatura.
+        expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-3' }))).enviado).toBe(true);
+        const r = await boleto({ contratoId: 17402, reenviar: true }, depoisDeA([
+          ['msg-3', 'cliente', 'e a outra?'], ['m-ia-2', 'ia', 'Prontinho! Enviei acima a segunda via.'], ['msg-5', 'cliente', 'não chegou, manda de novo'],
+        ]));
+        expect(r.enviado).toBe(true);
+      });
+
+      test('outra fatura entregue e sem a janela em ordem: só vale o pedido da mensagem atual', async () => {
+        await entregarA();
+        const semPedido = comFalas(['quero o boleto', 'e a outra?'], { ultimaFalaDoCliente: 'e a outra?', messageId: 'msg-3' });
+        expect(await boleto({ contratoId: 17402 }, semPedido)).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+        const comPedido = comFalas(['quero o boleto', 'manda o boleto dela também'], { ultimaFalaDoCliente: 'manda o boleto dela também', messageId: 'msg-4' });
+        expect((await boleto({ contratoId: 17402 }, comPedido)).enviado).toBe(true);
+      });
+
+      test('a leitura da outra entrega falhou: na dúvida, só vale o pedido da mensagem atual', async () => {
+        findLatestEnqueuedDeliveryOfOtherInvoice.mockRejectedValueOnce(new Error('banco fora'));
+        const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const r = await boleto({ contratoId: 17402 }, comFalas(['quero o boleto', 'e agora?'], { ultimaFalaDoCliente: 'e agora?' }));
+        expect(r).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+        expect(erro).toHaveBeenCalled();
+        erro.mockRestore();
+      });
+
+      // Revisão do delta (04/10/2026): a outra fatura que saiu NESTE turno não corta (o pedido é o mesmo); a de um turno
+      // anterior continua cortando; e o turno atual são as mensagens dele depois da última resposta da IA.
+      test('preservado — rajada "quero o boleto" + "das duas casas": a outra fatura que saiu neste turno não corta', async () => {
+        const itens = [['msg-1', 'cliente', 'quero o boleto'], ['msg-2', 'cliente', 'das duas casas']];
+        const doTurno = comFalas(['quero o boleto', 'das duas casas'], { mensagensDaJanela: janela(itens), ultimaFalaDoCliente: 'das duas casas', messageId: 'msg-2' });
+        expect((await boleto({ contratoId: 17402 }, doTurno)).enviado).toBe(true);
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA_B] });
+        expect((await boleto({ contratoId: 17402 }, doTurno)).enviado).toBe(true);
+        expect(documentos()).toHaveLength(2);
+      });
+
+      test('preservado — "quero pagar no pix", a IA pergunta o endereço, "os dois": o segundo PIX sai', async () => {
+        const itens = [['msg-1', 'cliente', 'quero pagar no pix'], ['m-ia-1', 'ia', 'De qual endereço?'], ['msg-3', 'cliente', 'os dois']];
+        const doTurno = comFalas(['quero pagar no pix', 'os dois'], {
+          mensagensDaJanela: janela(itens), ultimaFalaDaIa: 'De qual endereço?', ultimaFalaDoCliente: 'os dois', messageId: 'msg-3',
+        });
+        expect((await pix({ contratoId: 17402 }, doTurno)).enviado).toBe(true);
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA_B] });
+        expect((await pix({ contratoId: 17402 }, doTurno)).enviado).toBe(true);
+      });
+
+      test('a entrega de outra fatura neste turno não esconde o corte da entrega de um turno anterior', async () => {
+        await entregarA();
+        const FATURA_C = { ...FATURA, id: '11' };
+        const fala = 'manda o pix das outras duas';
+        const itens = [['msg-1', 'cliente', 'quero o boleto'], ['m-ia-1', 'ia', CONFIRMACAO_A], ['msg-3', 'cliente', fala]];
+        const doTurno = comFalas(['quero o boleto', fala], { mensagensDaJanela: janela(itens), ultimaFalaDaIa: CONFIRMACAO_A, ultimaFalaDoCliente: fala, messageId: 'msg-3' });
+        expect((await pix({ contratoId: 17402 }, doTurno)).enviado).toBe(true);
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA_C] });
+        expect(await boleto({ contratoId: 17402 }, doTurno)).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+        expect((await pix({ contratoId: 17402 }, doTurno)).enviado).toBe(true);
+      });
+
+      test('a mensagem atual sem texto (imagem): a última fala com texto, de antes da outra entrega, não vale', async () => {
+        await entregarA();
+        const itens = [['msg-1', 'cliente', 'quero o boleto'], ['m-ia-1', 'ia', CONFIRMACAO_A], ['msg-3', 'cliente', '[cliente enviou uma imagem]']];
+        const r = await boleto({ contratoId: 17402 }, comFalas(['quero o boleto', '[cliente enviou uma imagem]'], {
+          mensagensDaJanela: janela(itens), ultimaFalaDaIa: CONFIRMACAO_A, ultimaFalaDoCliente: 'quero o boleto', messageId: 'msg-3',
+        }));
+        expect(r).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+      });
     });
   });
 

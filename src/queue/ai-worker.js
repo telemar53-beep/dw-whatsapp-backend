@@ -645,7 +645,18 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // Em qualquer turno, "Bom dia" às 14h vira "Boa tarde" (o modelo erra mesmo
   // sabendo a hora); no primeiro turno, além disso, a saudação é garantida —
   // e da segunda resposta em diante ela é REMOVIDA (print 2026-09-16).
-  const textoDoModelo = corrigirPeriodoDaSaudacao(paraWhatsApp(turno.texto));
+  // Fechamento limitado (04/10/2026; avaliação real r4 E11 #5): a liberação em confiança confirmada NESTE turno e a
+  // conclusão da triagem no mesmo turno — a instrução da conclusão prevaleceu e a mensagem final omitiu a liberação. Nesse
+  // caso a mensagem sai pelos fatos: a ação confirmada no turno e a fila relida acima (em espera, triagem concluída, sem
+  // atendente; posse humana, encerramento ou silenciamento já saíram em silêncio). Nenhuma ação nova: sem liberar de novo,
+  // sem concluir de novo.
+  const setorDaFila = turno.triagemConcluida && turno.triagemConcluida.setor;
+  const liberouEConcluiuNoTurno = Boolean(noturnoAtivo && turno.desbloqueioNoTurno && concluiuAqui && !encerrouAqui && setorDaFila);
+  const nomeDaLiberacao = (turno.identidade && turno.identidade.primeiroNome) || (identidade && identidade.primeiroNome) || 'cliente';
+  const textoDoTurno = liberouEConcluiuNoTurno
+    ? `Prontinho, ${nomeDaLiberacao}! O desbloqueio em confiança foi realizado. Seu atendimento ficou registrado para o setor ${setorDaFila} e nossa equipe dá continuidade a partir das ${noturno.retornoAs}.`
+    : turno.texto;
+  const textoDoModelo = corrigirPeriodoDaSaudacao(paraWhatsApp(textoDoTurno));
   // O nome pode ter sido descoberto DENTRO do turno (buscar_cliente com o CPF
   // que o cliente acabou de mandar): a identidade do fim do turno vem antes da
   // que foi resolvida no começo (print 2026-09-17, entrega sem nome nenhum).

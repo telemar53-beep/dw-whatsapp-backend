@@ -1,6 +1,6 @@
 const { findTool, perfilTriagem, temEfeitoReal, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
 const { documentosNoTexto } = require('./documento-pendente');
-const { FERRAMENTAS_DE_COBRANCA, alvoFinanceiro, AMBIGUIDADE } = require('./financial-target');
+const { FERRAMENTAS_DE_COBRANCA, alvoFinanceiro, AMBIGUIDADE, documentosValidos } = require('./financial-target');
 const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
 const { mensagemSegura } = require('./safe-error-log');
@@ -126,31 +126,73 @@ const SEQUENCIA_FALADA = /\b(?:zero|uma?|dois|duas|tres|quatro|cinco|seis|meia|s
 const PALAVRA_DIGITO = /\b(?:zero|uma?|dois|duas|tres|quatro|cinco|seis|meia|sete|oito|nove)\b/g;
 const comDigitosFalados = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   .replace(SEQUENCIA_FALADA, (sequencia) => sequencia.replace(PALAVRA_DIGITO, (palavra) => DIGITO_FALADO[palavra]));
-function documentosDasFalas(falas) {
-  const textos = falas.map(comDigitosFalados);
-  const documentos = new Set([...falas, ...textos].flatMap(documentosNoTexto));
-  for (const texto of textos) {
-    const todos = soDigitos(texto);
-    if (todos.length === 11 || todos.length === 14) documentos.add(todos);
+// Fechamento limitado (04/10/2026; não impeditivo B4 da conferência das pendências, e revisão do delta): somar os dígitos
+// de uma fala inteira, ou de duas falas seguidas, juntava números sem relação (telefone e "12", contrato, dia e valor, um
+// CPF e "123" virando CNPJ), e a igualdade com o número do modelo passava por origem. Igualdade numérica sozinha não prova
+// origem:
+// - CPF ou CNPJ com dígito verificador válido é condição necessária, nunca suficiente: o número ainda tem de estar numa
+//   fala do cliente;
+// - o número escrito de uma vez (o leitor do documento pendente, documentosNoTexto) vale em qualquer fala dele: "Bom dia
+//   52998224725", "manda o boleto da minha mãe 111.444.777-35", "esse cadastro não é meu, é 52998224725";
+// - o número montado de pedaços — com pausas (vírgulas, traço com espaços) ou partido em duas falas seguidas — só vale com
+//   contexto de documento: a palavra cpf/cnpj/documento na fala dele (fora os marcadores do sistema, como "[cliente enviou
+//   um documento]"), a fala ser só o número, ou a resposta anterior da IA marcada como pedido de documento (a marca, não
+//   uma palavra solta no texto da IA). Na junção, o primeiro pedaço não pode já ser um documento completo.
+// Sem a janela em ordem (chamador sem as mensagens), valem as falas do cliente, sem o pedido da IA. Resta (registrado): um
+// número de 11 ou 14 dígitos escrito de uma vez, ou uma junção com contexto, que por acaso tenha dígito verificador válido
+// (cerca de 1 em 100) e que o modelo passe exatamente como documento.
+const EXPRESSAO_NUMERICA = /\d(?:[\s.,\-–/]*\d)*/g;
+const NUMERO_NO_FIM = /(\d(?:[\s.,\-–/]*\d)*)[\s.,;:!?\-–/]*$/;
+const SO_NUMERO = /^[\d\s.,\-–/]+$/;
+const PALAVRA_DE_DOCUMENTO = /\b(?:cpf|cnpj|documento)\b/;
+const MARCADOR_DO_SISTEMA = /\[cliente [^\]]*\]/g;
+const ehDocumento = (digitos) => digitos.length === 11 || digitos.length === 14;
+const documentoValido = (digitos) => documentosValidos(digitos).includes(digitos);
+function janelaDaOrigem(contexto) {
+  if (Array.isArray(contexto.mensagensDaJanela)) return contexto.mensagensDaJanela.filter((m) => m && (m.de === 'cliente' || m.de === 'ia'));
+  return contexto.falasDoCliente.map((texto) => ({ de: 'cliente', texto }));
+}
+function documentosApresentados(contexto) {
+  const documentos = new Set();
+  const falas = [];
+  let pedidoDaIa = false;
+  for (const mensagem of janelaDaOrigem(contexto)) {
+    if (mensagem.de === 'ia') {
+      pedidoDaIa = mensagem.pediuDocumento === true;
+      continue;
+    }
+    const original = String(mensagem.texto || '').replace(MARCADOR_DO_SISTEMA, ' ');
+    const texto = comDigitosFalados(original);
+    for (const d of [...documentosNoTexto(original), ...documentosNoTexto(texto)]) if (documentoValido(d)) documentos.add(d);
+    const comPalavraOuPedido = pedidoDaIa || PALAVRA_DE_DOCUMENTO.test(texto);
+    if (comPalavraOuPedido || SO_NUMERO.test(texto.trim())) {
+      for (const d of (texto.match(EXPRESSAO_NUMERICA) || []).map(soDigitos)) if (documentoValido(d)) documentos.add(d);
+    }
+    falas.push({ texto, comPalavraOuPedido });
   }
-  for (let i = 0; i + 1 < textos.length; i += 1) {
-    const [a, b] = [soDigitos(textos[i]), soDigitos(textos[i + 1])];
-    if (a && b && [11, 14].includes(a.length + b.length)) documentos.add(a + b);
+  for (let i = 0; i + 1 < falas.length; i += 1) {
+    const [a, b] = [falas[i], falas[i + 1]];
+    if (!(a.comPalavraOuPedido || b.comPalavraOuPedido) || !SO_NUMERO.test(b.texto.trim())) continue;
+    const fim = a.texto.match(NUMERO_NO_FIM);
+    if (!fim) continue;
+    const pedaco = soDigitos(fim[1]);
+    const junto = pedaco + soDigitos(b.texto);
+    if (!ehDocumento(pedaco) && documentoValido(junto)) documentos.add(junto);
   }
   return documentos;
 }
 function documentoTemOrigem(documento, contexto) {
   if (!contexto || !Array.isArray(contexto.falasDoCliente)) return true;
   if (documento && documento === documentoDoTitularDaConversa(contexto)) return true;
-  return Boolean(documento) && documentosDasFalas(contexto.falasDoCliente).has(documento);
+  return Boolean(documento) && documentosApresentados(contexto).has(documento);
 }
 
 function instrucaoDoDocumentoSemOrigem(contexto) {
   const identidade = contexto && contexto.identidade;
   const identificado = Boolean(identidade && identidade.nivel === 'forte' && !identidade.contestado);
   return identificado
-    ? 'NADA foi consultado: este documento não foi escrito pelo cliente nesta conversa. Não invente nem complete CPF ou CNPJ. Quem está falando JÁ está identificado: não peça CPF ou CNPJ dele e não consulte de novo; siga com o que ele pediu usando o cadastro que você já tem. Se ele pedir algo de OUTRA pessoa, use só o documento que ele escrever.'
-    : 'NADA foi consultado: este documento não foi escrito pelo cliente nesta conversa. Não invente nem complete CPF ou CNPJ: use só o que ele escrever. Se ele ainda não informou, peça o CPF ou CNPJ do titular.';
+    ? 'NADA foi consultado: este número não foi informado pelo cliente como documento nesta conversa (telefone, contrato, dia ou valor não são documento). Não invente nem complete CPF ou CNPJ. Quem está falando JÁ está identificado: não peça CPF ou CNPJ dele e não consulte de novo; siga com o que ele pediu usando o cadastro que você já tem. Se ele pedir algo de OUTRA pessoa, peça o CPF ou CNPJ dessa pessoa e use só o que ele escrever.'
+    : 'NADA foi consultado: este número não foi informado pelo cliente como documento nesta conversa (telefone, contrato, dia ou valor não são documento). Não invente nem complete CPF ou CNPJ: use só o que ele escrever. Se ele ainda não informou, peça o CPF ou CNPJ do titular.';
 }
 
 function comTimeout(promise, ms) {

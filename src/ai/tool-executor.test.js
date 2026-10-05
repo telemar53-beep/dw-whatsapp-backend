@@ -1064,8 +1064,9 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
 
   test('CPF ditado por extenso (áudio transcrito, com "meia") tem origem', async () => {
     buscar();
-    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é um um um meia meia meia sete sete sete três cinco'] };
-    expect((await executeTool('buscar_cliente', { cpf: '11166677735' }, ctx)).ok).toBe(true);
+    // Fechamento limitado (04/10/2026): um CPF com dígito verificador válido (o dígito verificador passou a ser necessário).
+    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é meia zero um meia meia meia sete sete sete três meia'] };
+    expect((await executeTool('buscar_cliente', { cpf: '60166677736' }, ctx)).ok).toBe(true);
   });
 
   // Revisão do incremento (04/10/2026): formatos reais de áudio e digitação não podem ser recusados como "não escrito".
@@ -1111,5 +1112,166 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
     const { falasDoCliente, ...semFalas } = TRIAGEM_IDENTIFICADA;
     expect((await executeTool('buscar_cliente', { cpf: '11144477735' }, semFalas)).ok).toBe(true);
     expect(executar).toHaveBeenCalled();
+  });
+});
+
+// Fechamento limitado (04/10/2026; não impeditivo B4 da conferência das pendências): números incidentais — telefone,
+// contrato, dia, valor — somados entre si davam um documento "com origem". Igualdade numérica sozinha não prova origem: o
+// número tem de ter sido apresentado como documento (a palavra cpf/cnpj/documento na fala, a IA pedindo o documento na
+// fala anterior a ela, o formato de documento, ou a fala ser só o número). Sem origem, nada é consultado nem gravado.
+describe('tool-executor — buscar_cliente: número incidental não é origem de documento', () => {
+  const real = jest.requireActual('./tool-registry');
+  const IDENTIFICADO = {
+    conversationId: 'c-1', contact: { id: 'ct-1', sgpDocument: '52998224725' }, contracts: [{ id: 17402 }],
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Fulano', client: { id: 9, document: '52998224725' }, contestado: false },
+    ferramentasPermitidas: ['buscar_cliente'],
+  };
+  const SEM_IDENTIDADE = { contact: { id: 'ct-1', sgpDocument: null }, identidade: { nivel: 'none', origem: 'none' }, contracts: [] };
+  const buscar = () => {
+    const executar = jest.fn().mockResolvedValue({ cliente: { nome: 'X' } });
+    findTool.mockImplementation((n) => (n === 'buscar_cliente' ? { ...real.findTool('buscar_cliente'), executar } : real.findTool(n)));
+    isToolEnabled.mockResolvedValue(true);
+    return executar;
+  };
+  // A janela como o orquestrador monta: em ordem, quem falou e o texto (e a marca do pedido de documento da IA).
+  const comJanela = (base, itens) => ({
+    ...base,
+    mensagensDaJanela: itens.map(([de, texto, extra], i) => ({ id: 'm-' + (i + 1), de, texto, ...(extra || {}) })),
+    falasDoCliente: itens.filter(([de]) => de === 'cliente').map(([, texto]) => texto),
+  });
+  beforeEach(() => jest.clearAllMocks());
+
+  test.each([
+    ['telefone e outro número na mesma fala', [['cliente', 'meu telefone é 98888-7777, casa 12']], '98888777712'],
+    ['telefone numa fala e um número na seguinte', [['cliente', 'meu telefone é 98888-7777'], ['cliente', '12']], '98888777712'],
+    ['contrato, dia e valor na mesma fala', [['cliente', 'contrato 17402, dia 10, valor 99,90']], '17402109990'],
+    ['CPF completo numa fala e um número na seguinte (formaria um CNPJ)', [['cliente', 'meu cpf é 529.982.247-25'], ['cliente', '123']], '52998224725123'],
+    ['número de 11 dígitos entre outras palavras, sem ser apresentado como documento', [['cliente', 'meu telefone é 98988887777']], '98988887777'],
+  ])('reprodução — %s: nada é consultado e a identidade confirmada fica como estava', async (_nome, itens, documento) => {
+    const executar = buscar();
+    const ctx = comJanela(IDENTIFICADO, itens);
+    const antes = JSON.stringify({ contact: ctx.contact, identidade: ctx.identidade, contracts: ctx.contracts });
+    const r = await executeTool('buscar_cliente', { cpf: documento }, ctx);
+    expect(r).toMatchObject({ ok: false, motivo: 'document_without_origin' });
+    expect(r.instrucao).toMatch(/JÁ está identificado: não peça CPF ou CNPJ dele/);
+    expect(executar).not.toHaveBeenCalled();
+    expect(JSON.stringify({ contact: ctx.contact, identidade: ctx.identidade, contracts: ctx.contracts })).toBe(antes);
+  });
+
+  test('sem a janela em ordem (só as falas), as concatenações também não valem', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '98888777712' }, { ...IDENTIFICADO, falasDoCliente: ['meu telefone é 98888-7777', '12'] });
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a IA pediu o CPF e ele respondeu com o número e uma saudação', [['ia', 'Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor.'], ['cliente', '52998224725 um abraço']], '52998224725'],
+    ['a IA pediu o CPF e ele ditou com pausas, sem dizer "cpf"', [['ia', 'Qual o CPF do titular?'], ['cliente', '529, 982, 247-25']], '52998224725'],
+    ['a IA pediu (marca do pedido de documento) e ele mandou o número com um agradecimento', [['ia', 'Pode me passar os números do titular?', { pediuDocumento: true }], ['cliente', '52998224725 obrigado']], '52998224725'],
+    ['a IA pediu o CPF (com a marca do pedido) e ele partiu o número em duas falas', [['ia', 'Me informe o CPF do titular, por favor.', { pediuDocumento: true }], ['cliente', '529.982'], ['cliente', '247-25']], '52998224725'],
+    ['"cpf" na fala, com pausas e outro número depois (áudio)', [['cliente', 'meu cpf é 529, 982, 247-25, quero o boleto do dia 10']], '52998224725'],
+    ['a fala é só o número', [['cliente', '52998224725']], '52998224725'],
+    ['CNPJ partido em duas falas, com "cnpj"', [['cliente', 'o cnpj é 11.222.333/0001'], ['cliente', '81']], '11222333000181'],
+    ['ditado por extenso depois de a IA pedir o CPF', [['ia', 'Qual é o seu CPF?'], ['cliente', 'cinco dois nove nove oito dois dois quatro sete dois cinco']], '52998224725'],
+  ])('preservado — %s: tem origem', async (_nome, itens, documento) => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: documento }, comJanela({ ...IDENTIFICADO, ...SEM_IDENTIDADE }, itens));
+    expect(r.ok).toBe(true);
+    expect(executar).toHaveBeenCalled();
+  });
+
+  test('preservado — CPF de outra pessoa no formato de documento, no meio do pedido: consulta de terceiro', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '11144477735' }, comJanela(IDENTIFICADO, [['cliente', 'manda o boleto da minha mãe 111.444.777-35']]));
+    expect(r.ok).toBe(true);
+    expect(executar).toHaveBeenCalledWith(expect.objectContaining({ cpf: '11144477735', titularEOutraPessoa: true }), expect.anything());
+  });
+
+  test('o pedido de documento da IA vale para as falas depois dele, não para uma fala anterior', async () => {
+    const executar = buscar();
+    // 98888777717 tem dígito verificador válido: só o contexto decide.
+    const r = await executeTool('buscar_cliente', { cpf: '98888777717' }, comJanela(IDENTIFICADO, [
+      ['cliente', 'meu telefone é 98888-7777'], ['cliente', '17'], ['ia', 'Me informe o CPF do titular, por favor.', { pediuDocumento: true }], ['cliente', 'é o da minha mãe'],
+    ]));
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test('a recusa diz ao modelo que número de telefone, contrato ou valor não é documento, e manda pedir o de outra pessoa', async () => {
+    buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '98988887777' }, comJanela(IDENTIFICADO, [['cliente', 'meu telefone é 98988887777']]));
+    expect(r.instrucao).toMatch(/telefone, contrato, dia ou valor não são documento/);
+    expect(r.instrucao).toMatch(/peça o CPF ou CNPJ dessa pessoa/);
+  });
+
+  test('o pedido de documento vale até a próxima fala da IA: depois dela, um número incidental não tem origem', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '98888777717' }, comJanela(IDENTIFICADO, [
+      ['ia', 'Qual o CPF do titular?', { pediuDocumento: true }], ['cliente', '52998224725'], ['ia', 'Encontrei seu cadastro. Posso ajudar em algo mais?'],
+      ['cliente', 'meu telefone novo é 98888-7777'], ['cliente', '17'],
+    ]));
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  // Revisão do delta (04/10/2026): o dígito verificador é condição necessária; o número escrito de uma vez vale em qualquer
+  // fala; o montado de pedaços só com contexto — e o contexto não reabre os incidentais.
+  test.each([
+    ['saudação e o número', 'Bom dia 52998224725'],
+    ['pedido e o número', 'segunda via boleto 52998224725'],
+    ['contestação do cadastro', 'esse cadastro não é meu, é 52998224725'],
+  ])('preservado — CPF escrito de uma vez, sem "cpf" e sem pedido (%s): tem origem', async (_nome, fala) => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725' }, comJanela({ ...IDENTIFICADO, ...SEM_IDENTIDADE }, [['cliente', fala]]));
+    expect(r.ok).toBe(true);
+    expect(executar).toHaveBeenCalled();
+  });
+
+  test('preservado — CPF de outra pessoa sem formato, no meio do pedido: consulta de terceiro', async () => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '11144477735' }, comJanela(IDENTIFICADO, [['cliente', 'manda o boleto da minha mãe 11144477735']]));
+    expect(r.ok).toBe(true);
+    expect(executar).toHaveBeenCalledWith(expect.objectContaining({ cpf: '11144477735', titularEOutraPessoa: true }), expect.anything());
+  });
+
+  test.each([
+    ['telefone e um número depois de a IA pedir o CPF', [['ia', 'Me informe o CPF do titular.', { pediuDocumento: true }], ['cliente', 'meu telefone é 98888-7777'], ['cliente', '12']], '98888777712'],
+    ['contrato e outro número depois do pedido', [['ia', 'Me informe o CPF do titular.', { pediuDocumento: true }], ['cliente', 'o contrato é 17402'], ['cliente', '109990']], '17402109990'],
+    ['telefone com a palavra cpf na fala', [['cliente', 'não tenho o cpf aqui, meu número é 98988887777']], '98988887777'],
+    ['CPF e um número com a palavra cpf (formaria um CNPJ)', [['cliente', 'meu cpf 52998224725, 123']], '52998224725123'],
+  ])('reprodução com contexto — %s: dígito verificador inválido, nada é consultado', async (_nome, itens, documento) => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: documento }, comJanela(IDENTIFICADO, itens));
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a fala da IA só cita o CPF, sem a marca de pedido', [['ia', 'Localizei seu cadastro pelo CPF.'], ['cliente', 'meu telefone é 98888-7777'], ['cliente', '17']]],
+    ['o marcador do sistema "[cliente enviou um documento]" não é palavra do cliente', [['cliente', '[cliente enviou um documento] 98888-7777'], ['cliente', '17']]],
+  ])('sem contexto de verdade — %s: a junção, mesmo com dígito verificador válido, não vale', async (_nome, itens) => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '98888777717' }, comJanela(IDENTIFICADO, itens));
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['telefone e outro número na mesma fala, sem contexto', [['cliente', 'meu telefone é 98888-7777, 17']], '98888777717'],
+    ['CPF completo e três dígitos na fala seguinte (formariam um CNPJ válido)', [['cliente', 'meu cpf é 529.982.247-25'], ['cliente', '027']], '52998224725027'],
+  ])('dígito verificador válido por acaso — %s: nada é consultado', async (_nome, itens, documento) => {
+    const executar = buscar();
+    const r = await executeTool('buscar_cliente', { cpf: documento }, comJanela(IDENTIFICADO, itens));
+    expect(r.motivo).toBe('document_without_origin');
+    expect(executar).not.toHaveBeenCalled();
+  });
+
+  test('a junção com a marca de pedido de documento da IA vale (é o contexto que a regra exige)', async () => {
+    buscar();
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725' }, comJanela({ ...IDENTIFICADO, ...SEM_IDENTIDADE }, [
+      ['ia', 'Pode me passar o documento do titular?', { pediuDocumento: true }], ['cliente', '529.982.247'], ['cliente', '25'],
+    ]));
+    expect(r.ok).toBe(true);
   });
 });

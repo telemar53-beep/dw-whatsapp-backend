@@ -1346,6 +1346,46 @@ describe('perfil de triagem', () => {
       expect(r.desbloqueioRealizado).toBe(true);
     });
 
+    // Fechamento limitado (04/10/2026; avaliação real r4 E11 #5): o worker precisa saber que a liberação foi confirmada
+    // NESTE turno (a ferramenta), não só que ela existe (o banco também marca desbloqueioRealizado, de um turno anterior).
+    test('o turno devolve desbloqueioNoTurno só quando a ferramenta liberou neste turno', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'desbloqueio_confianca', arguments: '{"contratoId":26515}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, contexto) => {
+        contexto.desbloqueioRealizado = true;
+        contexto.desbloqueioResultado = { liberado: true, dias: 3 };
+        contexto.desbloqueioConfirmadoNoTurno = true;
+        return { ok: true, resultado: { liberado: true, dias: 3 } };
+      });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(r.desbloqueioNoTurno).toBe(true);
+
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't2', function: { name: 'consultar_status_todos_contratos', arguments: '{}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Seu acesso já foi liberado em confiança.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, contexto) => {
+        contexto.desbloqueioRealizado = true; // lido do banco: liberação de um turno anterior
+        return { ok: true, resultado: {} };
+      });
+      const anterior = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(anterior.desbloqueioRealizado).toBe(true);
+      expect(anterior.desbloqueioNoTurno).toBe(false);
+
+      // Revisão do delta: a primeira tentativa liberou e a segunda, no mesmo turno, foi recusada — a liberação continua.
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't3', function: { name: 'desbloqueio_confianca', arguments: '{"contratoId":26516}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, contexto) => {
+        contexto.desbloqueioRealizado = true;
+        contexto.desbloqueioConfirmadoNoTurno = true;
+        contexto.desbloqueioResultado = { liberado: false, motivo: 'recusado na segunda tentativa' };
+        return { ok: true, resultado: { liberado: false } };
+      });
+      const recusadaDepois = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(recusadaDepois.desbloqueioNoTurno).toBe(true);
+    });
+
     // Falha de gravação dentro da consulta do documento (30/09/2026): o worker precisa saber que a ferramenta não
     // conseguiu gravar o pendente antes de consultar, para gravá-lo ele mesmo e não marcar as entradas do turno.
     test('o turno devolve alvoTerceiroNaoGravado quando a ferramenta marcou o contexto (e false sem marca)', async () => {
@@ -2142,6 +2182,22 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
       const ctx = executeTool.mock.calls[0][2];
       expect(ctx.falasDoCliente).toEqual(['oi', 'pode ser no pix']);
       expect(ctx.ultimaFalaDaIa).toBe('Você prefere boleto ou PIX?');
+    });
+
+    // Fechamento limitado (04/10/2026): a janela em ordem, com quem falou, o id e a marca do pedido de documento. A origem
+    // do documento e o meio de outra fatura precisam saber o que veio antes e depois de cada fala.
+    test('a janela em ordem (quem falou, o texto, o id e a marca do pedido de documento) chega às ferramentas', async () => {
+      roteiro(chamada('consultar_status_todos_contratos'), final('Certo.'));
+      const pedido = { ...saida('Me informe seu CPF ou CNPJ, por favor.'), id: 'out-7', metadata: { pedidoDeDocumento: 'titular' } };
+      await turno(['oi', pedido, 'pode ser no pix']);
+      const ctx = executeTool.mock.calls[0][2];
+      expect(ctx.mensagensDaJanela.map(({ de, texto, pediuDocumento }) => ({ de, texto, pediuDocumento }))).toEqual([
+        { de: 'cliente', texto: 'oi', pediuDocumento: false },
+        { de: 'ia', texto: 'Me informe seu CPF ou CNPJ, por favor.', pediuDocumento: true },
+        { de: 'cliente', texto: 'pode ser no pix', pediuDocumento: false },
+      ]);
+      expect(ctx.mensagensDaJanela[1].id).toBe('out-7');
+      expect(ctx.mensagensDaJanela.every((m) => m.id)).toBe(true);
     });
 
     test('"entrou na fila" depois de uma conclusão que falhou sai, e entra a frase de transferência não confirmada', async () => {

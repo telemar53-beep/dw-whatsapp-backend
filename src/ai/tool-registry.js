@@ -32,6 +32,7 @@ const { analisarComprovante } = require('./receipt-analysis');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestEnqueuedDelivery, findEnqueuedDeliveryOfInvoice,
+  findLatestEnqueuedDeliveryOfOtherInvoice,
 } = require('./billing-delivery.repository');
 const {
   hojeEmSaoPaulo, analisarSituacaoFinanceiraContrato, decidirCobranca, pagamentoConfirmadoDoTitulo, descreverReativacao,
@@ -788,14 +789,59 @@ const MEIO_CITADO = {
   boleto: /\bboletos?\b|\bcodigo de barras\b|\blinha digitavel\b/,
 };
 const NOME_DO_MEIO = { pix: 'PIX', boleto: 'boleto' };
+// As falas do cliente no turno atual: com a janela em ordem, as mensagens dele depois da última resposta da IA (uma imagem
+// sem legenda ou um áudio não transcrito também são do turno); sem a janela, a última fala com texto.
+function falasDoTurno(contexto) {
+  const janela = Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela.filter(Boolean) : null;
+  if (janela) {
+    let inicio = janela.length;
+    while (inicio > 0 && janela[inicio - 1].de === 'cliente') inicio -= 1;
+    return janela.slice(inicio).map((m) => m.texto).filter(Boolean);
+  }
+  const ultima = contexto.ultimaFalaDoCliente || contexto.ultimaFala;
+  return ultima ? [ultima] : [];
+}
+
 async function meioNaoEstabelecido({ meio, tool, contexto, fatura, outroDisponivel }) {
   if (!contexto || !Array.isArray(contexto.falasDoCliente)) return null;
   const cita = (texto, m) => MEIO_CITADO[m].test(normalizarFala(texto));
-  if (contexto.falasDoCliente.some((fala) => cita(fala, meio))) return null;
   const outro = meio === 'pix' ? 'boleto' : 'pix';
-  const daIa = contexto.ultimaFalaDaIa;
-  if (daIa && cita(daIa, meio) && !(outroDisponivel && cita(daIa, outro))) return null;
   const invoiceId = identificadorDeFatura(fatura);
+  // Fechamento limitado (04/10/2026): o meio escolhido para OUTRA fatura não estabelece a escolha desta. Quando outra
+  // fatura já saiu nesta conversa, pedida por uma mensagem anterior à deste turno, só vale o que o cliente disse depois da
+  // mensagem que a pediu; e a fala da IA só vale se veio depois de uma fala dele posterior àquela entrega (a confirmação da
+  // própria entrega, "Enviei acima o boleto", não vale). Outra fatura que saiu NESTE turno não corta: o pedido é o mesmo
+  // ("os boletos das duas casas", "os dois"). Sem conseguir ler a outra entrega, ou sem a janela em ordem, só vale o que
+  // ele disse no turno atual. O reenvio e a continuidade da MESMA fatura seguem pela entrega anterior dela (abaixo).
+  let falas = contexto.falasDoCliente;
+  let daIa = contexto.ultimaFalaDaIa;
+  let deOutraFatura = false;
+  if (invoiceId) {
+    let outra = null;
+    let lida = true;
+    try {
+      outra = await findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId: contexto.conversationId, invoiceId, exceptoMensagem: contexto.messageId || null });
+    } catch (err) {
+      lida = false;
+      console.error(`${tool}: entrega de outra fatura não lida na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    }
+    if (outra || !lida) {
+      deOutraFatura = Boolean(outra);
+      const janela = outra && Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela.filter(Boolean) : null;
+      if (janela) {
+        const corte = janela.findIndex((m) => String(m.id) === String(outra.messageId));
+        const depois = corte >= 0 ? janela.slice(corte + 1) : janela;
+        const primeiraDele = depois.findIndex((m) => m.de === 'cliente');
+        falas = depois.filter((m) => m.de === 'cliente').map((m) => m.texto);
+        daIa = primeiraDele >= 0 ? (depois.slice(primeiraDele + 1).filter((m) => m.de === 'ia').map((m) => m.texto).pop() || null) : null;
+      } else {
+        falas = falasDoTurno(contexto);
+        daIa = null;
+      }
+    }
+  }
+  if (falas.some((fala) => cita(fala, meio))) return null;
+  if (daIa && cita(daIa, meio) && !(outroDisponivel && cita(daIa, outro))) return null;
   if (invoiceId) {
     try {
       if (await findEnqueuedDeliveryOfInvoice({ conversationId: contexto.conversationId, tool, invoiceId })) return null;
@@ -808,11 +854,14 @@ async function meioNaoEstabelecido({ meio, tool, contexto, fatura, outroDisponiv
   if (contexto.triagem && contexto.triagem.forcarConclusao) {
     instrucao = 'NADA foi enviado: o cliente ainda não escolheu o meio de pagamento, e esta é a última resposta da triagem. Não pergunte: chame concluir_triagem para o setor que cuidar de financeiro, com "meio de pagamento não escolhido" no resumo.';
   } else if (outroDisponivel) {
-    instrucao = 'NADA foi enviado: o cliente ainda não escolheu o meio de pagamento nesta conversa. Pergunte só: "Você prefere boleto ou PIX?" e espere a resposta dele. Não escolha por ele e não diga que enviou.';
+    instrucao = deOutraFatura
+      ? 'NADA foi enviado: o meio que saiu antes nesta conversa foi o de outra fatura e não vale para esta. Pergunte só: "Você prefere boleto ou PIX?" e espere a resposta dele. Não escolha por ele e não diga que enviou.'
+      : 'NADA foi enviado: o cliente ainda não escolheu o meio de pagamento nesta conversa. Pergunte só: "Você prefere boleto ou PIX?" e espere a resposta dele. Não escolha por ele e não diga que enviou.';
   } else {
     instrucao = `NADA foi enviado: o cliente ainda não escolheu o meio de pagamento, e esta fatura só tem o ${NOME_DO_MEIO[meio]} disponível agora. Pergunte só se pode enviar o ${NOME_DO_MEIO[meio]} desta fatura e espere a resposta dele. Não diga que enviou.`;
   }
-  return { enviado: false, meioNaoEscolhido: true, motivo: 'O cliente ainda não escolheu o meio de pagamento nesta conversa.', instrucao };
+  const motivo = deOutraFatura ? 'O meio escolhido antes foi para outra fatura.' : 'O cliente ainda não escolheu o meio de pagamento nesta conversa.';
+  return { enviado: false, meioNaoEscolhido: true, motivo, instrucao };
 }
 
 function respostaDeDuplicata(registro, item, messageId) {
@@ -1885,10 +1934,20 @@ const TOOLS = [
 
       const entrega = await findLatestEnqueuedDelivery(contexto.conversationId);
       if (!entrega) {
+        // Fechamento limitado (04/10/2026; avaliação real r4 E13 #6, e revisão do delta): "manda o boleto, ela está cortada"
+        // veio para cá, e esta instrução levou a IA a perguntar o meio a quem já tinha pedido o boleto. Quando o turno cita UM
+        // meio, a instrução diz o que fazer se for pedido — sem afirmar que é: "já paguei o boleto" também cita o meio, e
+        // quem diz que pagou segue o caminho de quem pagou (acima). Sem meio no turno (ou com os dois), a pergunta curta.
+        const doTurno = normalizarFala(falasDoTurno(contexto).join(' '));
+        const citaBoleto = MEIO_CITADO.boleto.test(doTurno);
+        const citaPix = MEIO_CITADO.pix.test(doTurno);
+        const querPagar = citaBoleto !== citaPix
+          ? `Se ele pediu o ${citaBoleto ? 'boleto' : 'PIX'} e ainda não pagou, não conclua: chame ${citaBoleto ? 'enviar_boleto' : 'gerar_pix'} agora, sem perguntar o meio de novo.`
+          : 'Se ele ainda não pagou e quer pagar, não conclua: entregue o meio que ele escolheu ou pergunte curto se prefere boleto ou PIX.';
         return {
           pagamentoConfirmado: false,
           motivo: 'Nenhum boleto ou PIX foi enviado nesta conversa.',
-          instrucao: 'Não há cobrança enviada nesta conversa para conferir. NÃO diga que o pagamento foi confirmado. Se o cliente pagou por outro meio, chame concluir_triagem para o setor que cuidar de financeiro e, só depois de a conclusão confirmar (concluido: true), diga que a equipe vai conferir. Se ele ainda não pagou e quer pagar, não conclua: entregue o meio que ele escolheu ou pergunte curto se prefere boleto ou PIX.',
+          instrucao: `Não há cobrança enviada nesta conversa para conferir. NÃO diga que o pagamento foi confirmado. Se o cliente pagou por outro meio, chame concluir_triagem para o setor que cuidar de financeiro e, só depois de a conclusão confirmar (concluido: true), diga que a equipe vai conferir. ${querPagar}`,
         };
       }
       const contratoId = entrega.contractId;
@@ -2232,6 +2291,8 @@ const TOOLS = [
         // deixar a frase passar. E o resultado vai para o resumo da fila.
         contexto.desbloqueioRealizado = true;
         contexto.desbloqueioResultado = { liberado: true, dias: resposta.dias || null };
+        // Fechamento limitado (04/10/2026): a marca da liberação confirmada neste turno; uma recusa seguinte não a apaga.
+        contexto.desbloqueioConfirmadoNoTurno = true;
         resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila${contexto.comprovante ? ' com o comprovante' : ''} para acompanhamento. Você consegue testar se a internet voltou?" — e ${concluirPara} NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
       }
       return resposta;

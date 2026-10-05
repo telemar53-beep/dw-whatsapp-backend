@@ -512,11 +512,14 @@ describe('PAGAMENTO — conferir_pagamento relê o MESMO título no SGP', () => 
 
   test.each([
     ['sem meio na mensagem', 'quero pagar minha fatura'],
-    ['os dois meios na mesma mensagem (não é escolha)', 'pode ser boleto ou pix, tanto faz'],
-  ])('20e. sem cobrança enviada, %s: a pergunta curta continua', async (_nome, fala) => {
+    // Revisão da entrega 1: "tanto faz" cita os dois meios — a ferramenta chamada entrega o meio dela (a trava aceita).
+    ['os dois meios citados, sem preferência', 'pode ser boleto ou pix, tanto faz'],
+  ])('20e. sem cobrança enviada, %s: a instrução manda a ferramenta de cobrança dizer o que existe, sem perguntar o meio por conta própria', async (_nome, fala) => {
     findLatestEnqueuedDelivery.mockResolvedValue(null);
     const r = await conferir(ctx({ ultimaFalaDoCliente: fala }));
-    expect(r.instrucao).toMatch(/pergunte curto se prefere boleto ou PIX/);
+    // Comportamento da IA (05/10/2026; E6 #1): a pergunta "boleto ou PIX" sai da ferramenta de cobrança, que sabe se os meios existem.
+    expect(r.instrucao).toMatch(/chame a ferramenta de cobrança/);
+    expect(r.instrucao).not.toMatch(/prefere boleto ou PIX/);
     expect(r.instrucao).not.toMatch(/agora, sem perguntar/);
   });
 
@@ -536,7 +539,20 @@ describe('PAGAMENTO — conferir_pagamento relê o MESMO título no SGP', () => 
     const r = await conferir(ctx({ ultimaFalaDoCliente: 'quero o boleto', mensagensDaJanela: [
       { id: 'm1', de: 'cliente', texto: 'quero o boleto' }, { id: 'm2', de: 'ia', texto: 'Posso ajudar em algo mais?' }, { id: 'm3', de: 'cliente', texto: 'já paguei, pode ver?' },
     ] }));
-    expect(r.instrucao).toMatch(/pergunte curto se prefere boleto ou PIX/);
+    expect(r.instrucao).toMatch(/chame a ferramenta de cobrança/);
+    expect(r.instrucao).not.toMatch(/Se ele pediu o boleto/);
+  });
+
+  // Comportamento da IA (05/10/2026; avaliação real E6 #1): sem PIX e sem boleto na fatura, "E agora, como eu pago?" veio
+  // para cá, e a instrução mandou perguntar "boleto ou PIX". A instrução não sabe a disponibilidade: manda chamar a
+  // ferramenta de cobrança, que sabe (os dois meios: pergunta; um: oferece só ele; nenhum: diz que não há outra forma).
+  test('20h. reprodução E6 #1 — "E agora, como eu pago?": a instrução não manda perguntar o meio; manda a ferramenta de cobrança dizer o que existe', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'E agora, como eu pago?' }));
+    expect(r.instrucao).not.toMatch(/boleto ou PIX/);
+    expect(r.instrucao).toMatch(/chame a ferramenta de cobrança \(enviar_boleto ou gerar_pix\) e siga a instrução dela/);
+    expect(r.instrucao).toMatch(/é ela que diz quais meios existem nesta fatura/);
+    expect(r.instrucao).toMatch(/Não pergunte nem ofereça um meio que a ferramenta não confirmou/);
   });
 
   test('21. cliente diz "paguei" e o título continua Gerado: NÃO confirma', async () => {

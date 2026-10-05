@@ -897,6 +897,37 @@ function respostaDeDuplicata(registro, item, messageId) {
  * oferecido; ou não há outra forma de pagamento por aqui. Nada é enviado nem agendado. Falha ao ler o registro: a
  * entrega anterior não é afirmada (cai na oferta, que só envia se ele aceitar).
  */
+/**
+ * Comportamento da IA (05/10/2026; revisão da entrega 1): o boleto sem link voltava ao modelo sem instrução — e a
+ * instrução do conferir_pagamento sem cobrança manda a ferramenta de cobrança dizer o que existe na fatura. Simétrica à do
+ * PIX sem código: o PIX desta mesma fatura já saiu; o PIX dela existe e pode ser oferecido; ou não há outra forma de
+ * pagamento por aqui. Nada é enviado nem agendado. Falha ao ler o registro: o envio anterior não é afirmado.
+ */
+async function instrucaoDoBoletoSemLink(contexto, contratoId, fatura) {
+  const naoHouve = 'Esta fatura não tem boleto disponível para enviar agora: NÃO houve envio de boleto. Não prometa enviar o boleto depois.';
+  let pixSaiu = false;
+  try {
+    pixSaiu = Boolean(await findEnqueuedDeliveryOfInvoice({ conversationId: contexto.conversationId, tool: 'gerar_pix', invoiceId: fatura.id }));
+  } catch (err) {
+    console.error(`enviar_boleto: entrega do PIX não lida na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+  }
+  if (pixSaiu) {
+    return `${naoHouve} O PIX desta mesma fatura já foi enviado acima nesta conversa: diga, curto, que não há boleto para esta fatura agora e que ele pode pagar pelo PIX que está logo acima. Não reenvie o PIX sem ele pedir.`;
+  }
+  if (fatura.pixCode) {
+    return `${naoHouve} Diga isso em uma frase e ofereça o PIX desta mesma fatura; só gere (gerar_pix${contratoId ? ` com contratoId ${contratoId}` : ''}) se ele aceitar.`;
+  }
+  return `${naoHouve} Também não há PIX desta fatura que eu consiga enviar agora. Diga isso com honestidade: não há outra forma de pagamento para oferecer por aqui agora. Se ele quiser, pode pedir para falar com um atendente. Não invente outro caminho.`;
+}
+
+// Comportamento da IA (05/10/2026): a fatura da oferta do boleto marcada na ÚLTIMA resposta da IA (a anterior a esta
+// mensagem do cliente), ou null. A marca vem da metadata da mensagem (worker), lida na janela em ordem.
+function ofertaDoBoletoNaUltimaResposta(contexto) {
+  const janela = contexto && Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela.filter(Boolean) : [];
+  const ultima = [...janela].reverse().find((m) => m.de === 'ia');
+  return ultima && ultima.ofertaDoBoleto && ultima.ofertaDoBoleto.faturaId != null ? String(ultima.ofertaDoBoleto.faturaId) : null;
+}
+
 async function instrucaoDoPixSemCodigo(contexto, contratoId, fatura) {
   const naoHouve = 'Esta fatura não tem código PIX disponível no sistema agora: NÃO houve envio de PIX. Não prometa gerar o PIX depois.';
   let boletoSaiu = false;
@@ -910,7 +941,18 @@ async function instrucaoDoPixSemCodigo(contexto, contratoId, fatura) {
   }
   // Revisão (04/10/2026): enviar_boleto exige o link do PDF; só a linha digitável não basta para oferecer.
   if (fatura.boletoLink) {
-    return `${naoHouve} Diga isso em uma frase e ofereça enviar o boleto desta mesma fatura; só envie (enviar_boleto${contratoId ? ` com contratoId ${contratoId}` : ''}) se ele aceitar.`;
+    // Comportamento da IA (05/10/2026; avaliação real E15 #1): o cliente aceitou a oferta do boleto ("Pode ser, manda sim")
+    // e o modelo chamou o PIX de novo; esta instrução mandava oferecer outra vez. A oferta fica marcada na resposta que a
+    // fez (metadata da mensagem, com a fatura); quando a resposta anterior da IA é a oferta desta mesma fatura, a instrução
+    // diz que a oferta já foi feita. Se a mensagem atual aceita, quem chama enviar_boleto é o modelo — esta ferramenta não
+    // envia nada; se ele recusou ou insiste no PIX, a oferta não se repete.
+    const faturaId = String(identificadorDeFatura(fatura));
+    contexto.ofertaDoBoleto = { faturaId };
+    const comContrato = contratoId ? ` com contratoId ${contratoId}` : '';
+    if (ofertaDoBoletoNaUltimaResposta(contexto) === faturaId) {
+      return `${naoHouve} Você já ofereceu o boleto desta mesma fatura na resposta anterior. Se a mensagem atual dele aceita a oferta, chame enviar_boleto${comContrato} agora — não ofereça de novo. Se ele recusou ou insiste no PIX, diga só que o PIX desta fatura não está disponível agora; não repita a oferta.`;
+    }
+    return `${naoHouve} Diga isso em uma frase e ofereça enviar o boleto desta mesma fatura; só envie (enviar_boleto${comContrato}) se ele aceitar.`;
   }
   return `${naoHouve} Também não há boleto desta fatura que eu consiga enviar agora. Diga isso com honestidade: não há outra forma de pagamento para oferecer por aqui agora. Se ele quiser, pode pedir para falar com um atendente. Não invente outro caminho.`;
 }
@@ -1943,7 +1985,10 @@ const TOOLS = [
         const citaPix = MEIO_CITADO.pix.test(doTurno);
         const querPagar = citaBoleto !== citaPix
           ? `Se ele pediu o ${citaBoleto ? 'boleto' : 'PIX'} e ainda não pagou, não conclua: chame ${citaBoleto ? 'enviar_boleto' : 'gerar_pix'} agora, sem perguntar o meio de novo.`
-          : 'Se ele ainda não pagou e quer pagar, não conclua: entregue o meio que ele escolheu ou pergunte curto se prefere boleto ou PIX.';
+          // Comportamento da IA (05/10/2026; avaliação real E6 #1): sem PIX e sem boleto na fatura, esta instrução mandou
+          // perguntar "boleto ou PIX". Ela não sabe o que existe na fatura; a ferramenta de cobrança sabe (os dois meios:
+          // pergunta; um: oferece só ele; nenhum: diz que não há outra forma por aqui).
+          : 'Se ele ainda não pagou e quer pagar, não conclua: chame a ferramenta de cobrança (enviar_boleto ou gerar_pix) e siga a instrução dela — é ela que diz quais meios existem nesta fatura. Não pergunte nem ofereça um meio que a ferramenta não confirmou.';
         return {
           pagamentoConfirmado: false,
           motivo: 'Nenhum boleto ou PIX foi enviado nesta conversa.',
@@ -2474,7 +2519,7 @@ const TOOLS = [
       try {
         if (!primeira.boletoLink) {
           await liberarEntrega(claimId, contexto.conversationId, 'enviar_boleto sem link');
-          return { enviado: false, motivo: 'Boleto sem link para download' };
+          return { enviado: false, motivo: 'Boleto sem link para download', instrucao: await instrucaoDoBoletoSemLink(contexto, busca.contratoId, primeira) };
         }
         const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
         mediaPath = await saveMediaFile(buffer, '.pdf');
@@ -2524,6 +2569,9 @@ const TOOLS = [
       // Mesma razão de gerar_pix: a flag persistida é o que autoriza
       // encerrar_atendimento num turno posterior à entrega. 2+ à noite: reativação.
       await marcarDepoisDaEntrega(gate, contexto);
+      // Comportamento da IA (05/10/2026; revisão da entrega 1): o boleto entregue consome a oferta — a resposta que o confirma
+      // não sai marcada como oferta, e o turno não herda a da resposta anterior.
+      contexto.ofertaDoBoleto = null;
       const reativacaoDepois = Boolean(gate.decisao && gate.decisao.reativacaoDepois);
       // contratoUsado só aparece quando a fatura veio de OUTRO contrato do
       // mesmo cliente. O modelo de frase do dono sai DAQUI, e só depois do

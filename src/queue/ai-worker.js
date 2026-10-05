@@ -657,6 +657,8 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     ? `Prontinho, ${nomeDaLiberacao}! O desbloqueio em confiança foi realizado. Seu atendimento ficou registrado para o setor ${setorDaFila} e nossa equipe dá continuidade a partir das ${noturno.retornoAs}.`
     : turno.texto;
   const textoDoModelo = corrigirPeriodoDaSaudacao(paraWhatsApp(textoDoTurno));
+  // Revisão da entrega 1: a marca da oferta foi calculada sobre o texto do modelo; a mensagem composta pelos fatos não a leva.
+  const ofertaDaMensagem = textoDoTurno === turno.texto ? turno.ofertaDoBoleto : null;
   // O nome pode ter sido descoberto DENTRO do turno (buscar_cliente com o CPF
   // que o cliente acabou de mandar): a identidade do fim do turno vem antes da
   // que foi resolvida no começo (print 2026-09-17, entrega sem nome nenhum).
@@ -675,7 +677,11 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // CONFIRMAÇÃO do terceiro não viaja aqui: é fato do sistema, lido do escopo persistido.)
     await enqueueOutboundMessage({
       conversationId: conversation.id, channelId: conversation.channelId, content: texto, sentBy: 'ai',
-      ...(turno.pedidoDeDocumento ? { metadata: { pedidoDeDocumento: turno.pedidoDeDocumento } } : {}),
+      // Comportamento da IA (05/10/2026): a oferta do boleto também viaja na metadata (o próximo turno sabe que foi feita).
+      ...((turno.pedidoDeDocumento || ofertaDaMensagem) ? { metadata: {
+        ...(turno.pedidoDeDocumento ? { pedidoDeDocumento: turno.pedidoDeDocumento } : {}),
+        ...(ofertaDaMensagem ? { ofertaDoBoleto: ofertaDaMensagem } : {}),
+      } } : {}),
     });
   } else if (noturnoAtivo && turno.desbloqueioRealizado && !concluiuAqui && !encerrouAqui) {
     // O turno estourou o tempo (TURNO_MAX_MS) DEPOIS de a liberação acontecer

@@ -474,6 +474,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         .map((m) => ({
           id: m.id, de: m.direction === 'inbound' ? 'cliente' : 'ia', texto: conteudoParaModelo(m, perfil) || '',
           pediuDocumento: Boolean(m.metadata && m.metadata.pedidoDeDocumento),
+          // Comportamento da IA (05/10/2026): a oferta do boleto marcada na resposta da IA (gerar_pix sem código).
+          ofertaDoBoleto: (m.metadata && m.metadata.ofertaDoBoleto) || null,
         })),
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
       // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
@@ -1023,7 +1025,22 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // Documento pendente: a resposta final pede o CPF/CNPJ? O worker grava isto na metadata da
     // própria mensagem — é o registro do pedido, com DE QUEM é o documento pedido.
     pedidoDeDocumento: perfil === 'triagem' && texto && pedeDocumento(texto) ? { alvo: alvoDoPedido(contexto, texto) } : null,
+    // Comportamento da IA (05/10/2026; E15 #1): a oferta do boleto que a ferramenta mandou fazer, só se a resposta final de
+    // fato cita o boleto. O worker grava isto na metadata da mensagem; o próximo turno lê na janela.
+    ofertaDoBoleto: perfil === 'triagem' && texto && CITA_BOLETO.test(texto) ? ofertaDoBoletoDoTurno(contexto) : null,
   };
+}
+
+// A resposta cita o boleto (com os sinônimos da trava do meio).
+const CITA_BOLETO = /\bboletos?\b|\bc[oó]digo de barras\b|\blinha digit[aá]vel\b/i;
+// A oferta do boleto do turno: a que a ferramenta marcou; null quando o boleto foi entregue (a ferramenta apaga); sem nenhuma
+// das duas (turno sem ferramenta de cobrança, como "por que não tem PIX?"), a da última resposta da IA, herdada — a resposta
+// que cita o boleto de novo continua a mesma oferta (revisão da entrega 1).
+function ofertaDoBoletoDoTurno(contexto) {
+  if (contexto.ofertaDoBoleto !== undefined) return contexto.ofertaDoBoleto || null;
+  const janela = Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela : [];
+  const ultima = [...janela].reverse().find((m) => m && m.de === 'ia');
+  return (ultima && ultima.ofertaDoBoleto) || null;
 }
 
 module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA, ferramentasDaTriagem, afirmaLiberacao, afirmaFila, afirmaEnvio };

@@ -252,6 +252,13 @@ describe('ai-worker — triagem', () => {
       expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ sentBy: 'ai', metadata: { ofertaDoBoleto: { faturaId: '9' } } }));
     });
 
+    // D8 (06/10/2026): a marca com a lista das faturas sai inteira na metadata (duas ofertas pendentes).
+    test('a marca com duas ofertas pendentes sai com a lista inteira', async () => {
+      runAiTurn.mockResolvedValue({ texto: 'Para as duas faturas não há PIX agora. Posso te enviar os boletos delas?', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: null, ofertaDoBoleto: { faturaId: '10', faturaIds: ['9', '10'] } });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ metadata: { ofertaDoBoleto: { faturaId: '10', faturaIds: ['9', '10'] } } }));
+    });
+
     test('com o pedido de documento no mesmo turno, as duas marcas saem juntas', async () => {
       runAiTurn.mockResolvedValue({ texto: 'Posso te enviar o boleto? E me informe o CPF do titular.', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: { alvo: 'principal' }, ofertaDoBoleto: { faturaId: '9' } });
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });

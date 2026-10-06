@@ -93,6 +93,20 @@ describe('promessas-sem-evidencia', () => {
       'Assim que o pagamento que você enviou for compensado, vou verificar a liberação.',
       'Assim que o PIX que você me mandou cair, vou conferir o seu contrato.',
       'Assim que o pagamento constar, vou conferir; me chama aqui se precisar.',
+      // Comportamento da IA (05/10/2026; conferência estreita das pendências): o agradecimento pelo que ele já fez não é
+      // pedido; um pedido em outra oração (";") não condiciona a verificação; e "eu confiro" no presente é promessa futura.
+      'Obrigado por me enviar o comprovante, assim que o pagamento constar vou verificar a liberação.',
+      'Você acabou de me enviar o comprovante, e assim que o pagamento constar vou conferir o contrato.',
+      'Me avise se tiver dúvida; assim que o pagamento constar, vou verificar o contrato.',
+      'Assim que o pagamento constar, eu confiro a liberação.',
+      'Quando o pagamento cair, eu verifico seu contrato.',
+      // Revisão do delta (05/10/2026): "já" antes do verbo do gatilho não tira a promessa.
+      'Assim que o pagamento já constar, eu confiro a liberação.',
+      // Conferência estreita (05/10/2026): agradecimento com "de" ou com "você" também não é pedido.
+      'Obrigado por lembrar de me enviar o comprovante, assim que o pagamento constar vou verificar a liberação.',
+      'Agradeço a gentileza de me enviar o comprovante, assim que o pagamento constar eu confiro.',
+      'Você acabou agora de me enviar o comprovante, e assim que o pagamento constar vou conferir.',
+      'Obrigado por você me enviar o comprovante, assim que o pagamento constar vou verificar a liberação.',
     ])('"%s": verificação futura sem mecanismo sai', (t) => {
       expect(promessasSemEvidencia(t, {})).toEqual(['promessa_da_ia']);
     });
@@ -102,6 +116,25 @@ describe('promessas-sem-evidencia', () => {
       'Assim que você me mandar o comprovante, eu confiro.',
       'Assim que o pagamento for feito, me avise por aqui que eu vou conferir.',
       'Assim que o PIX cair, me manda o comprovante que vamos verificar.',
+      // Comportamento da IA (05/10/2026): o pedido na mesma oração continua valendo, e a frase segura do sistema fica.
+      'Quando o pagamento constar, me avise que eu confiro.',
+      'Assim que o pagamento for feito, me avise; eu vou conferir por aqui.',
+      'Quando quiser, eu confiro o pagamento por aqui.',
+      // Revisão do delta (05/10/2026): "não deixe de me mandar" é pedido (só "por me" e "acabou de me" agradecem); e o
+      // pagamento no passado ("quando o pix foi feito") é o que o cliente fez, não o gatilho de constar no sistema.
+      'Não deixe de me mandar o comprovante assim que o pagamento for feito, que eu vou conferir.',
+      'Me diga quando o pix foi feito, que eu confiro.',
+      'Me diga quando o PIX já foi feito, que eu confiro.',
+      // Conferência estreita (05/10/2026): pedido com "de" que não é agradecimento, pedido depois do agradecimento
+      // separado por vírgula, e os pedidos "me diga/informe/confirme".
+      'Tenha a gentileza de me enviar o comprovante assim que o pagamento for feito, que eu vou conferir.',
+      'Obrigado pela paciência, me avise quando o pagamento for feito que eu confiro.',
+      'Me diga quando o pix for feito, que eu confiro.',
+      'Me informe quando o pagamento for feito, que eu confiro.',
+      'Me confirme quando o pix for feito, que eu verifico.',
+      // Sem verbo de pedido: só o passado ("foi", "já foi") tira o gatilho.
+      'Obrigado por avisar quando o pix foi feito, eu confiro por aqui.',
+      'Você disse quando o PIX já foi feito, então eu confiro agora.',
     ])('"%s": próximo passo que depende do cliente fica', (t) => {
       expect(promessasSemEvidencia(t, {})).toEqual([]);
     });

@@ -2070,6 +2070,55 @@ describe('enviar_boleto', () => {
       expect(c.ofertaDoBoleto).toBeNull();
     });
 
+    // Comportamento da IA (06/10/2026; limitação da entrega 1): o boleto entregue apagava a oferta mesmo quando ela era de
+    // OUTRA fatura — a oferta pendente perdia a marca, e a aceitação seguinte podia ouvir a oferta de novo.
+    test('(d10) o boleto de outra fatura entregue não consome a oferta marcada neste turno', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...SEM_PIX_COM_BOLETO, id: '10' }] });
+      sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+      const c = { ...ctx(), ofertaDoBoleto: { faturaId: '9' } };
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+      expect(r.enviado).toBe(true);
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '9' });
+    });
+
+    test('(d11) o boleto de outra fatura entregue não consome a oferta herdada da resposta anterior', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...SEM_PIX_COM_BOLETO, id: '10' }] });
+      sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+      expect(r.enviado).toBe(true);
+      expect(c.ofertaDoBoleto).toBeUndefined();
+    });
+
+    // Revisão estreita (06/10/2026): a marca do turno de outra fatura fica mesmo com uma oferta herdada da fatura entregue, e o
+    // id numérico da fatura compara com a marca (texto) pelo mesmo identificador.
+    test('(d13) marca do turno de outra fatura e oferta herdada da fatura entregue: fica a marca do turno', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '9' }), ofertaDoBoleto: { faturaId: '10' } };
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+      expect(r.enviado).toBe(true);
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '10' });
+    });
+
+    test('(d14) id numérico da fatura entregue e oferta herdada em texto: a oferta é consumida', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...SEM_PIX_COM_BOLETO, id: 9 }] });
+      sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+      expect(r.enviado).toBe(true);
+      expect(c.ofertaDoBoleto).toBeNull();
+    });
+
+    test('(d12) o boleto da fatura da oferta herdada consome a oferta', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+      expect(r.enviado).toBe(true);
+      expect(c.ofertaDoBoleto).toBeNull();
+    });
+
     test('sem fatura em aberto: sucesso false', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
       const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());

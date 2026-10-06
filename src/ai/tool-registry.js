@@ -2570,8 +2570,12 @@ const TOOLS = [
       // encerrar_atendimento num turno posterior à entrega. 2+ à noite: reativação.
       await marcarDepoisDaEntrega(gate, contexto);
       // Comportamento da IA (05/10/2026; revisão da entrega 1): o boleto entregue consome a oferta — a resposta que o confirma
-      // não sai marcada como oferta, e o turno não herda a da resposta anterior.
-      contexto.ofertaDoBoleto = null;
+      // não sai marcada como oferta, e o turno não herda a da resposta anterior. 06/10: só a oferta DESTA fatura; a de outra
+      // fatura (marcada neste turno ou herdada) continua pendente.
+      const ofertaPendente = contexto.ofertaDoBoleto !== undefined
+        ? (contexto.ofertaDoBoleto && contexto.ofertaDoBoleto.faturaId != null ? String(contexto.ofertaDoBoleto.faturaId) : null)
+        : ofertaDoBoletoNaUltimaResposta(contexto);
+      if (ofertaPendente === null || ofertaPendente === identificadorDeFatura(primeira)) contexto.ofertaDoBoleto = null;
       const reativacaoDepois = Boolean(gate.decisao && gate.decisao.reativacaoDepois);
       // contratoUsado só aparece quando a fatura veio de OUTRO contrato do
       // mesmo cliente. O modelo de frase do dono sai DAQUI, e só depois do

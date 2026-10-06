@@ -1033,7 +1033,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
 // A resposta cita o boleto (com os sinônimos da trava do meio).
 const CITA_BOLETO = /\bboletos?\b|\bc[oó]digo de barras\b|\blinha digit[aá]vel\b/i;
-// A oferta do boleto do turno: a que a ferramenta marcou; null quando o boleto foi entregue (a ferramenta apaga); sem nenhuma
+// A oferta do boleto do turno: a que a ferramenta marcou; null quando o boleto DA FATURA DA OFERTA foi entregue (a ferramenta
+// apaga; o de outra fatura não mexe — 06/10/2026); sem nenhuma
 // das duas (turno sem ferramenta de cobrança, como "por que não tem PIX?"), a da última resposta da IA, herdada — a resposta
 // que cita o boleto de novo continua a mesma oferta (revisão da entrega 1).
 function ofertaDoBoletoDoTurno(contexto) {

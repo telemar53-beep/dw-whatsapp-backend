@@ -2,11 +2,11 @@ const { brazilianNumberVariants } = require('./phone-variants');
 
 describe('brazilianNumberVariants', () => {
   test('celular com o 9: devolve a forma digitada e a forma sem o 9', () => {
-    expect(brazilianNumberVariants('5598985120338')).toEqual(['5598985120338', '559885120338']);
+    expect(brazilianNumberVariants('5520999990338')).toEqual(['5520999990338', '552099990338']);
   });
 
   test('celular sem o 9 (forma antiga do wa_id): devolve a forma digitada e a forma com o 9', () => {
-    expect(brazilianNumberVariants('559885120338')).toEqual(['559885120338', '5598985120338']);
+    expect(brazilianNumberVariants('552099990338')).toEqual(['552099990338', '5520999990338']);
   });
 
   test.each(['551133334444', '559832345678', '559845678901', '559853456789'])(

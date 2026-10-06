@@ -373,7 +373,7 @@ describe('ai-worker — triagem', () => {
         { id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'Boa tarde! Como posso ajudar você hoje?' },
         { id: 'm-2', direction: 'inbound', content: 'Sobre o sinal da internet tá muito ruim faz dias' },
         { id: 'o-2', direction: 'outbound', sentBy: 'ai', content: 'Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor.' },
-        { id: 'm-3', direction: 'inbound', content: '62373943387' },
+        { id: 'm-3', direction: 'inbound', content: '44455566619' },
         { id: 'o-3', direction: 'outbound', sentBy: 'ai', content: MODELO },
         { id: 'm-4', direction: 'inbound', content: 'Lentidão' },
       ]);

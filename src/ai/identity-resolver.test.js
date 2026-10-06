@@ -13,17 +13,17 @@ beforeEach(() => jest.clearAllMocks());
 
 describe('variantesTelefone', () => {
   test('tira o 55 e oferece a variante sem o nono dígito', () => {
-    expect(variantesTelefone('5598985120338')).toEqual(['98985120338', '9885120338']);
+    expect(variantesTelefone('5520999990338')).toEqual(['20999990338', '2099990338']);
   });
   // Reescrito na Fase 1A (25/09/2026): antes, o número de 8 dígitos ficava como
   // estava. É exatamente a forma do wa_id da Meta fora dos DDDs 11-19/21/22/24/
   // 27/28, e o SGP da DW guarda o celular COM o 9 — a busca por telefone não
   // achava ninguém e a IA pedia CPF (B14 da Fase 0).
   test('celular de 8 dígitos (forma antiga do wa_id) também tenta a forma com o 9', () => {
-    expect(variantesTelefone('9885120338')).toEqual(['9885120338', '98985120338']);
+    expect(variantesTelefone('2099990338')).toEqual(['2099990338', '20999990338']);
   });
   test('wa_id sem o 9, com 55, também tenta a forma com o 9', () => {
-    expect(variantesTelefone('559885120338')).toEqual(['9885120338', '98985120338']);
+    expect(variantesTelefone('552099990338')).toEqual(['2099990338', '20999990338']);
   });
   test('fixo (8 dígitos começando com 2 a 5) nunca ganha variante de celular', () => {
     expect(variantesTelefone('559832345678')).toEqual(['9832345678']);
@@ -46,7 +46,7 @@ describe('primeiroNome', () => {
 describe('resolverIdentidade', () => {
   test('memória: contato já vinculado não consulta telefone', async () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725' } });
     expect(r.nivel).toBe('forte');
     expect(r.origem).toBe('memory');
     expect(r.primeiroNome).toBe('João');
@@ -56,16 +56,16 @@ describe('resolverIdentidade', () => {
   test('telefone: exatamente um cliente identifica, grava o vínculo e vira forte', async () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null } });
     expect(r).toMatchObject({ nivel: 'forte', origem: 'phone', primeiroNome: 'João' });
-    expect(sgpClient.findClientRecord).toHaveBeenCalledWith({ telefone: '98985120338' });
+    expect(sgpClient.findClientRecord).toHaveBeenCalledWith({ telefone: '20999990338' });
     expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', expect.objectContaining({ sgpClientId: 16957, sgpDocument: '52998224725' }));
   });
 
   test('telefone: grava também o primeiro nome no contato', async () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
-    await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null } });
     expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', expect.objectContaining({ sgpFirstName: 'João' }));
   });
 
@@ -73,7 +73,7 @@ describe('resolverIdentidade', () => {
     sgpClient.lookupClientByCpf.mockRejectedValueOnce(new Error('SGP down'));
     const r = await resolverIdentidade({
       contact: {
-        id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725',
+        id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725',
         sgpFirstName: 'João', sgpClientId: 16957, sgpContractId: 17402,
       },
     });
@@ -86,7 +86,7 @@ describe('resolverIdentidade', () => {
   test('memória: com o SGP fora e sem nome guardado, ainda identifica (sem nome)', async () => {
     sgpClient.lookupClientByCpf.mockRejectedValueOnce(new Error('SGP down'));
     const r = await resolverIdentidade({
-      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725', sgpFirstName: null },
+      contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725', sgpFirstName: null },
     });
     expect(r).toMatchObject({ nivel: 'forte', origem: 'memory', primeiroNome: null, sgpIndisponivel: true });
   });
@@ -96,7 +96,7 @@ describe('resolverIdentidade', () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
     const r = await resolverIdentidade({
       contact: {
-        id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725',
+        id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725',
         sgpFirstName: null, sgpClientId: 16957, sgpContractId: 17402,
       },
     });
@@ -110,7 +110,7 @@ describe('resolverIdentidade', () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: null } });
     await resolverIdentidade({
-      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725', sgpFirstName: 'João' },
+      contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725', sgpFirstName: 'João' },
     });
     expect(setContactSgpLink).not.toHaveBeenCalled();
   });
@@ -122,7 +122,7 @@ describe('resolverIdentidade', () => {
     // rejeição permanente vazaria para os testes seguintes.
     setContactSgpLink.mockRejectedValueOnce(new Error('banco fora'));
     const r = await resolverIdentidade({
-      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725', sgpFirstName: null },
+      contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725', sgpFirstName: null },
     });
     expect(r).toMatchObject({ nivel: 'forte', origem: 'memory', primeiroNome: 'João' });
     expect(r.sgpIndisponivel).toBeUndefined();
@@ -133,7 +133,7 @@ describe('resolverIdentidade', () => {
     // permanente vazaria para os testes seguintes (clearAllMocks não apaga
     // implementações).
     sgpClient.findClientRecord.mockRejectedValueOnce(new Error('SGP down'));
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null } });
     expect(r).toMatchObject({ nivel: 'none', origem: 'none' });
     expect(r.sgpIndisponivel).toBeUndefined();
   });
@@ -143,9 +143,9 @@ describe('resolverIdentidade', () => {
       .mockResolvedValueOnce({ total: 0, cliente: null })
       .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: null } });
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null } });
     expect(r.origem).toBe('phone');
-    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(2, { telefone: '9885120338' });
+    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(2, { telefone: '2099990338' });
   });
 
   test('telefone: wa_id sem o 9 acha o cliente cadastrado com o 9 no SGP', async () => {
@@ -153,10 +153,10 @@ describe('resolverIdentidade', () => {
       .mockResolvedValueOnce({ total: 0, cliente: null })
       .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } });
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '552099990338', sgpDocument: null } });
     expect(r).toMatchObject({ nivel: 'forte', origem: 'phone', primeiroNome: 'João' });
-    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(1, { telefone: '9885120338' });
-    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(2, { telefone: '98985120338' });
+    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(1, { telefone: '2099990338' });
+    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(2, { telefone: '20999990338' });
     expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', expect.objectContaining({ sgpClientId: 16957 }));
   });
 
@@ -165,21 +165,21 @@ describe('resolverIdentidade', () => {
       .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } })
       .mockResolvedValueOnce({ total: 1, cliente: { id: 20001, cpfcnpj: '11144477735' } });
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '552099990338', sgpDocument: null } });
     expect(r).toMatchObject({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
     expect(sgpClient.lookupClientByCpf).not.toHaveBeenCalled();
     expect(setContactSgpLink).not.toHaveBeenCalled();
     // Registra o fato sem dado do cliente: nem CPF, nem telefone.
     const log = spy.mock.calls.flat().join(' ');
     expect(log).toContain('different SGP clients');
-    expect(log).not.toMatch(/52998224725|11144477735|9885120338/);
+    expect(log).not.toMatch(/52998224725|11144477735|2099990338/);
     spy.mockRestore();
   });
 
   test('telefone: as duas formas achando o MESMO cliente identifica normalmente', async () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } });
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '552099990338', sgpDocument: null } });
     expect(r).toMatchObject({ nivel: 'forte', origem: 'phone' });
     expect(sgpClient.lookupClientByCpf).toHaveBeenCalledTimes(1);
   });
@@ -188,7 +188,7 @@ describe('resolverIdentidade', () => {
     sgpClient.findClientRecord
       .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } })
       .mockResolvedValueOnce({ total: 2, cliente: null });
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '552099990338', sgpDocument: null } });
     expect(r).toMatchObject({ nivel: 'none', origem: 'none' });
     expect(setContactSgpLink).not.toHaveBeenCalled();
   });
@@ -202,14 +202,14 @@ describe('resolverIdentidade', () => {
 
   test('telefone: vários resultados não identificam', async () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 3, cliente: null });
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null } });
     expect(r).toMatchObject({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
     expect(setContactSgpLink).not.toHaveBeenCalled();
   });
 
   test('SGP fora vira none, sem lançar', async () => {
     sgpClient.findClientRecord.mockRejectedValue(new Error('SGP down'));
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null } });
     expect(r.nivel).toBe('none');
   });
 
@@ -225,7 +225,7 @@ describe('resolverIdentidade', () => {
     // contato é limpo, mas buscar pelo MESMO telefone de novo cumprimentaria
     // a mesma pessoa errada outra vez.
     const r = await resolverIdentidade({
-      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null },
+      contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null },
       ignorarTelefone: true,
     });
     expect(r).toMatchObject({ nivel: 'none', origem: 'none' });
@@ -235,7 +235,7 @@ describe('resolverIdentidade', () => {
   test('memória: aproveita os contratos para preencher a cidade do contato', async () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
-    const contact = { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' };
+    const contact = { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725' };
 
     await resolverIdentidade({ contact });
 
@@ -245,7 +245,7 @@ describe('resolverIdentidade', () => {
   test('telefone: aproveita os contratos para preencher a cidade do contato', async () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
-    const contact = { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null };
+    const contact = { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null };
 
     await resolverIdentidade({ contact });
 
@@ -254,7 +254,7 @@ describe('resolverIdentidade', () => {
 
   test('sem identidade nenhuma, nada de cidade', async () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 0, cliente: null });
-    await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: null } });
     expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
   });
 
@@ -264,7 +264,7 @@ describe('resolverIdentidade', () => {
     preencherCidadePeloSgp.mockRejectedValueOnce(new Error('banco fora'));
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' } });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725' } });
 
     // Não pode cair no caminho de "SGP fora" (que devolveria contracts vazio).
     expect(r).toMatchObject({ nivel: 'forte', origem: 'memory' });
@@ -276,7 +276,7 @@ describe('resolverIdentidade', () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
     const r = await resolverIdentidade({
-      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' },
+      contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725' },
       ignorarTelefone: true,
     });
     expect(r.nivel).toBe('forte');
@@ -292,7 +292,7 @@ describe('resolverIdentidade', () => {
       client: { id: 9, name: 'MARIA SILVA', document: '52998224725' },
       contracts: [{ id: 1, status: 1, address: 'Rua A' }],
     });
-    const id = await resolverIdentidade({ contact: { id: 'ct1', phoneNumber: '5598985120338' } });
+    const id = await resolverIdentidade({ contact: { id: 'ct1', phoneNumber: '5520999990338' } });
     expect(['forte', 'none']).toContain(id.nivel);
     expect(id).not.toHaveProperty('dataNascimento');
     expect(id).not.toHaveProperty('nascimentoTentado');

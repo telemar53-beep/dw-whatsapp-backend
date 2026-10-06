@@ -571,7 +571,8 @@ describe('startOutboundWorker', () => {
   });
 
   // Fase 1A (25/09/2026): a Meta devolve o wa_id do cliente no envio de template. No DDD 98 ele
-  // vem sem o 9 mesmo quando o disparo manda com o 9 — e é com ele que a resposta chega.
+  // vem sem o 9 mesmo quando o disparo manda com o 9 — e é com ele que a resposta chega. (Nos
+  // exemplos, o DDD fictício 20 faz o papel de um DDD fora dos DDDs 11-19/21/22/24/27/28.)
   describe('Fase 1A — wa_id devolvido pela Meta', () => {
     const CANAL_META = { id: 'channel-1', type: 'meta_cloud', config: {} };
     const JOB_TEMPLATE = {
@@ -580,29 +581,29 @@ describe('startOutboundWorker', () => {
     };
 
     beforeEach(() => {
-      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '5598985120338' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '5520999990338' });
       findChannelById.mockResolvedValue(CANAL_META);
       recordMessageSent.mockResolvedValue({ id: 'msg-1' });
     });
 
     test('wa_id diferente do número do contato: grava o wa_id na mensagem e tenta a troca segura do número (regra revista: fantasma sem histórico próprio)', async () => {
-      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T1', waId: '559885120338' });
+      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T1', waId: '552099990338' });
       renameGhostContactToWaId.mockResolvedValue(true);
 
       await handler(JOB_TEMPLATE);
 
       // O pedido à Meta é o de sempre, com o número que o SGP mandou.
-      expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(CANAL_META, '5598985120338', { name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Ana'] });
+      expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(CANAL_META, '5520999990338', { name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Ana'] });
       expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.T1');
-      expect(recordMessageWaId).toHaveBeenCalledWith('msg-1', '559885120338');
+      expect(recordMessageWaId).toHaveBeenCalledWith('msg-1', '552099990338');
       // O número atual vai junto: a troca só vale se o banco ainda tiver exatamente esse número.
-      expect(renameGhostContactToWaId).toHaveBeenCalledWith('contact-1', '5598985120338', '559885120338', 'msg-1');
+      expect(renameGhostContactToWaId).toHaveBeenCalledWith('contact-1', '5520999990338', '552099990338', 'msg-1');
       expect(markMessageFailed).not.toHaveBeenCalled();
     });
 
     test('wa_id igual ao número do contato: nada a registrar nem a trocar', async () => {
-      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '559885120338' });
-      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T2', waId: '559885120338' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '552099990338' });
+      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T2', waId: '552099990338' });
 
       await handler(JOB_TEMPLATE);
 
@@ -621,7 +622,7 @@ describe('startOutboundWorker', () => {
     });
 
     test('falha ao registrar ou trocar o número nunca vira falha de envio: a mensagem já saiu', async () => {
-      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T4', waId: '559885120338' });
+      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T4', waId: '552099990338' });
       recordMessageWaId.mockRejectedValueOnce(new Error('banco fora'));
       const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -629,7 +630,7 @@ describe('startOutboundWorker', () => {
 
       expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.T4');
       expect(markMessageFailed).not.toHaveBeenCalled();
-      expect(spy.mock.calls.flat().join(' ')).not.toContain('559885120338');
+      expect(spy.mock.calls.flat().join(' ')).not.toContain('552099990338');
       spy.mockRestore();
     });
   });
@@ -639,7 +640,7 @@ describe('startOutboundWorker', () => {
   // texto montado nunca pode virar envio de texto no lugar do template.
   test('Fase 1B: template com content montado e metadata envia à Meta exatamente o mesmo pedido', async () => {
     const canal = { id: 'channel-1', type: 'meta_cloud', config: {} };
-    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '559885120338' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '552099990338' });
     findChannelById.mockResolvedValue(canal);
     metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.1B' });
 
@@ -653,7 +654,7 @@ describe('startOutboundWorker', () => {
     });
 
     expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledTimes(1);
-    expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(canal, '559885120338', {
+    expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(canal, '552099990338', {
       name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Maria', 'R$ 100,00', '30/09/2026', 'https://b/x'], headerType: null, headerLink: null,
     });
     expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();

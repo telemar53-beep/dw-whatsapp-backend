@@ -1338,7 +1338,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.lookupClientByCpf.mockResolvedValue({
-      client: { id: 77, name: 'JOEL SOUZA', document: '90460835315' },
+      client: { id: 77, name: 'JOEL SOUZA', document: '22233344405' },
       contracts: [{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }],
     });
   });
@@ -1353,7 +1353,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     c.contact.cityId = 'cidade-de-quem-fala';
     c.contact.localityId = null;
 
-    await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, c);
+    await findTool('buscar_cliente').executar({ cpf: '22233344405', titularEOutraPessoa: true }, c);
 
     expect(setContactSgpLink).not.toHaveBeenCalled();
     // A cidade E a localidade moram na mesma função: o POP do contrato do
@@ -1376,7 +1376,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
   // (contexto.terceiro, não contexto.identidade).
 
   test('a instrução proíbe "seu contrato" e manda dizer de quem é', async () => {
-    const r = await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, ctxTerceiro());
+    const r = await findTool('buscar_cliente').executar({ cpf: '22233344405', titularEOutraPessoa: true }, ctxTerceiro());
     expect(r.instrucao).toMatch(/NUNCA diga "seu contrato"/);
     expect(r.instrucao).toMatch(/Joel/);
     expect(r.instrucao).toMatch(/registre no resumo que quem pediu não é o titular/);
@@ -1384,16 +1384,16 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
 
   test('sem o parâmetro, nada muda: o vínculo continua sendo gravado', async () => {
     const c = { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    await findTool('buscar_cliente').executar({ cpf: '90460835315' }, c);
+    await findTool('buscar_cliente').executar({ cpf: '22233344405' }, c);
     expect(setContactSgpLink).toHaveBeenCalled();
     expect(c.identidade.primeiroNome).toBe('Joel');
   });
 
   test('validar aceita o booleano e ignora lixo', () => {
     const v = findTool('buscar_cliente').validar;
-    expect(v({ cpf: '90460835315', titularEOutraPessoa: true }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: true });
-    expect(v({ cpf: '90460835315' }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: false });
-    expect(v({ cpf: '90460835315', titularEOutraPessoa: 'sim' }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: false });
+    expect(v({ cpf: '22233344405', titularEOutraPessoa: true }).args).toEqual({ cpf: '22233344405', titularEOutraPessoa: true });
+    expect(v({ cpf: '22233344405' }).args).toEqual({ cpf: '22233344405', titularEOutraPessoa: false });
+    expect(v({ cpf: '22233344405', titularEOutraPessoa: 'sim' }).args).toEqual({ cpf: '22233344405', titularEOutraPessoa: false });
   });
 });
 

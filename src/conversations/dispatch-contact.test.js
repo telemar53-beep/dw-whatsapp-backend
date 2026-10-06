@@ -2,8 +2,8 @@ jest.mock('./contact.repository');
 const { findContactsWithOwnHistoryByPhoneNumbers, findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { escolherContatoDoDisparo, resolverContatoDoDisparo } = require('./dispatch-contact');
 
-const COM9 = '5598985120338';
-const SEM9 = '559885120338';
+const COM9 = '5520999990338';
+const SEM9 = '552099990338';
 const contato = (id, phoneNumber) => ({ id, phoneNumber });
 
 beforeEach(() => jest.clearAllMocks());

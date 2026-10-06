@@ -22,7 +22,7 @@ function primeiroNome(nome) {
 }
 
 /**
- * '5598985120338' → ['98985120338', '9885120338'] e '559885120338' → ['9885120338', '98985120338']:
+ * '5520999990338' → ['20999990338', '2099990338'] e '552099990338' → ['2099990338', '20999990338']:
  * sem o 55, a forma recebida primeiro e depois a outra forma do nono dígito.
  *
  * Fase 1A (25/09/2026): antes, o número de 8 dígitos não ganhava a forma com o 9. É a forma do

@@ -1065,8 +1065,8 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
   test('CPF ditado por extenso (áudio transcrito, com "meia") tem origem', async () => {
     buscar();
     // Fechamento limitado (04/10/2026): um CPF com dígito verificador válido (o dígito verificador passou a ser necessário).
-    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é meia zero um meia meia meia sete sete sete três meia'] };
-    expect((await executeTool('buscar_cliente', { cpf: '60166677736' }, ctx)).ok).toBe(true);
+    const ctx = { ...TRIAGEM_IDENTIFICADA, ...SEM_IDENTIDADE, falasDoCliente: ['meu cpf é cinco cinco cinco meia meia meia sete sete sete dois zero'] };
+    expect((await executeTool('buscar_cliente', { cpf: '55566677720' }, ctx)).ok).toBe(true);
   });
 
   // Revisão do incremento (04/10/2026): formatos reais de áudio e digitação não podem ser recusados como "não escrito".

@@ -25,13 +25,13 @@ describe('sgp-client', () => {
   describe('lookupClientByCpf', () => {
     test('throws SgpNotConfiguredError when there is no config', async () => {
       getSgpQueryConfig.mockResolvedValue(null);
-      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpNotConfiguredError);
+      await expect(lookupClientByCpf('11122233396')).rejects.toBeInstanceOf(SgpNotConfiguredError);
       expect(axios.post).not.toHaveBeenCalled();
     });
 
     test('throws SgpDisabledError when the integration is disabled', async () => {
       getSgpQueryConfig.mockResolvedValue({ ...CONFIG, enabled: false });
-      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpDisabledError);
+      await expect(lookupClientByCpf('11122233396')).rejects.toBeInstanceOf(SgpDisabledError);
     });
 
     test('calls consultacliente and normalizes the response, excluding password fields', async () => {
@@ -43,7 +43,7 @@ describe('sgp-client', () => {
             {
               contratoId: 17402,
               clienteId: 16957,
-              cpfCnpj: '036.668.113-37',
+              cpfCnpj: '111.222.333-96',
               razaoSocial: 'CLIENTE EXEMPLO',
               contratoStatus: 1,
               contratoStatusDisplay: 'Ativo',
@@ -57,21 +57,21 @@ describe('sgp-client', () => {
               endereco_bairro: 'CENTRO',
               endereco_cidade: 'CANDIDO MENDES',
               endereco_uf: 'MA',
-              telefones: [{ tipoContato: 'WhatsApp Número', contato: '(98) 98512-0338' }],
+              telefones: [{ tipoContato: 'WhatsApp Número', contato: '(20) 99999-0338' }],
               emails: [{ tipoContato: 'E-Mail', contato: 'exemplo@dominio.com' }],
             },
           ],
         },
       });
 
-      const result = await lookupClientByCpf('03666811337');
+      const result = await lookupClientByCpf('11122233396');
 
       expect(axios.post).toHaveBeenCalledWith(
         'https://dwtelecom.sgp.tsmx.com.br/api/ura/consultacliente',
-        expect.stringContaining('cpfcnpj=03666811337'),
+        expect.stringContaining('cpfcnpj=11122233396'),
         expect.objectContaining({ headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 })
       );
-      expect(result.client).toEqual({ id: 16957, name: 'CLIENTE EXEMPLO', document: '036.668.113-37' });
+      expect(result.client).toEqual({ id: 16957, name: 'CLIENTE EXEMPLO', document: '111.222.333-96' });
       expect(result.contracts).toEqual([
         {
           id: 17402,
@@ -95,7 +95,7 @@ describe('sgp-client', () => {
           // Cidade crua, de uso interno: alimenta o preenchimento automático
           // da cidade do contato (não vai para o modelo).
           city: 'CANDIDO MENDES',
-          phones: ['(98) 98512-0338'],
+          phones: ['(20) 99999-0338'],
           emails: ['exemplo@dominio.com'],
         },
       ]);
@@ -111,7 +111,7 @@ describe('sgp-client', () => {
     test('throws SgpRequestError when the SGP call fails', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post.mockRejectedValue(new Error('timeout of 15000ms exceeded'));
-      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpRequestError);
+      await expect(lookupClientByCpf('11122233396')).rejects.toBeInstanceOf(SgpRequestError);
     });
 
     // Modelado no teste de vazamento de openai-client.test.js: um axios error
@@ -125,26 +125,26 @@ describe('sgp-client', () => {
         response: { status: 500, data: { error: 'server error' } },
         config: {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          data: `token=${CONFIG.token}&app=chatmix&cpfcnpj=03666811337`,
+          data: `token=${CONFIG.token}&app=chatmix&cpfcnpj=11122233396`,
         },
         message: 'Request failed with status code 500',
       };
       axios.post.mockRejectedValue(axiosError);
 
       try {
-        await lookupClientByCpf('03666811337');
+        await lookupClientByCpf('11122233396');
         fail('should have thrown');
       } catch (err) {
         const serialized = JSON.stringify(err) + JSON.stringify(err.cause);
         expect(serialized).not.toContain(CONFIG.token);
-        expect(serialized).not.toContain('03666811337');
+        expect(serialized).not.toContain('11122233396');
       }
     });
 
     test('throws SgpRequestError when SGP returns a malformed/non-object response', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post.mockResolvedValue({ data: '<html>login page</html>' });
-      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpRequestError);
+      await expect(lookupClientByCpf('11122233396')).rejects.toBeInstanceOf(SgpRequestError);
     });
   });
 
@@ -781,11 +781,11 @@ describe('findClientRecord', () => {
       id: 16957, nome: 'CLIENTE EXEMPLO', cpfcnpj: '529.982.247-25', dataNascimento: '1990-05-20',
       contratos: [{ id: 17402, contratoCentralSenha: 'SEGREDO', contratoCentralLogin: 'user' }],
       endereco: { logradouro: 'RUA X' }, contatos: [] } ] } });
-    const r = await findClientRecord({ telefone: '98985120338' });
+    const r = await findClientRecord({ telefone: '20999990338' });
     const [url, body] = axios.post.mock.calls[0];
     expect(url).toBe('https://dwtelecom.sgp.tsmx.com.br/api/ura/clientes/');
     const p = new URLSearchParams(body);
-    expect(p.get('telefone')).toBe('98985120338');
+    expect(p.get('telefone')).toBe('20999990338');
     expect(p.get('omitir_titulos')).toBe('1');
     expect(p.get('omitir_contatos')).toBe('1');
     expect(p.get('limit')).toBe('2');

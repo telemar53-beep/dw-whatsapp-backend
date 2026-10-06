@@ -607,18 +607,19 @@ describe('sendTemplateMessage', () => {
   });
 
   // Fase 1A (25/09/2026): a resposta de envio da Meta traz contacts[].wa_id — o número como
-  // o WhatsApp conhece o cliente. No DDD 98 ele vem sem o 9 mesmo quando mandamos com o 9.
+  // o WhatsApp conhece o cliente. No DDD 98 ele vem sem o 9 mesmo quando mandamos com o 9. (No
+  // exemplo, o DDD fictício 20 faz o papel de um DDD fora dos DDDs 11-19/21/22/24/27/28.)
   test('Fase 1A: devolve o wa_id que a Meta informa, sem mudar nada no pedido enviado', async () => {
-    axios.post.mockResolvedValue({ data: { contacts: [{ input: '5598985120338', wa_id: '559885120338' }], messages: [{ id: 'wamid.TPL9' }] } });
+    axios.post.mockResolvedValue({ data: { contacts: [{ input: '5520999990338', wa_id: '552099990338' }], messages: [{ id: 'wamid.TPL9' }] } });
     const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
 
-    const result = await sendTemplateMessage(channel, '5598985120338', { name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Ana'] });
+    const result = await sendTemplateMessage(channel, '5520999990338', { name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Ana'] });
 
-    expect(result).toEqual({ whatsappMessageId: 'wamid.TPL9', waId: '559885120338' });
+    expect(result).toEqual({ whatsappMessageId: 'wamid.TPL9', waId: '552099990338' });
     expect(axios.post).toHaveBeenCalledWith(
       'https://graph.facebook.com/v20.0/1234567890/messages',
       {
-        messaging_product: 'whatsapp', to: '5598985120338', type: 'template',
+        messaging_product: 'whatsapp', to: '5520999990338', type: 'template',
         template: { name: 'dw_fatura_mensal', language: { code: 'pt_BR' }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Ana' }] }] },
       },
       { headers: { Authorization: 'Bearer token-abc' } }

@@ -223,7 +223,7 @@ test('a identidade nunca volta como fraca', async () => {
     client: { id: 9, name: 'MARIA SILVA', document: '52998224725' },
     contracts: [{ id: 1, status: 1, address: 'Rua A' }],
   });
-  const id = await resolverIdentidade({ contact: { id: 'ct1', phoneNumber: '5598985120338' } });
+  const id = await resolverIdentidade({ contact: { id: 'ct1', phoneNumber: '5520999990338' } });
   expect(['forte', 'none']).toContain(id.nivel);
   expect(id).not.toHaveProperty('dataNascimento');
   expect(id).not.toHaveProperty('nascimentoTentado');

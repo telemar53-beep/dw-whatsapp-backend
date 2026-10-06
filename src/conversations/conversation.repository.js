@@ -198,6 +198,13 @@ async function completeTriage(conversationId, sectorId) {
  * Conclusão da triagem feita pela IA. Guardada por triage_state = 'pending'
  * como completeTriage: dois turnos (ou o job de timeout e um turno) que
  * tentem concluir a mesma conversa — só o primeiro ganha, o outro recebe null.
+ * Comportamento da IA (05/10/2026; reprodução de 30/09): também exige a conversa
+ * em espera e sem atendente responsável, no próprio UPDATE. Encerrar direto da
+ * fila deixa triage_state = 'pending' com status = 'closed', e a conclusão em
+ * código (vigia, limite de perguntas, noturno) "concluía" a conversa do humano —
+ * com queue:new e aviso no painel. Uma leitura anterior não basta: o humano pode
+ * encerrar ou assumir entre ela e o UPDATE; com a linha mudada enquanto o UPDATE
+ * espera a trava, o Postgres reavalia a condição na versão nova.
  * sector_id (setor FINAL) recebe o mesmo valor que ai_triage_sector_id; o
  * atendente pode mudar sector_id depois, e a diferença é a "triagem corrigida".
  */
@@ -208,7 +215,7 @@ async function concludeAiTriage(conversationId, { sectorId, reasonId, confidence
             ai_triage_sector_id = $2, ai_triage_reason_id = $3, ai_triage_confidence = $4,
             ai_triage_summary = $5, ai_triage_identified_by = $6, ai_triage_low_confidence = $7,
             ai_triage_resolved_by_ai = (ai_triage_resolved_by_ai OR $8), ai_triage_completed_at = now(), updated_at = now()
-      WHERE id = $1 AND triage_state = 'pending'
+      WHERE id = $1 AND triage_state = 'pending' AND status = 'waiting' AND assigned_agent_id IS NULL
       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts,
                 protocol_number, business_hours_notice_sent_at, suggested_reason_id, created_at, updated_at,
                 ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary,

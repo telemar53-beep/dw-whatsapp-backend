@@ -1767,3 +1767,113 @@ describe('localidade do contato nos resumos de conversa', () => {
     expect(colunasDeLocalidade).toBe(joinsDeCidade);
   });
 });
+
+// Guarda da conclusão (comportamento da IA, 05/10/2026; reprodução e testes de 30/09). concludeAiTriage é a conclusão do
+// vigia de inatividade, do limite de perguntas, do modo noturno e da ferramenta concluir_triagem. Ela exige, NO PRÓPRIO
+// UPDATE: triagem pendente, conversa em espera e nenhum atendente responsável. Reprodução que virou regressão: encerrar direto da
+// fila deixa triage_state = 'pending' com status = 'closed', e a conclusão antiga "concluía" essa conversa
+// (D:\dw-redesenho-arquivo\2026-09-30\encaminhamento-etapa1\lacuna-conclusao-antiga.txt).
+describe('concludeAiTriage — só conclui conversa em triagem, em espera e sem atendente', () => {
+  const { Client } = require('pg');
+  let contato;
+  let canal;
+  let agente;
+  let externa = null;
+  const dados = { sectorId: null, reasonId: null, confidence: null, summary: 'Triagem não concluída: IA indisponível. Atender normalmente.', identifiedBy: 'none', lowConfidence: true, resolvedByAi: false };
+  const estado = async (id) => (await getPool().query(
+    'SELECT status, triage_state, assigned_agent_id, ai_triage_summary, ai_triage_completed_at FROM conversations WHERE id = $1', [id])).rows[0];
+  async function outraConexao() {
+    const c = new Client({ connectionString: process.env.DATABASE_URL });
+    c.on('error', () => {});
+    await c.connect();
+    return c;
+  }
+  async function esperandoTrava() {
+    for (let i = 0; i < 100; i += 1) {
+      const r = await getPool().query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'
+        AND query LIKE 'UPDATE conversations%' AND pid <> pg_backend_pid()`);
+      if (r.rowCount > 0) return;
+      await new Promise((ok) => setTimeout(ok, 50));
+    }
+    throw new Error('a conclusão não chegou a esperar a trava');
+  }
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, agents, conversation_events, sectors CASCADE');
+    contato = await findOrCreateContactByPhoneNumber('+5511977775555', 'Cliente Sintético');
+    canal = await createChannel({ type: 'meta_cloud', name: 'Canal Guarda', phoneNumber: '+5511999990555', config: { phoneNumberId: '555', accessToken: 'tok' } });
+    agente = await createAgent({ email: 'guarda@dw.com', password: 'secret123', role: 'agent' });
+  });
+  afterEach(async () => {
+    if (externa) { try { await externa.query('ROLLBACK'); } catch (_) { /* fechada */ } await externa.end().catch(() => {}); externa = null; }
+  });
+  afterAll(async () => {
+    await closePool();
+  });
+
+  test('regressão: conversa encerrada direto da fila (triagem ainda pendente) não é concluída nem alterada', async () => {
+    const conv = await createConversation(contato.id, canal.id, 'pending');
+    await closeConversation(conv.id, agente.id, null);
+    expect(await estado(conv.id)).toMatchObject({ status: 'closed', triage_state: 'pending' });
+    expect(await concludeAiTriage(conv.id, dados)).toBeNull();
+    expect(await estado(conv.id)).toMatchObject({ status: 'closed', triage_state: 'pending', ai_triage_summary: null, ai_triage_completed_at: null });
+  });
+
+  test.each([
+    ['com atendente responsável (status assigned)', "UPDATE conversations SET status = 'assigned', assigned_agent_id = $2 WHERE id = $1"],
+    ['com atendente responsável e status ainda waiting', 'UPDATE conversations SET assigned_agent_id = $2 WHERE id = $1'],
+    ['silenciada', "UPDATE conversations SET status = 'silent' WHERE id = $1 AND $2::uuid IS NOT NULL"],
+  ])('conversa %s, com a triagem pendente: nada muda', async (_rotulo, sql) => {
+    const conv = await createConversation(contato.id, canal.id, 'pending');
+    await getPool().query(sql, [conv.id, agente.id]);
+    const antes = await estado(conv.id);
+    expect(antes.triage_state).toBe('pending');
+    expect(await concludeAiTriage(conv.id, dados)).toBeNull();
+    expect(await estado(conv.id)).toEqual(antes);
+  });
+
+  test('triagem já concluída: nada muda', async () => {
+    const conv = await createConversation(contato.id, canal.id, 'pending');
+    await concludeAiTriage(conv.id, { ...dados, summary: 'primeira' });
+    const antes = await estado(conv.id);
+    expect(await concludeAiTriage(conv.id, { ...dados, summary: 'segunda' })).toBeNull();
+    expect(await estado(conv.id)).toEqual(antes);
+  });
+
+  test('corrida: a leitura deixava concluir, mas o humano encerra antes do UPDATE — a conclusão espera, relê e não altera', async () => {
+    const conv = await createConversation(contato.id, canal.id, 'pending');
+    externa = await outraConexao();
+    await externa.query('BEGIN');
+    await externa.query(`UPDATE conversations SET status = 'closed', updated_at = now() WHERE id = $1 AND (assigned_agent_id = $2 OR assigned_agent_id IS NULL) AND status <> 'closed'`, [conv.id, agente.id]);
+    const conclusao = concludeAiTriage(conv.id, dados);
+    await esperandoTrava();
+    await externa.query('COMMIT');
+    expect(await conclusao).toBeNull();
+    expect(await estado(conv.id)).toMatchObject({ status: 'closed', triage_state: 'pending', ai_triage_summary: null });
+  });
+
+  test('corrida: o humano assume antes do UPDATE (assumir de verdade e assumir sem marcar a triagem) — não altera', async () => {
+    for (const sql of [
+      "UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now() WHERE id = $1 AND assigned_agent_id IS NULL AND status <> 'closed'",
+      "UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, updated_at = now() WHERE id = $1",
+    ]) {
+      const conv = await createConversation(contato.id, canal.id, 'pending');
+      externa = await outraConexao();
+      await externa.query('BEGIN');
+      await externa.query(sql, [conv.id, agente.id]);
+      const conclusao = concludeAiTriage(conv.id, dados);
+      await esperandoTrava();
+      await externa.query('COMMIT');
+      await externa.end(); externa = null;
+      expect(await conclusao).toBeNull();
+      expect(await estado(conv.id)).toMatchObject({ status: 'assigned', assigned_agent_id: agente.id, ai_triage_summary: null });
+      await getPool().query('DELETE FROM conversations WHERE id = $1', [conv.id]);
+    }
+  });
+
+  test('a conclusão legítima continua: em triagem, em espera e sem atendente', async () => {
+    const conv = await createConversation(contato.id, canal.id, 'pending');
+    const r = await concludeAiTriage(conv.id, dados);
+    expect(r).toMatchObject({ id: conv.id, status: 'waiting', triageState: 'completed', assignedAgentId: null, aiTriageSummary: dados.summary });
+  });
+});

@@ -1538,15 +1538,15 @@ describe('listClosedConversationsByContact — quem atendeu, quem encerrou e por
 
   test('distingue o admin que encerrou do atendente que atendeu', async () => {
     const tatiane = await createAgent({ email: 'tatiane2@dw.com', password: 'secret123', role: 'agent', name: 'Tatiane' });
-    const willemberg = await createAgent({ email: 'will@dw.com', password: 'secret123', role: 'admin', name: 'Willemberg' });
+    const joaquim = await createAgent({ email: 'joaquim@dw.com', password: 'secret123', role: 'admin', name: 'Joaquim' });
     const conversa = await createConversation(contactId, channelId);
     await claimConversation(conversa.id, tatiane.id);
-    await adminCloseConversation(conversa.id, willemberg.id);
+    await adminCloseConversation(conversa.id, joaquim.id);
 
     const [historico] = await listClosedConversationsByContact(contactId);
 
     expect(historico.assignedAgentName).toBe('Tatiane');
-    expect(historico.closedByAgentName).toBe('Willemberg');
+    expect(historico.closedByAgentName).toBe('Joaquim');
   });
 
   test('traz o motivo do encerramento', async () => {

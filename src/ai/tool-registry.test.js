@@ -815,7 +815,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
   const noturno = (extra = {}) => ({
     contracts: [SUSPENSO], contact: { id: 'ct-1' },
     conversationId: 'c-1', channelId: 'ch-1',
-    identidade: { nivel: 'forte', primeiroNome: 'Willemberg' },
+    identidade: { nivel: 'forte', primeiroNome: 'Joaquim' },
     triagem: { noturno: { ativo: true, retornoAs: '08:00' } },
     comprovante: COMPROVANTE, ...extra,
   });
@@ -843,14 +843,14 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
-      content: 'Recebi seu comprovante, Willemberg! Como nossa equipe retorna a partir das 08:00, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.',
+      content: 'Recebi seu comprovante, Joaquim! Como nossa equipe retorna a partir das 08:00, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.',
     });
     // A ordem é a garantia que interessa: o cliente lê o aviso antes de a
     // liberação existir no SGP, e não depois — nem "em vez de".
     expect(enqueueOutboundMessage.mock.invocationCallOrder[0])
       .toBeLessThan(sgpClient.requestTrustUnlock.mock.invocationCallOrder[0]);
     expect(r.liberado).toBe(true);
-    expect(r.instrucao).toContain('Prontinho, Willemberg! O desbloqueio em confiança foi realizado');
+    expect(r.instrucao).toContain('Prontinho, Joaquim! O desbloqueio em confiança foi realizado');
     expect(r.instrucao).toContain('a partir das 08:00');
     expect(r.instrucao).toContain('Já deixei seu atendimento na fila');
     expect(ctx.desbloqueioRealizado).toBe(true);
@@ -1080,7 +1080,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
   test('(b) sem comprovante no contexto o aviso não diz "Recebi seu comprovante"', async () => {
     await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno({ comprovante: undefined }));
     expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
-      content: 'Willemberg, como nossa equipe retorna a partir das 08:00, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.',
+      content: 'Joaquim, como nossa equipe retorna a partir das 08:00, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.',
     }));
   });
 
@@ -1150,7 +1150,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(r.instrucao.endsWith(fecho)).toBe(true);
     const paraOCliente = r.instrucao.slice(abertura.length, r.instrucao.length - fecho.length);
     expect(paraOCliente).toBe(
-      `Willemberg, recebi seu comprovante e ele já está registrado para a equipe conferir a partir das 08:00. `
+      `Joaquim, recebi seu comprovante e ele já está registrado para a equipe conferir a partir das 08:00. `
       // Ajuste de 25/09/2026: sem a promessa de liberação automática (não é garantida).
       // Pendências do atendimento (04/10/2026): sem a promessa de verificar "assim que o pagamento constar" (nenhum
       // mecanismo faz isso); a equipe confere a partir do horário de retorno, como a primeira frase já diz.
@@ -1236,7 +1236,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
       const ctx = noturno({ contracts: [ATIVO] });
       const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
       expect(r.liberado).toBe(false);
-      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Recebi seu comprovante, Willemberg! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das 08:00." — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.');
+      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Recebi seu comprovante, Joaquim! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das 08:00." — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.');
       expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'contrato ativo, não há bloqueio para liberar' });
       expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
       expect(enqueueOutboundMessage).not.toHaveBeenCalled();
@@ -1245,7 +1245,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
     test('sem comprovante: não conclui ainda e puxa o diagnóstico de conexão', async () => {
       const ctx = noturno({ contracts: [ATIVO], comprovante: undefined });
       const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
-      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Willemberg, seu contrato está ativo, então não há bloqueio para liberar. Se a internet não estiver funcionando, me conta o que está acontecendo." — não conclua ainda.');
+      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Joaquim, seu contrato está ativo, então não há bloqueio para liberar. Se a internet não estiver funcionando, me conta o que está acontecendo." — não conclua ainda.');
       expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'contrato ativo, não há bloqueio para liberar' });
     });
 
@@ -1328,9 +1328,9 @@ describe('esquecer_identificacao', () => {
   });
 });
 
-// Print 2026-09-16: "quero a fatura de Jureildson" + CPF dele → a IA disse
+// Print 2026-09-16: "quero a fatura de Joel" + CPF dele → a IA disse
 // "SEU contrato tem uma fatura em aberto" e o código gravou o vínculo do
-// contato da Agnieska com o cadastro do Jureildson (nome, contratos, cidade).
+// contato da Marina com o cadastro do Joel (nome, contratos, cidade).
 // No próximo atendimento ela seria tratada como ele. Entregar o boleto é
 // certo (o site do SGP faz o mesmo só com o CPF); o que não pode é o contato
 // mudar de dono.
@@ -1338,14 +1338,14 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.lookupClientByCpf.mockResolvedValue({
-      client: { id: 77, name: 'JUREILDSON SOUZA', document: '90460835315' },
+      client: { id: 77, name: 'JOEL SOUZA', document: '90460835315' },
       contracts: [{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }],
     });
   });
 
   const ctxTerceiro = () => ({
     conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' },
-    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Agnieska', contracts: [] },
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Marina', contracts: [] },
   });
 
   test('não grava o vínculo do contato, nem a cidade, nem a localidade, e mantém o primeiro nome de quem fala', async () => {
@@ -1363,7 +1363,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     expect(c.contact.cityId).toBe('cidade-de-quem-fala');
     expect(c.contact.localityId).toBeNull();
     expect(c.contact.sgpDocument).toBeUndefined();
-    expect(c.identidade.primeiroNome).toBe('Agnieska');
+    expect(c.identidade.primeiroNome).toBe('Marina');
   });
 
   // Substituída em 2026-09-18 (Task 6): até então este teste provava a
@@ -1378,7 +1378,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
   test('a instrução proíbe "seu contrato" e manda dizer de quem é', async () => {
     const r = await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, ctxTerceiro());
     expect(r.instrucao).toMatch(/NUNCA diga "seu contrato"/);
-    expect(r.instrucao).toMatch(/Jureildson/);
+    expect(r.instrucao).toMatch(/Joel/);
     expect(r.instrucao).toMatch(/registre no resumo que quem pediu não é o titular/);
   });
 
@@ -1386,7 +1386,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     const c = { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
     await findTool('buscar_cliente').executar({ cpf: '90460835315' }, c);
     expect(setContactSgpLink).toHaveBeenCalled();
-    expect(c.identidade.primeiroNome).toBe('Jureildson');
+    expect(c.identidade.primeiroNome).toBe('Joel');
   });
 
   test('validar aceita o booleano e ignora lixo', () => {
@@ -1774,7 +1774,7 @@ describe('enviar_boleto', () => {
   // lembrar o modelo de chamar o cliente pelo nome.
   // messageId: a entrega exige a identidade da mensagem do cliente e, sem
   // ela, falha FECHADO. Em produção a triagem sempre a tem (ai-worker.js).
-  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte', primeiroNome: 'Willemberg' }, messageId: 'msg-1' });
+  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte', primeiroNome: 'Joaquim' }, messageId: 'msg-1' });
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: '836100000012' }] });
@@ -1801,7 +1801,7 @@ describe('enviar_boleto', () => {
     // um contrato só, sem endereço.
     // Print 2026-09-17: a IA entregou o boleto sem chamar a cliente pelo nome,
     // mesmo tendo acabado de identificar pelo CPF. Ficou robótico.
-    expect(r.instrucao).toContain('Comece pelo primeiro nome do cliente ("Prontinho, Willemberg!")');
+    expect(r.instrucao).toContain('Comece pelo primeiro nome do cliente ("Prontinho, Joaquim!")');
     expect(r.instrucao).toContain('Responda EXATAMENTE no modelo, sem emoji: "Enviei acima o boleto em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     expect(r.instrucao).not.toMatch(/endereço/);
     // A linha digitável vai junto, sozinha numa mensagem, pelo mesmo sender do
@@ -1935,7 +1935,7 @@ describe('enviar_boleto', () => {
       expect(markTriageResolvedByAi).toHaveBeenCalledWith('c-1');
       // Modelo de frase do dono, devolvido só depois do envio real; com um
       // contrato só, sem endereço.
-      expect(r.instrucao).toContain('Comece pelo primeiro nome do cliente ("Prontinho, Willemberg!")');
+      expect(r.instrucao).toContain('Comece pelo primeiro nome do cliente ("Prontinho, Joaquim!")');
       expect(r.instrucao).toContain('Responda EXATAMENTE no modelo: "Enviei acima o PIX. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     });
 
@@ -2349,7 +2349,7 @@ describe('tool-executor + desbloqueio_confianca (composição real)', () => {
       contact: { id: 'ct-1' },
       // CPF digitado, data de nascimento não confirmada: sem o gate, quem
       // digitasse o CPF de outra pessoa liberaria o contrato dela.
-      identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+      identidade: { nivel: 'fraca', primeiroNome: 'Joaquim' },
       triagem: { noturno: { ativo: true, retornoAs: '08:00' } },
       ferramentasPermitidas: ['desbloqueio_confianca'],
     };
@@ -3810,7 +3810,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   };
   const ctx = (extra = {}) => ({
     conversationId: 'c-idem', channelId: 'ch-1', contracts: [{ id: 17402 }],
-    identidade: { nivel: 'forte', primeiroNome: 'Willemberg' },
+    identidade: { nivel: 'forte', primeiroNome: 'Joaquim' },
     ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
     registroFerramentas: [], sgpCache: {}, terceiro: null,
     messageId: 'msg-1',
@@ -4129,7 +4129,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       const FATURA_B = { ...FATURA, id: '10' };
       const janela = (itens) => itens.map(([id, de, texto]) => ({ id, de, texto }));
       // msg-1 pediu o boleto da fatura 9, que saiu; depois a IA confirmou a entrega.
-      const CONFIRMACAO_A = 'Prontinho, Willemberg! Enviei acima o boleto em PDF e com a linha digitável.';
+      const CONFIRMACAO_A = 'Prontinho, Joaquim! Enviei acima o boleto em PDF e com a linha digitável.';
       // semTrava: a fatura 9 sai sem as falas no contexto (a trava não age), para a fala do cliente não citar o meio.
       const entregarA = async (fala = 'quero o boleto', semTrava = false) => {
         const doTurno = semTrava ? ctx({ messageId: 'msg-1' }) : comFalas([fala], { messageId: 'msg-1' });
@@ -4472,7 +4472,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   describe('9. o boleto de terceiro segue o mesmo mecanismo', () => {
     const ctxTerceiro = () => ({
       conversationId: 'c-idem', channelId: 'ch-1', contracts: [],
-      identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+      identidade: { nivel: 'fraca', primeiroNome: 'Joaquim' },
       ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
       terceiro: { nome: 'Maria', contratos: [{ id: 99 }] },
       registroFerramentas: [], sgpCache: {}, messageId: 'msg-1',
@@ -4604,7 +4604,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: null }] });
       const r = await executeTool('enviar_boleto', { contratoId: 99 }, {
         conversationId: 'c-idem', channelId: 'ch-1', contracts: [],
-        identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+        identidade: { nivel: 'fraca', primeiroNome: 'Joaquim' },
         ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
         terceiro: { nome: 'Maria', contratos: [{ id: 99 }] },
         registroFerramentas: [], sgpCache: {}, messageId: 'msg-1',
@@ -4685,7 +4685,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       expect(serializado).not.toContain('836100000012');
       expect(serializado).not.toContain('000201-pix-emv');
       expect(serializado).not.toContain('89.9');
-      expect(serializado).not.toContain('Willemberg');
+      expect(serializado).not.toContain('Joaquim');
     }
   });
 });

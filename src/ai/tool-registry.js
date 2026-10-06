@@ -1175,7 +1175,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         cpf: { type: 'string', description: 'CPF ou CNPJ do cliente, com ou sem pontuação.' },
-        // Print 2026-09-16: "quero a fatura de Jureildson" + o CPF dele fez o
+        // Print 2026-09-16: "quero a fatura de [nome]" + o CPF dele fez o
         // contato de quem pediu ficar vinculado ao cadastro do titular.
         titularEOutraPessoa: {
           type: 'boolean',

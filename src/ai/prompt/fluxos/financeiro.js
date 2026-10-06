@@ -39,7 +39,7 @@
 // triagem para o setor da lista acima que cuidar do financeiro" (sempre
 // minúsculo — é o assunto, não o nome do setor).
 //
-// Nome real de cliente: a despedida citava "Imagina, Willemberg! 😊 ..." nas
+// Nome real de cliente: a despedida citava "Imagina, [nome]! 😊 ..." nas
 // duas variantes (com emoji, do fluxo geral do PIX/boleto por ferramenta, e
 // sem emoji, do fluxo do BOLETO). As duas viraram "Imagina, [nome]! ...":
 // marcador, nunca nome real. Guarda dedicada em financeiro.test.js.

@@ -1,19 +1,14 @@
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { contemNomeReal, contemNumeroReal, palavrasDe, hash, criarDetector } = require('./test-support/dados-reais');
 
-// P1-3 da auditoria final (25/09/2026): nomes de clientes reais de casos de produção não podem
-// chegar a este repositório (ele é público). Os casos usados nos testes são de regressão SINTÉTICOS
-// (a titular Fulana e a terceira Beltrana). Esta varredura guarda só HASHES das palavras proibidas —
-// o nome nunca aparece aqui — e compara com cada palavra dos fontes do backend e do frontend,
-// normalizada (minúsculas, sem acento).
-const PROIBIDAS = new Set([
-  'b23d3ffb1d24fdb42b68b0010fb3769010270f9aeb876e0d5be25ffad8d74192',
-  '1b1dd21d63046036df6c5556ca557cd2cda6b97394f7af0d7809acdaf2d5a128',
-]);
-
+// P1-3 da auditoria final (25/09/2026): nomes de clientes reais de casos de produção não podem chegar a este repositório
+// (ele é público). Os casos usados nos testes são de regressão SINTÉTICOS. Esta varredura compara só HASHES das palavras
+// proibidas (src/test-support/dados-reais.js) — o nome nunca aparece aqui — com cada palavra dos fontes do backend, do
+// frontend e dos documentos, normalizada (minúsculas, sem acento). Comportamento da IA (05/10/2026): também os
+// documentos e o telefone real que aparecia em testes e planos.
 const RAIZ = path.join(__dirname, '..');
-const PASTAS = ['src', 'migrations', path.join('frontend', 'src')];
+const PASTAS = ['src', 'migrations', path.join('frontend', 'src'), 'docs'];
 const EXTENSOES = new Set(['.js', '.jsx', '.ts', '.tsx', '.json', '.md', '.css', '.html']);
 
 function arquivos(dir) {
@@ -25,20 +20,33 @@ function arquivos(dir) {
   });
 }
 
-const normalizar = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const hash = (t) => crypto.createHash('sha256').update(t).digest('hex');
+const todos = () => PASTAS.flatMap((pasta) => arquivos(path.join(RAIZ, pasta)));
 
-test('nenhum nome de cliente real de caso de produção nos fontes', () => {
-  const achados = [];
-  for (const pasta of PASTAS) {
-    for (const arquivo of arquivos(path.join(RAIZ, pasta))) {
-      // Palavras (letras, com acento), e também os pedaços de identificadores camelCase/SNAKE_CASE.
-      const texto = fs.readFileSync(arquivo, 'utf8').replace(/([a-zà-ÿ])([A-ZÀ-Ý])/g, '$1 $2');
-      const palavras = new Set((normalizar(texto).match(/[a-z]+/g) || []));
-      for (const palavra of palavras) {
-        if (PROIBIDAS.has(hash(palavra))) achados.push(path.relative(RAIZ, arquivo));
-      }
-    }
-  }
+test('nenhum nome real (cliente ou proprietário) nos fontes, testes e documentos', () => {
+  const achados = todos().filter((arquivo) => contemNomeReal(fs.readFileSync(arquivo, 'utf8'))).map((a) => path.relative(RAIZ, a));
   expect(achados).toEqual([]);
+});
+
+test('nenhum telefone real nos fontes, testes e documentos', () => {
+  const achados = todos().filter((arquivo) => contemNumeroReal(fs.readFileSync(arquivo, 'utf8'))).map((a) => path.relative(RAIZ, a));
+  expect(achados).toEqual([]);
+});
+
+test('o detector acha a palavra pelo hash, com acento, maiúscula e dentro de identificador camelCase', () => {
+  expect(palavrasDe('Boa tarde, Ândrea! clienteFulano')).toEqual(new Set(['boa', 'tarde', 'andrea', 'cliente', 'fulano']));
+  expect(hash('fulano')).toMatch(/^[0-9a-f]{64}$/);
+  expect(contemNomeReal('Boa tarde, Fulano!')).toBe(false);
+  expect(contemNumeroReal('telefone 98 91234-5678')).toBe(false);
+});
+
+// Os hashes reais não podem ser provados aqui sem o dado; a mesma regra com uma lista SINTÉTICA prova que a palavra e o
+// número listados são achados (com maiúscula, camelCase, DDI/DDD e separadores) e os outros não.
+test('o detector acha a palavra e o número que estão na lista de hashes (lista sintética)', () => {
+  const { contemNome, contemNumero } = criarDetector([hash('fulano')], [hash('912345678')]);
+  expect(contemNome('Boa tarde, FULANO!')).toBe(true);
+  expect(contemNome('const clienteFulano = 1;')).toBe(true);
+  expect(contemNome('Boa tarde, Beltrano!')).toBe(false);
+  expect(contemNumero('ligue (11) 91234-5678')).toBe(true);
+  expect(contemNumero('+55 11 91234 5678')).toBe(true);
+  expect(contemNumero('ligue (11) 91234-0000')).toBe(false);
 });

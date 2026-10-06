@@ -50,7 +50,7 @@ function fonteDoComercial(estado) {
 // de outra pessoa) SAÍRAM daqui. Elas são conteúdo de fluxos/privacidade.js e
 // fluxos/terceiros.js (Task 13) — deixá-las aqui garantiria a duplicação que
 // esta entrega existe para eliminar, e o texto original em ai-orchestrator.js
-// tem dois nomes reais de cliente ("Laureny", "Jureildson") que a Task 13
+// tem dois nomes reais de cliente ("[nome]", "[nome]") que a Task 13
 // precisa trocar por marcador ao migrar, não copiar verbatim. Os dois módulos
 // já entram (entra() -> true) em qualquer estado de identidade; só o
 // conteúdo (linhas()) ainda é esqueleto.

@@ -7,10 +7,10 @@
 // já é true.
 //
 // Nomes reais trocados por marcador: o original usa "a fatura da cliente
-// Laureny" e "quero a fatura do Jureildson" como exemplo — pessoas reais
+// [nome]" e "quero a fatura do [nome]" como exemplo — pessoas reais
 // versionadas no repositório. ai-orchestrator.js já documenta (comentário nas
 // linhas 427-429) um caso real em que o modelo copiou um exemplo assim ao pé
-// da letra ("Laureny, seu atendimento vai para o Financeiro", chamando quem
+// da letra ("[nome], seu atendimento vai para o Financeiro", chamando quem
 // falava pelo nome do titular). Os exemplos abaixo usam [nome] no lugar.
 //
 // CONTEÚDO NOVO desta tarefa (não é migração): o parágrafo de "pode/não

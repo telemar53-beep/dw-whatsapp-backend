@@ -591,11 +591,11 @@ describe('ai-worker — triagem', () => {
   test('primeira resposta ganha saudação com o primeiro nome quando o cliente foi reconhecido', async () => {
     // Teste real 2026-09-13: o modelo entregou o PIX por ferramenta e
     // respondeu sem cumprimentar. A saudação é garantida em código.
-    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Joaquim', contracts: [] });
     runAiTurn.mockResolvedValue({ texto: 'Enviei o PIX da sua fatura. Precisa de mais alguma coisa?', toolsExecutadas: [], erro: null, triagemConcluida: null });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringMatching(/^(Bom dia|Boa tarde|Boa noite), Willemberg! Enviei o PIX da sua fatura\./),
+      content: expect.stringMatching(/^(Bom dia|Boa tarde|Boa noite), Joaquim! Enviei o PIX da sua fatura\./),
     }));
   });
 
@@ -603,11 +603,11 @@ describe('ai-worker — triagem', () => {
     // O identity-resolver devolve a memória (sgpIndisponivel) em vez de
     // 'none': o worker não muda, mas é este caminho que impede o cliente
     // vinculado de ouvir "me informe seu CPF" quando o SGP cai.
-    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'memory', primeiroNome: 'Willemberg', contracts: [], sgpIndisponivel: true });
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'memory', primeiroNome: 'Joaquim', contracts: [], sgpIndisponivel: true });
     runAiTurn.mockResolvedValue({ texto: 'Nosso sistema de consulta está instável agora. Já encaminhei ao Suporte.', toolsExecutadas: [], erro: null, triagemConcluida: null });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringMatching(/^(Bom dia|Boa tarde|Boa noite), Willemberg! Nosso sistema de consulta está instável agora\./),
+      content: expect.stringMatching(/^(Bom dia|Boa tarde|Boa noite), Joaquim! Nosso sistema de consulta está instável agora\./),
     }));
   });
 
@@ -618,11 +618,11 @@ describe('ai-worker — triagem', () => {
     const { saudacaoDaHora } = jest.requireActual('../ai/saudacao');
     const certa = saudacaoDaHora();
     const errada = certa === 'Bom dia' ? 'Boa noite' : 'Bom dia';
-    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Joaquim', contracts: [] });
     getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 0 });
-    runAiTurn.mockResolvedValue({ texto: `${errada}, Willemberg! Verifiquei aqui que sua conexão está offline.`, toolsExecutadas: [], erro: null, triagemConcluida: null });
+    runAiTurn.mockResolvedValue({ texto: `${errada}, Joaquim! Verifiquei aqui que sua conexão está offline.`, toolsExecutadas: [], erro: null, triagemConcluida: null });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: `${certa}, Willemberg! Verifiquei aqui que sua conexão está offline.` }));
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: `${certa}, Joaquim! Verifiquei aqui que sua conexão está offline.` }));
   });
 
   // Print 2026-09-17: o cliente mandou o CPF e a IA entregou o boleto sem
@@ -643,11 +643,11 @@ describe('ai-worker — triagem', () => {
   });
 
   test('a saudação não é duplicada nem aplicada fora do primeiro turno', async () => {
-    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Joaquim', contracts: [] });
     // A saudação do período certo para a hora em que o teste roda: o worker
     // agora corrige "Bom dia" às 14h, então o texto precisa já vir certo.
     const { saudacaoDaHora } = jest.requireActual('../ai/saudacao');
-    const jaCumprimenta = `${saudacaoDaHora()}, Willemberg! Me diz o endereço.`;
+    const jaCumprimenta = `${saudacaoDaHora()}, Joaquim! Me diz o endereço.`;
     runAiTurn.mockResolvedValue({ texto: jaCumprimenta, toolsExecutadas: [], erro: null, triagemConcluida: null });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: jaCumprimenta }));
@@ -1901,7 +1901,7 @@ describe('ai-worker — triagem', () => {
       beforeEach(() => {
         isNightModeActive.mockReturnValue(true);
         getAiConfig.mockResolvedValue(NOTURNO);
-        resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+        resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Joaquim', contracts: [] });
       });
 
       test('sem texto mas com liberação feita: o código manda a frase do dono e conclui na fila', async () => {
@@ -1911,7 +1911,7 @@ describe('ai-worker — triagem', () => {
 
         expect(enqueueOutboundMessage).toHaveBeenCalledWith({
           conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
-          content: 'Prontinho, Willemberg! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das 08:00. Já deixei seu atendimento na fila para acompanhamento. Você consegue testar se a internet voltou?',
+          content: 'Prontinho, Joaquim! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das 08:00. Já deixei seu atendimento na fila para acompanhamento. Você consegue testar se a internet voltou?',
         });
         expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({
           summary: expect.stringMatching(/desbloqueio em confiança realizado/i),
@@ -1931,7 +1931,7 @@ describe('ai-worker — triagem', () => {
       });
 
       test('com texto do modelo, a frase do código não entra: quem fala é o turno', async () => {
-        runAiTurn.mockResolvedValue({ texto: 'Prontinho, Willemberg! Testa a internet aí.', toolsExecutadas: [], erro: null, triagemConcluida: null, desbloqueioRealizado: true });
+        runAiTurn.mockResolvedValue({ texto: 'Prontinho, Joaquim! Testa a internet aí.', toolsExecutadas: [], erro: null, triagemConcluida: null, desbloqueioRealizado: true });
 
         await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 

@@ -801,7 +801,7 @@ Add this test inside the existing `describe('AdminChannelsPage', ...)` block, ri
 ```jsx
   test('switches to the Respostas rápidas tab and shows the quick-reply management UI', async () => {
     useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598912345678', status: 'connected' }],
       loading: false,
       refresh: vi.fn(),
     });

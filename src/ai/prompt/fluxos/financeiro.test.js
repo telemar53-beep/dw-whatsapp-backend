@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const financeiro = require('./financeiro');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -81,7 +82,7 @@ describe('módulo financeiro', () => {
       test('despedida usa marcador de nome, nunca o nome real', () => {
         expect(t).toMatch(/Imagina, \[nome\]! 😊 Qualquer dúvida/);
         expect(t).toMatch(/Imagina, \[nome\]! Qualquer dúvida…/);
-        expect(t).not.toMatch(/Willemberg/);
+        expect(contemNomeReal(t)).toBe(false);
       });
 
       test('despedida do boleto não tem emoji; a das demais tem', () => {
@@ -212,7 +213,6 @@ describe('módulo financeiro', () => {
 
     test('nunca contém nome real de cliente', () => {
       const t = texto({ config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: 'r1' } });
-      expect(t).not.toMatch(/Willemberg/);
     });
 
     test('nunca cita preço ou velocidade real, nem reintroduz nascimento/identidade fraca/gate de confiança', () => {

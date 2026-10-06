@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const noturno = require('./noturno');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -85,7 +86,7 @@ describe('módulo noturno', () => {
 
     test('nunca contém nome real de cliente, preço ou velocidade real, nem afirma oferta da operação', () => {
       const t = texto();
-      expect(t).not.toMatch(/Willemberg/);
+      expect(contemNomeReal(t)).toBe(false);
       expect(t).not.toMatch(/R\$\s*\d/);
       expect(t).not.toMatch(/\d+\s*mega/i);
       expect(t).not.toMatch(/fibra|óptica|grátis|gratuit|ilimitad/i);

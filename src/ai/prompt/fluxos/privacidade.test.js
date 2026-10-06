@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const privacidade = require('./privacidade');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -52,8 +53,7 @@ describe('módulo privacidade', () => {
 
   test('nunca contém nome real de cliente nem cita data de nascimento', () => {
     const texto = privacidade.linhas(estadoBase()).join('\n');
-    expect(texto).not.toMatch(/Laureny/);
-    expect(texto).not.toMatch(/Jureildson/);
+    expect(contemNomeReal(texto)).toBe(false);
     expect(texto).not.toMatch(/nascimento/i);
   });
 

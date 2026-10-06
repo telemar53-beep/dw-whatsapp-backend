@@ -42,16 +42,16 @@
 // que a guarda de montar.test.js varre em todos os módulos.
 // ==========================================================================
 //
-// Nome real de cliente: o texto original citava "Boa tarde, Willemberg!
+// Nome real de cliente: o texto original citava "Boa tarde, [nome]!
 // Claro, vou te ajudar a conhecer nossos planos 😊 Temos estas opções:" como
 // saudação fixa entre aspas — um roteiro engessado (a própria categoria que
 // os princípios desta fase proíbem) E com nome real dentro. O texto novo
 // (dado pela tarefa, ver Step 3 do brief) não usa saudação entre aspas
 // nenhuma: descreve o OBJETIVO ("cumprimente pelo nome, diga que vai
-// ajudar") em vez de um script fixo — por isso não sobra "Willemberg" nem é
+// ajudar") em vez de um script fixo — por isso não sobra "[nome]" nem é
 // preciso um marcador "[nome]" no lugar dele (não há citação nenhuma para
 // genericizar). Guarda dedicada em comercial-cliente.test.js confirma que
-// "Willemberg" não aparece em nenhum estado.
+// "[nome]" não aparece em nenhum estado.
 //
 // Nomes de setor (Restrição Global — "o setor da lista acima que cuidar de
 // X", mesmo idioma de fatos.js/painel.js/comercial-novo.js/suporte-*.js/

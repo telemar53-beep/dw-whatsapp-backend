@@ -841,7 +841,7 @@ In `frontend/src/pages/AdminChannelsPage.test.jsx`, replace the existing test `'
 ```jsx
   test('switches to the Mensagens tab and shows quick replies and per-channel welcome messages', async () => {
     useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', welcomeMessage: null }],
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598912345678', status: 'connected', welcomeMessage: null }],
       loading: false,
       refresh: vi.fn(),
     });

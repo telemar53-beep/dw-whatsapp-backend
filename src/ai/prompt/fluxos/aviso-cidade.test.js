@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const avisoCidade = require('./aviso-cidade');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -71,7 +72,7 @@ describe('módulo aviso-cidade', () => {
 
     test('nunca contém nome real de cliente, preço ou velocidade real', () => {
       const t = texto();
-      expect(t).not.toMatch(/Willemberg/);
+      expect(contemNomeReal(t)).toBe(false);
       expect(t).not.toMatch(/R\$\s*\d/);
       expect(t).not.toMatch(/\d+\s*mega/i);
     });

@@ -2896,7 +2896,7 @@ Then add these 2 new tests anywhere inside the `describe('AdminChannelsPage', ..
 ```jsx
   test('switches to the Triagem tab and shows the triage configuration UI', async () => {
     useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: false }],
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598912345678', status: 'connected', triageEnabled: false }],
       loading: false,
       refresh: vi.fn(),
     });
@@ -2913,7 +2913,7 @@ Then add these 2 new tests anywhere inside the `describe('AdminChannelsPage', ..
 
   test('shows a checkbox per channel to toggle automatic triage', () => {
     useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: true }],
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598912345678', status: 'connected', triageEnabled: true }],
       loading: false,
       refresh: vi.fn(),
     });

@@ -89,7 +89,7 @@ const SIMILARIDADE_MINIMA = 0.7;
 /**
  * O modelo, instruído a responder "no modelo: ...", às vezes escreve a frase
  * com as palavras dele E cola o modelo em seguida (observado em produção:
- * "Bom dia, Willemberg! Vou te ajudar com o boleto. Como você tem mais de um
+ * "Bom dia, [nome]! Vou te ajudar com o boleto. Como você tem mais de um
  * contrato..." seguido de "Claro, vou te ajudar com o boleto. Como você tem
  * mais de um contrato..."). Não é repetição idêntica, então
  * semRepeticaoIntegral não pega. Aqui uma linha com corpo de frase cujas

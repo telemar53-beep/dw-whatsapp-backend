@@ -104,7 +104,8 @@ function linhasDosMeiosDaFatura(meios) {
   if (!Array.isArray(meios) || meios.length === 0) return [];
   const linhas = [];
   for (const m of meios) {
-    const prefixo = `FATO DO SISTEMA (2ª via desta conversa): a fatura ${m.faturaId}`;
+    // Ordem de 06/10/2026 (tarde): o fato diz de qual contrato é a fatura — ele não vale para outro endereço.
+    const prefixo = `FATO DO SISTEMA (2ª via desta conversa): a fatura ${m.faturaId}${m.contratoId != null ? ` do contrato ${m.contratoId}` : ''}`;
     if (m.pix === false && m.boleto === false) {
       linhas.push(`${prefixo} não tem PIX nem boleto disponível para envio por aqui. Não ofereça nenhum dos dois nem sugira que ele peça de novo: o único próximo passo que existe é falar com um atendente, se ele quiser.`);
     } else if (m.pix === false) {
@@ -116,6 +117,9 @@ function linhasDosMeiosDaFatura(meios) {
     } else if (m.pix === null) {
       linhas.push(`${prefixo} tem boleto; o PIX dela não pôde ser confirmado (falha ao pedi-lo ao sistema): não diga que ela não tem PIX.`);
     }
+  }
+  if (linhas.length > 0) {
+    linhas.push('FATO DO SISTEMA: o que está acima vale só para a fatura e o contrato citados; não diga nada sobre os meios de outro contrato com base nisso.');
   }
   return linhas;
 }

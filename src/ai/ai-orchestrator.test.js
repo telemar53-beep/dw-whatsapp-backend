@@ -2256,14 +2256,16 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
     // Comportamento da IA (06/10/2026; A6/A7): o estado dos meios que a 2ª via desta conversa comprovou viaja na metadata da
     // resposta da IA, volta na janela, vira fato do prompt, e as guardas da resposta usam só ele.
     describe('meios de pagamento comprovados pela 2ª via', () => {
-      const NADA = [{ contratoId: '17402', faturaId: '9', pix: false, boleto: false }];
+      // 06/10/2026 (tarde): o estado é do contrato do próprio cliente (IDENT, contrato 5) — com outro contrato no estado, a
+      // conversa teria dois contratos e a guarda da oferta só agiria com a falta comprovada nos dois.
+      const NADA = [{ contratoId: '5', faturaId: '9', pix: false, boleto: false }];
       const respostaAnterior = (meios) => ({ ...saida('Não há PIX nem boleto desta fatura disponível agora.'), id: 'out-meios', metadata: { meiosDaFatura: meios } });
 
       test('a janela traz o estado da resposta anterior, o prompt recebe o fato e o turno devolve o estado para a próxima mensagem', async () => {
         roteiro(final('Esta fatura não tem PIX nem boleto disponível por aqui agora.'));
         ferramentas();
         const r = await turno(['manda o pix', respostaAnterior(NADA), 'e agora?']);
-        expect(vistas[0].sistema).toMatch(/FATO DO SISTEMA \(2ª via desta conversa\): a fatura 9 não tem PIX nem boleto disponível para envio por aqui\./);
+        expect(vistas[0].sistema).toMatch(/FATO DO SISTEMA \(2ª via desta conversa\): a fatura 9 do contrato 5 não tem PIX nem boleto disponível para envio por aqui\./);
         expect(vistas[0].sistema).toMatch(/o único próximo passo que existe é falar com um atendente/);
         expect(r.meiosDaFatura).toEqual(NADA);
       });
@@ -2279,12 +2281,111 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
       test('o pedido do PIX ao SGP falhou no turno: "não há PIX" sai, a falha é dita, e o resto da resposta fica', async () => {
         roteiro(chamada('gerar_pix'), final('Não há código PIX disponível para essa fatura agora. Se quiser, posso te enviar o boleto.'));
         executeTool.mockReset().mockImplementation(async (_n, _a, c) => {
-          c.meiosDaFatura = [{ contratoId: '17402', faturaId: '9', pix: null, boleto: true }];
+          c.meiosDaFatura = [{ contratoId: '5', faturaId: '9', pix: null, boleto: true }];
           return { ok: true, resultado: { sucesso: false, enviado: false, pixIndeterminado: true } };
         });
         const r = await turno(['manda o pix']);
         expect(r.texto).toBe('Não consegui confirmar agora se o PIX está disponível para esta fatura. Se quiser, posso te enviar o boleto.');
-        expect(r.meiosDaFatura).toEqual([{ contratoId: '17402', faturaId: '9', pix: null, boleto: true }]);
+        expect(r.meiosDaFatura).toEqual([{ contratoId: '5', faturaId: '9', pix: null, boleto: true }]);
+      });
+
+      // Ordem de 06/10/2026 (tarde): com dois contratos, a ausência de PIX de um não vira afirmação sobre o outro — a guarda da
+      // oferta só age quando o meio foi comprovado inexistente em todos; a frase que não se pode vincular fica como está.
+      describe('dois contratos', () => {
+        const DOIS = {
+          ...IDENT,
+          contracts: [
+            { id: 301, statusCode: 1, address: 'Rua de Teste, 300 - Bairro de Teste' },
+            { id: 302, statusCode: 1, address: 'Avenida de Teste, 30 - Outro Bairro de Teste' },
+          ],
+        };
+        const RUA_SEM_PIX = [{ contratoId: '301', faturaId: '3001', pix: false, boleto: true }];
+        const anterior = { ...saida('O PIX dessa fatura não está disponível agora, mas posso te enviar o boleto dela.'), id: 'out-rua', metadata: { meiosDaFatura: RUA_SEM_PIX } };
+
+        test('o cliente pergunta pelo outro endereço: a oferta do PIX de lá fica como o modelo escreveu', async () => {
+          roteiro(final('Do outro endereço, posso gerar o PIX para você?'));
+          ferramentas();
+          const r = await turno(['manda o pix', anterior, 'e do outro endereço?'], { identidade: DOIS });
+          expect(r.texto).toBe('Do outro endereço, posso gerar o PIX para você?');
+        });
+
+        test('só a Rua comprovada sem PIX: nem a oferta genérica vira o fato da Rua (não dá para saber de qual endereço se fala)', async () => {
+          roteiro(final('Posso gerar o PIX para você?'));
+          ferramentas();
+          const r = await turno(['manda o pix', anterior, 'e agora?'], { identidade: DOIS });
+          expect(r.texto).toBe('Posso gerar o PIX para você?');
+        });
+
+        test('os dois contratos comprovados sem PIX: a oferta sai e entra o fato de todos', async () => {
+          roteiro(chamada('gerar_pix'), final('Posso gerar o PIX para você?'));
+          executeTool.mockReset().mockImplementation(async (_n, _a, c) => {
+            c.meiosDaFatura = [...RUA_SEM_PIX, { contratoId: '302', faturaId: '3002', pix: false, boleto: true }];
+            return { ok: true, resultado: { sucesso: false, motivo: 'Fatura sem código PIX no SGP' } };
+          });
+          const r = await turno(['manda o pix', anterior, 'e o pix do outro?'], { identidade: DOIS });
+          expect(r.texto).toBe('O PIX não está disponível agora em nenhuma das faturas consultadas.');
+        });
+
+        test('o pedido do PIX do outro contrato falhou no turno: a troca da indisponibilidade não cita "esta fatura"', async () => {
+          roteiro(chamada('gerar_pix'), final('O PIX não está disponível agora.'));
+          executeTool.mockReset().mockImplementation(async (_n, _a, c) => {
+            c.meiosDaFatura = [{ contratoId: '302', faturaId: '3002', pix: null, boleto: true }];
+            return { ok: true, resultado: { sucesso: false, enviado: false, pixIndeterminado: true } };
+          });
+          const r = await turno(['e o pix do outro contrato?'], { identidade: DOIS });
+          expect(r.texto).toBe('Não consegui confirmar agora se o PIX está disponível.');
+        });
+
+        test('o fato do prompt diz de qual contrato é a fatura e que vale só para ela', async () => {
+          roteiro(final('Certo.'));
+          ferramentas();
+          await turno(['manda o pix', anterior, 'e agora?'], { identidade: DOIS });
+          expect(vistas[0].sistema).toMatch(/a fatura 3001 do contrato 301 não tem PIX disponível/);
+          expect(vistas[0].sistema).toMatch(/vale só para a fatura e o contrato citados; não diga nada sobre os meios de outro contrato/);
+        });
+      });
+
+      // Revisão estreita (06/10/2026, tarde): pessoa sem contrato conhecido na conversa (terceiro pendente, alvo ambíguo,
+      // identificação contestada) também é "outro contrato" — o fato do contrato do cliente não vira resposta sobre ela.
+      describe('pessoa sem contrato conhecido', () => {
+        const DO_CLIENTE = [{ contratoId: '5', faturaId: '9', pix: false, boleto: true }];
+        const anterior = { ...saida('Esta fatura não tem PIX agora. Posso te enviar o boleto dela?'), id: 'out-cliente', metadata: { meiosDaFatura: DO_CLIENTE } };
+        const historico = (fala) => ['manda o pix', anterior, fala];
+
+        test('terceiro pendente (sem contrato): o pedido do CPF da mãe fica como o modelo escreveu', async () => {
+          roteiro(final('Me envie o CPF da sua mãe e eu posso gerar o PIX dela.'));
+          ferramentas();
+          const r = await turno(historico('e o pix da minha mãe?'), { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento' } });
+          expect(r.texto).toBe('Me envie o CPF da sua mãe e eu posso gerar o PIX dela.');
+        });
+
+        test('alvo ambíguo no turno: a pergunta de quem é a fatura fica como o modelo escreveu', async () => {
+          roteiro(final('É a sua fatura ou a da sua esposa? Assim que você me disser, posso gerar o PIX.'));
+          ferramentas();
+          const r = await turno(historico('manda o pix dela também'), { alvoAmbiguo: 'outra_pessoa_sem_documento' });
+          expect(r.texto).toBe('É a sua fatura ou a da sua esposa? Assim que você me disser, posso gerar o PIX.');
+        });
+
+        test('identificação contestada (sem contratos): o pedido do CPF fica como o modelo escreveu', async () => {
+          roteiro(final('Sem problema! Me passe o seu CPF e depois posso gerar o PIX da sua fatura.'));
+          ferramentas();
+          const r = await turno(historico('esse não sou eu'), { identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: true } });
+          expect(r.texto).toBe('Sem problema! Me passe o seu CPF e depois posso gerar o PIX da sua fatura.');
+        });
+
+        test('terceiro confirmado com contrato: o fato do contrato do cliente não vale para a fatura do terceiro', async () => {
+          roteiro(final('Posso gerar o PIX da fatura da Beltrana?'));
+          ferramentas();
+          const r = await turno(historico('agora o da Beltrana'), { terceiro: { nome: 'Beltrana', contratos: [{ id: 501 }] } });
+          expect(r.texto).toBe('Posso gerar o PIX da fatura da Beltrana?');
+        });
+
+        test('sem pessoa nova (só o cliente, um contrato): a oferta do PIX inexistente continua saindo', async () => {
+          roteiro(final('Posso gerar o PIX para você?'));
+          ferramentas();
+          const r = await turno(historico('E agora?'));
+          expect(r.texto).toBe('O PIX desta fatura não está disponível agora.');
+        });
       });
 
       test('a ferramenta de cobrança respondeu outra coisa (bloqueio): a frase dela fica, sem a troca da indisponibilidade não confirmada', async () => {

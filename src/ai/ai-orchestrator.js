@@ -5,7 +5,9 @@ const { montarContexto } = require('./prompt/montar');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
 const { recordAiInteraction, listAiInteractionsByConversation } = require('./ai-interaction.repository');
 const { promessasSemEvidencia, respostaSemPromessas } = require('./promessas-sem-evidencia');
-const { meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada } = require('./meios-de-pagamento');
+const {
+  meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada,
+} = require('./meios-de-pagamento');
 const { listRecentMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { resumoParaModelo, encontrarDisparoRelacionado, fatoDoDisparo } = require('../conversations/automatic-message');
 const { linhasDoDisparoRecente } = require('./prompt/fluxos/disparo-recente');
@@ -950,12 +952,25 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   // resultado sai (e entra que não deu para confirmar). Não interpretam o pedido do cliente (meios-de-pagamento.js).
   if (perfil === 'triagem' && texto) {
     const meios = meiosDoTurno(contexto);
-    const semOferta = respostaSemOfertaDeMeioInexistente(texto, meios);
+    // Ordem de 06/10/2026 (tarde): o fato é da fatura E do contrato — com mais de um contrato na conversa, a guarda da
+    // oferta só age quando o meio foi comprovado inexistente em todos (meios-de-pagamento.js).
+    // Pessoa sem contrato conhecido na conversa (terceiro pendente ou sem contrato, alvo ambíguo no turno, cliente sem
+    // contratos identificados, como na identificação contestada) conta como mais um contrato, que nunca terá fatura: o fato
+    // do contrato do cliente não vira resposta sobre ela.
+    const terceiro = contexto.terceiro;
+    const pessoaSemContrato = Boolean(contexto.alvoAmbiguo)
+      || Boolean(terceiro && (terceiro.pendente || terceiro.alvoPendente || !(terceiro.contratos || []).length))
+      || (contexto.contracts || []).length === 0;
+    const contratos = [
+      ...(contexto.contracts || []), ...((terceiro && terceiro.contratos) || []),
+      ...(pessoaSemContrato ? [{ id: 'pessoa-sem-contrato-conhecido' }] : []),
+    ];
+    const semOferta = respostaSemOfertaDeMeioInexistente(texto, meios, { contratos });
     if (semOferta.alterado) {
       console.warn(`Resposta da IA oferecia meio de pagamento que a 2ª via mostrou inexistente na conversa ${conversation.id}; trocada pelo fato`);
       texto = semOferta.texto;
     }
-    const semAfirmacao = respostaSemIndisponibilidadeNaoConfirmada(texto, meios, { cobrancaComResposta: Boolean(contexto.cobrancaComResposta) });
+    const semAfirmacao = respostaSemIndisponibilidadeNaoConfirmada(texto, meios, { cobrancaComResposta: Boolean(contexto.cobrancaComResposta), contratos });
     if (semAfirmacao.alterado) {
       console.warn(`Resposta da IA afirmava meio indisponível sem resultado na conversa ${conversation.id}; frase trocada`);
       texto = semAfirmacao.texto;

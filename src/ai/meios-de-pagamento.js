@@ -11,6 +11,12 @@
 // 2. a frase que AFIRMA a indisponibilidade de um meio sem resultado que a comprove (o pedido do PIX falhou, ou nenhuma
 //    ferramenta respondeu e nada se sabe) sai, e entra que não deu para confirmar. Quando a ferramenta respondeu outra
 //    coisa (bloqueio do gate, sem fatura, outro titular), a instrução dela vale e a guarda não age.
+// O fato é da fatura E do contrato dela (ordem de 06/10/2026, tarde). Com mais de um contrato na conversa (os do cliente,
+// os do terceiro confirmado e os que aparecem no estado), nenhuma frase é ligada a um contrato pelo texto — elipse, apelido,
+// abreviação e duas ruas na mesma frase tornam esse vínculo inseguro. A guarda 1 só age quando o meio foi comprovado
+// inexistente em TODOS os contratos; fora disso, a frase fica como o modelo escreveu, e quem segura a geração do meio
+// inexistente é a ferramenta (por contrato). A guarda 2 mantém a regra (só troca quando nenhuma fatura tem a falta
+// comprovada) e, com mais de um contrato, a troca não cita fatura nenhuma.
 // Redação diferente das formas abaixo passa (limitação conhecida, como nas outras guardas).
 
 const norm = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -89,8 +95,24 @@ function ofereceNaFrase(f, m) {
 
 const existe = (meios, m) => Array.isArray(meios) && meios.length > 0 && meios.every((x) => x[m] === true);
 
-function respostaSemOfertaDeMeioInexistente(texto, meios) {
-  const inex = { pix: inexistente(meios, 'pix'), boleto: inexistente(meios, 'boleto') };
+/** Os contratos da conversa: os informados (do cliente e do terceiro) e os que aparecem no estado dos meios. */
+function contratosDaConversa(contratos, meios) {
+  const ids = new Set();
+  for (const c of Array.isArray(contratos) ? contratos : []) if (c && c.id != null) ids.add(String(c.id));
+  for (const x of Array.isArray(meios) ? meios : []) if (x && x.contratoId != null) ids.add(String(x.contratoId));
+  return ids;
+}
+// O meio é comprovado assim em TODOS os contratos da conversa (cada um com fatura conhecida); com um contrato só, como antes.
+function emTodosOsContratos(meios, m, ids, teste) {
+  if (ids.size <= 1) return teste(meios, m);
+  return [...ids].every((id) => teste(meios.filter((x) => String(x.contratoId) === id), m));
+}
+
+function respostaSemOfertaDeMeioInexistente(texto, meios, { contratos = [] } = {}) {
+  const lista = Array.isArray(meios) ? meios : [];
+  const ids = contratosDaConversa(contratos, lista);
+  const varios = ids.size > 1;
+  const inex = { pix: emTodosOsContratos(lista, 'pix', ids, inexistente), boleto: emTodosOsContratos(lista, 'boleto', ids, inexistente) };
   if (!inex.pix && !inex.boleto) return { texto, alterado: false };
   const ficam = [];
   const tiradas = [];
@@ -110,20 +132,25 @@ function respostaSemOfertaDeMeioInexistente(texto, meios) {
   const jaDiz = os2 ? dizIndisponivel('pix') && dizIndisponivel('boleto') : dizIndisponivel(meioUnico);
   const partes = [resto];
   if (!jaDiz) {
-    partes.push(os2
-      ? 'Esta fatura não tem PIX nem boleto disponível por aqui agora. Se quiser, posso encaminhar você para um atendente.'
-      : `O ${NOME[meioUnico]} desta fatura não está disponível agora.`);
+    const fato = varios
+      ? (os2 ? 'Nenhuma das faturas consultadas tem PIX nem boleto disponível por aqui agora. Se quiser, posso encaminhar você para um atendente.'
+        : `O ${NOME[meioUnico]} não está disponível agora em nenhuma das faturas consultadas.`)
+      : (os2 ? 'Esta fatura não tem PIX nem boleto disponível por aqui agora. Se quiser, posso encaminhar você para um atendente.'
+        : `O ${NOME[meioUnico]} desta fatura não está disponível agora.`);
+    partes.push(fato);
   }
   // A oferta verdadeira que a frase tirada trazia (o outro meio, que a 2ª via mostrou existir) volta, se o resto não a tem.
-  if (!os2 && existe(meios, outro) && tiradas.some((f) => ofereceNaFrase(f, outro))
+  // (Aqui o meio tirado falta em todos os contratos, então todos têm fatura conhecida: existir em todas as faturas é existir em todos.)
+  if (!os2 && existe(lista, outro) && tiradas.some((f) => ofereceNaFrase(f, outro))
     && !frasesDe(resto).some((frase) => ofereceNaFrase(norm(frase), outro))) {
-    partes.push(`Se quiser, posso enviar o ${NOME[outro]} dela.`);
+    partes.push(varios ? `Se quiser, posso enviar o ${NOME[outro]}.` : `Se quiser, posso enviar o ${NOME[outro]} dela.`);
   }
   return { texto: partes.join(' ').trim(), alterado: true };
 }
 
-function respostaSemIndisponibilidadeNaoConfirmada(texto, meios, { cobrancaComResposta = false } = {}) {
+function respostaSemIndisponibilidadeNaoConfirmada(texto, meios, { cobrancaComResposta = false, contratos = [] } = {}) {
   const lista = Array.isArray(meios) ? meios : [];
+  const varios = contratosDaConversa(contratos, lista).size > 1;
   // Sem resultado: o pedido do meio falhou (null, sem nenhuma fatura comprovando a falta), ou nada se sabe e nenhuma
   // ferramenta de cobrança respondeu neste turno.
   const semResultado = (m) => !inexistente(lista, m)
@@ -138,9 +165,8 @@ function respostaSemIndisponibilidadeNaoConfirmada(texto, meios, { cobrancaComRe
       continue;
     }
     alterado = true;
-    const troca = naoConfirmados.length === 2
-      ? 'Não consegui confirmar agora se o PIX e o boleto estão disponíveis para esta fatura.'
-      : `Não consegui confirmar agora se o ${NOME[naoConfirmados[0]]} está disponível para esta fatura.`;
+    const nomes = naoConfirmados.length === 2 ? 'o PIX e o boleto estão disponíveis' : `o ${NOME[naoConfirmados[0]]} está disponível`;
+    const troca = `Não consegui confirmar agora se ${nomes}${varios ? '' : ' para esta fatura'}.`;
     if (!saida.includes(troca)) saida.push(troca);
   }
   return alterado ? { texto: saida.join(' ').trim(), alterado } : { texto, alterado: false };

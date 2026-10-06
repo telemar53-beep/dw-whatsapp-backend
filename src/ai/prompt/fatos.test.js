@@ -16,11 +16,11 @@ describe('módulo fatos', () => {
       expect(texto(undefined)).not.toMatch(/FATO DO SISTEMA \(2ª via/);
     });
     test('sem PIX e sem boleto: o fato e o único próximo passo', () => {
-      expect(texto([{ contratoId: '1', faturaId: '9', pix: false, boleto: false }])).toMatch(/a fatura 9 não tem PIX nem boleto disponível para envio por aqui\. Não ofereça nenhum dos dois nem sugira que ele peça de novo: o único próximo passo que existe é falar com um atendente/);
+      expect(texto([{ contratoId: '1', faturaId: '9', pix: false, boleto: false }])).toMatch(/a fatura 9 do contrato 1 não tem PIX nem boleto disponível para envio por aqui\. Não ofereça nenhum dos dois nem sugira que ele peça de novo: o único próximo passo que existe é falar com um atendente/);
     });
     test('só sem PIX, só sem boleto', () => {
-      expect(texto([{ contratoId: '1', faturaId: '9', pix: false, boleto: true }])).toMatch(/a fatura 9 não tem PIX disponível; o boleto dela existe\. Não ofereça o PIX\./);
-      expect(texto([{ contratoId: '1', faturaId: '9', pix: true, boleto: false }])).toMatch(/a fatura 9 não tem boleto disponível; o PIX dela existe\. Não ofereça o boleto\./);
+      expect(texto([{ contratoId: '1', faturaId: '9', pix: false, boleto: true }])).toMatch(/a fatura 9 do contrato 1 não tem PIX disponível; o boleto dela existe\. Não ofereça o PIX\./);
+      expect(texto([{ contratoId: '1', faturaId: '9', pix: true, boleto: false }])).toMatch(/a fatura 9 do contrato 1 não tem boleto disponível; o PIX dela existe\. Não ofereça o boleto\./);
     });
     test('o PIX que falhou não vira "não tem PIX"', () => {
       const t = texto([{ contratoId: '1', faturaId: '9', pix: null, boleto: true }]);

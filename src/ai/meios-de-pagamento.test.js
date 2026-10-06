@@ -117,3 +117,71 @@ describe('indisponibilidade afirmada sem resultado', () => {
     expect(respostaSemIndisponibilidadeNaoConfirmada(texto, meios, sinais)).toEqual({ texto, alterado: false });
   });
 });
+
+// Ordem do proprietário (06/10/2026, tarde): o fato é da fatura E do contrato. Com mais de um contrato na conversa, nenhuma
+// frase é ligada a um contrato pelo texto (a revisão mostrou que elipse, apelido, abreviação e duas ruas na mesma frase
+// tornam esse vínculo inseguro): a guarda da oferta só age quando o meio foi comprovado inexistente em TODOS os contratos, e
+// a frase que não se pode vincular fica como o modelo escreveu. Dados sintéticos do SGP falso (contratos 301 e 302).
+describe('mais de um contrato na conversa', () => {
+  const CONTRATOS = [{ id: 301, address: 'Rua de Teste, 300' }, { id: 302, address: 'Avenida de Teste, 30' }];
+  const RUA_SEM_PIX = { contratoId: '301', faturaId: '3001', pix: false, boleto: true };
+  const AVENIDA_SEM_PIX = { contratoId: '302', faturaId: '3002', pix: false, boleto: true };
+  const AVENIDA_SEM_BOLETO = { contratoId: '302', faturaId: '3002', pix: true, boleto: false };
+  const AVENIDA_NADA = { contratoId: '302', faturaId: '3002', pix: false, boleto: false };
+  const RUA_NADA = { contratoId: '301', faturaId: '3001', pix: false, boleto: false };
+  const AVENIDA_PIX_FALHOU = { contratoId: '302', faturaId: '3002', pix: null, boleto: true };
+  const doisContratos = { contratos: CONTRATOS };
+
+  test('reprodução: com só a Rua comprovada sem PIX, nenhuma oferta de PIX vira o fato da Rua (o outro endereço, a elipse, a abreviação)', () => {
+    for (const texto of [
+      'Do outro endereço, posso gerar o PIX para você?', 'Posso gerar o PIX para você?', 'E o outro? Posso gerar o PIX dele?',
+      'Da Av. de Teste, posso gerar o PIX?', 'Na Rua de Teste não tem PIX, mas posso gerar o PIX da Avenida de Teste.',
+    ]) {
+      expect(respostaSemOfertaDeMeioInexistente(texto, [RUA_SEM_PIX], doisContratos)).toEqual({ texto, alterado: false });
+    }
+  });
+
+  test('a ausência comprovada em TODOS os contratos: a oferta sai e entra o fato, sem citar uma fatura só', () => {
+    expect(respostaSemOfertaDeMeioInexistente('Posso gerar o PIX para você?', [RUA_SEM_PIX, AVENIDA_SEM_PIX], doisContratos))
+      .toEqual({ texto: 'O PIX não está disponível agora em nenhuma das faturas consultadas.', alterado: true });
+    expect(respostaSemOfertaDeMeioInexistente('Você pode me pedir o boleto ou o PIX novamente.', [RUA_NADA, AVENIDA_NADA], doisContratos).texto)
+      .toBe('Nenhuma das faturas consultadas tem PIX nem boleto disponível por aqui agora. Se quiser, posso encaminhar você para um atendente.');
+  });
+
+  test('a oferta verdadeira do outro meio, existente em todos, é preservada junto do fato', () => {
+    expect(respostaSemOfertaDeMeioInexistente('Posso te enviar o boleto e, se preferir, o PIX.', [RUA_SEM_PIX, AVENIDA_SEM_PIX], doisContratos).texto)
+      .toBe('O PIX não está disponível agora em nenhuma das faturas consultadas. Se quiser, posso enviar o boleto.');
+  });
+
+  test('dois contratos com disponibilidades diferentes: nenhuma oferta é trocada, em nenhum dos dois sentidos', () => {
+    const meios = [RUA_SEM_PIX, AVENIDA_SEM_BOLETO];
+    for (const texto of ['Posso gerar o PIX para você?', 'Posso te enviar o boleto?', 'Da Rua de Teste, posso te enviar o boleto. Da Avenida de Teste, posso gerar o PIX.']) {
+      expect(respostaSemOfertaDeMeioInexistente(texto, meios, doisContratos)).toEqual({ texto, alterado: false });
+    }
+  });
+
+  test('o contrato do terceiro confirmado também conta (estado só do terceiro não vale para o contrato do cliente)', () => {
+    const terceiro = { contratoId: '501', faturaId: '5001', pix: false, boleto: true };
+    const texto = 'Posso gerar o PIX da sua fatura?';
+    expect(respostaSemOfertaDeMeioInexistente(texto, [terceiro], { contratos: [{ id: 101 }] })).toEqual({ texto, alterado: false });
+  });
+
+  test('a indisponibilidade sem resultado em nenhum contrato: a troca não cita fatura nenhuma', () => {
+    expect(respostaSemIndisponibilidadeNaoConfirmada('O PIX não está disponível agora.', [AVENIDA_PIX_FALHOU], doisContratos).texto)
+      .toBe('Não consegui confirmar agora se o PIX está disponível.');
+    expect(respostaSemIndisponibilidadeNaoConfirmada('O boleto não está disponível agora.', [], doisContratos).texto)
+      .toBe('Não consegui confirmar agora se o boleto está disponível.');
+  });
+
+  test('com a falta comprovada em algum contrato, a afirmação não é transformada (não dá para saber de qual se fala)', () => {
+    const texto = 'O PIX do outro endereço não está disponível agora.';
+    expect(respostaSemIndisponibilidadeNaoConfirmada(texto, [RUA_SEM_PIX, AVENIDA_PIX_FALHOU], doisContratos)).toEqual({ texto, alterado: false });
+  });
+
+  test('com um contrato só, nada muda (mesmas frases e mesmos textos de antes)', () => {
+    expect(respostaSemOfertaDeMeioInexistente('Posso gerar o PIX para você?', [RUA_SEM_PIX], { contratos: [{ id: 301 }] }).texto)
+      .toBe('O PIX desta fatura não está disponível agora.');
+    expect(respostaSemIndisponibilidadeNaoConfirmada('O PIX não está disponível agora.', [{ ...RUA_SEM_PIX, pix: null }], { contratos: [{ id: 301 }] }).texto)
+      .toBe('Não consegui confirmar agora se o PIX está disponível para esta fatura.');
+  });
+});

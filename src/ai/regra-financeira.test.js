@@ -281,6 +281,16 @@ describe('DIA', () => {
     expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
   });
 
+  // N3 (06/10/2026): no caminho de 1 vencida (a fatura autorizada pela regra), gerar_pix pede a 2ª via no padrão — com a
+  // geração do PIX quando a 2ª via não traz código — e o PIX sai. Só a conferência do comprovante desliga a geração.
+  test('14e. 1 vencida: gerar_pix pede a 2ª via no padrão e entrega o PIX da fatura autorizada', async () => {
+    titulosPorContrato[100] = leitura([titulo(1481, -3)]);
+    viasPorContrato[100] = segundaVia(titulo(1481, -3));
+    const r = await findTool('gerar_pix').executar({ contratoId: 100 }, ctx({ falasDoCliente: ['manda o pix'] }));
+    expect(r.enviado).toBe(true);
+    expect(sgpClient.getDuplicateInvoice.mock.calls).toEqual([[100]]);
+  });
+
   test('14b. o vencimento atualizado para hoje não esconde o atraso: 2 vencidas continuam 2', async () => {
     // As duas vencidas têm vencimento_atualizado = HOJE. Pela data atualizada seriam "do dia".
     titulosPorContrato[100] = leitura([titulo(1451, -35), titulo(1452, -5)]);

@@ -126,7 +126,8 @@ describe('analisarComprovante', () => {
       config: CONFIG,
     });
 
-    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith('ctr-1');
+    // N3 (06/10/2026): a 2ª via continua sendo a fonte, pedida sem gerar PIX (a conferência não usa o código PIX).
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith('ctr-1', { gerarPix: false });
     expect(resultado.faturaId).toBe('f-1');
     expect(resultado.contratoId).toBe('ctr-1');
   });

@@ -237,6 +237,38 @@ describe('sgp-client', () => {
       expect(result.duplicates[0].pixFalhou).toBeUndefined();
     });
 
+    // N3 (06/10/2026, autorizado): a análise do comprovante só usa id, valor e vencimento da 2ª via — pede a 2ª via sem
+    // gerar o PIX. O código que a 2ª via já traz continua vindo; a fatura sem código fica sem código, sem marca de falha.
+    test('gerarPix: false — não chama pagamento/pix; o resto da 2ª via vem igual', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      const links = [
+        { id: '998', vencimento: '2026-09-10', valor: 50, linhadigitavel: '8361-a', codigopix: '000201-pronto', link: 'https://x/998' },
+        { id: '999', vencimento: '2026-09-20', valor: 89.9, linhadigitavel: '8361-b', codigopix: '', link: 'https://x/999' },
+      ];
+      axios.post
+        .mockResolvedValueOnce({ data: { faturas: [] } })
+        .mockResolvedValueOnce({ data: { status: 1, links } });
+      const result = await getDuplicateInvoice(17402, { gerarPix: false });
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(axios.post.mock.calls.some(([url]) => url.includes('pagamento/pix'))).toBe(false);
+      expect(result.hasOpenInvoice).toBe(true);
+      expect(result.duplicates).toEqual([
+        { id: '998', dueDate: '2026-09-10', value: 50, barCode: '8361-a', pixCode: '000201-pronto', boletoLink: 'https://x/998' },
+        { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '8361-b', pixCode: null, boletoLink: 'https://x/999' },
+      ]);
+    });
+
+    test('sem a opção, o padrão continua gerando o PIX da fatura sem código (as ferramentas que entregam PIX não mudam)', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post
+        .mockResolvedValueOnce({ data: { faturas: [] } })
+        .mockResolvedValueOnce({ data: { status: 1, links: [{ id: '999', vencimento: '2026-09-20', valor: 89.9, linhadigitavel: '8361-b', codigopix: '', link: 'https://x/999' }] } })
+        .mockResolvedValueOnce({ data: { status: 1, pix: '000201-gerado' } });
+      const result = await getDuplicateInvoice(17402);
+      expect(axios.post.mock.calls.filter(([url]) => url.includes('pagamento/pix/999'))).toHaveLength(1);
+      expect(result.duplicates[0].pixCode).toBe('000201-gerado');
+    });
+
     // Comportamento da IA (06/10/2026; A6/A7): o SGP respondeu sem código PIX — aí sim a fatura não tem PIX agora.
     test('pagamento/pix answers without a pix code: null pixCode and no failure flag', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);

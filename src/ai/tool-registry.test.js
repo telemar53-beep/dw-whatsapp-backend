@@ -3769,8 +3769,9 @@ describe('analisar_comprovante', () => {
 
     const r = await findTool('analisar_comprovante').executar({}, c);
 
-    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(17402);
-    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(17403);
+    // N3 (06/10/2026): os mesmos contratos, a 2ª via pedida sem gerar PIX.
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(17402, { gerarPix: false });
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(17403, { gerarPix: false });
     expect(r.faturaId).toBe('9999');
     expect(r.contratoId).toBe(17403);
   });
@@ -4184,6 +4185,17 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
           expect(r.instrucao).toMatch(/sem afirmar que os dois estão disponíveis/);
           expect(r.instrucao).toMatch(/Você quer pagar por boleto ou por PIX\? Assim que você escolher, eu vejo se ele está disponível para esta fatura\./);
         }
+      });
+
+      // N3 (06/10/2026): só a conferência do comprovante pede a 2ª via sem gerar PIX; gerar_pix e enviar_boleto usam o
+      // padrão (com a geração do PIX quando a 2ª via não traz código), e o PIX pedido pelo cliente continua saindo.
+      test('N3: gerar_pix e enviar_boleto pedem a 2ª via no padrão (sem desligar a geração do PIX), e o PIX sai', async () => {
+        sgpClient.getDuplicateInvoice.mockClear();
+        const p = await pix({ contratoId: 17402 }, comFalas(['manda o pix da minha internet'], { messageId: 'msg-n3-1' }));
+        expect(p.enviado).toBe(true);
+        const b = await boleto({ contratoId: 17402 }, comFalas(['manda o boleto da minha internet'], { messageId: 'msg-n3-2' }));
+        expect(b.enviado).toBe(true);
+        expect(sgpClient.getDuplicateInvoice.mock.calls).toEqual([[17402], [17402]]);
       });
 
       test('pedido explícito continua: a 2ª via é pedida uma vez e o PIX sai', async () => {

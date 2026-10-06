@@ -74,7 +74,9 @@ async function analisarComprovante({ conversationId, imagem, contratos = [], con
   // Faturas em aberto de TODOS os contratos: o comprovante pode ser do outro ponto.
   const faturas = [];
   if (contratos.length > 0) {
-    const segundasVias = await Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id)));
+    // N3 (06/10/2026, autorizado): a 2ª via continua sendo a fonte, pedida SEM gerar o PIX — a conferência só usa id, valor
+    // e vencimento das faturas em aberto, e o PIX gerado aqui não servia para nada.
+    const segundasVias = await Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id, { gerarPix: false })));
     segundasVias.forEach((r, i) => {
       if (r.status === 'fulfilled' && r.value && r.value.hasOpenInvoice) {
         for (const d of r.value.duplicates) faturas.push({ id: d.id, value: d.value, dueDate: d.dueDate, contratoId: contratos[i].id });

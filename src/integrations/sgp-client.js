@@ -170,7 +170,9 @@ async function conferirTitulos(config, contratoId) {
   return montarConferencia(leitura, contratoId);
 }
 
-async function getDuplicateInvoice(contratoId) {
+// N3 (06/10/2026, autorizado pelo proprietário): `gerarPix: false` pede a 2ª via sem chamar pagamento/pix — para quem só
+// usa id, valor e vencimento (a conferência do comprovante). O padrão, usado por quem entrega o PIX, continua gerando.
+async function getDuplicateInvoice(contratoId, { gerarPix = true } = {}) {
   const config = await requireConfig();
   const conferencia = await conferirTitulos(config, contratoId);
 
@@ -187,7 +189,7 @@ async function getDuplicateInvoice(contratoId) {
       // pagamento/pix quando a fatura não trouxer nenhum código pronto.
       let pixCode = typeof link.codigopix === 'string' && link.codigopix.trim() ? link.codigopix : null;
       let pixFalhou = false;
-      if (!pixCode) {
+      if (!pixCode && gerarPix) {
         try {
           const pixResponse = await postSgp(config, `/api/ura/pagamento/pix/${link.id}`, { contrato: contratoId });
           if (pixResponse.data.pix) pixCode = pixResponse.data.pix;

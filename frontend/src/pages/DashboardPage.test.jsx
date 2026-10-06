@@ -59,7 +59,7 @@ beforeEach(() => {
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
   useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(), clearUnread: vi.fn() });
   closeConversation.mockResolvedValue({ id: 'c1', status: 'closed' });
-  useCompanyName.mockReturnValue({ name: 'Net Fibra', status: 'ready' });
+  useCompanyName.mockReturnValue({ name: 'Provedor Exemplo', status: 'ready' });
   useTransferNotice.mockReturnValue({ notice: null, dismiss: vi.fn() });
 });
 
@@ -82,7 +82,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+    expect(screen.getByText('Provedor Exemplo · Atendimento')).toBeInTheDocument();
   });
 
   test('em carregamento não mostra "Atendimento" genérico', () => {
@@ -93,7 +93,7 @@ describe('DashboardPage', () => {
     // A aba "Atendimento" existe sempre na lista; o que não pode aparecer é o título da tela vazia.
     const emptyState = within(screen.getByRole('main'));
     expect(emptyState.queryByText('Atendimento')).not.toBeInTheDocument();
-    expect(emptyState.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
+    expect(emptyState.queryByText('Provedor Exemplo · Atendimento')).not.toBeInTheDocument();
   });
 
   test('sem empresa cadastrada, a tela vazia mostra só Atendimento', () => {
@@ -507,19 +507,19 @@ describe('DashboardPage', () => {
 
     expect(mesa).toHaveAttribute('data-lista', 'oculta');
     // Sem conversa escolhida, quem ocupa a área de trabalho é a tela vazia.
-    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+    expect(screen.getByText('Provedor Exemplo · Atendimento')).toBeInTheDocument();
 
     await abrirEspera();
     await userEvent.click(within(lista).getByRole('button', { name: /carlos/i }));
 
     // A conversa tomou o lugar da tela vazia: um contexto por vez.
-    expect(screen.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
+    expect(screen.queryByText('Provedor Exemplo · Atendimento')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
 
     expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
-    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+    expect(screen.getByText('Provedor Exemplo · Atendimento')).toBeInTheDocument();
     expect(mesa).toHaveAttribute('data-lista', 'oculta');
   });
 
@@ -766,13 +766,13 @@ describe('aviso de transferência recebida', () => {
     });
     renderDashboard();
 
-    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+    expect(screen.getByText('Provedor Exemplo · Atendimento')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /abrir o atendimento/i }));
 
     expect(dismiss).toHaveBeenCalled();
     // A tela vazia deu lugar à conversa transferida.
-    expect(screen.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
+    expect(screen.queryByText('Provedor Exemplo · Atendimento')).not.toBeInTheDocument();
     expect(screen.getByTitle('5511999998888')).toHaveTextContent('Carlos');
   });
 });

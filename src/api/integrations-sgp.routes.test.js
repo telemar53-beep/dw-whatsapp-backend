@@ -297,7 +297,7 @@ describe('GET /api/integrations/sgp/messages', () => {
       // O template real de hoje, com o texto aprovado na Meta.
       const DW_FATURA = {
         id: 'tpl-dw', name: 'dw_fatura_mensal', language: 'pt_BR', variableCount: 4, headerType: null, status: 'APPROVED', purpose: 'disparo',
-        bodyText: 'Olá, {{1}}! Sua fatura da DW Telecom está disponível.\n\nValor: {{2}}\nVencimento: {{3}}\nBoleto: {{4}}\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 445 4546.',
+        bodyText: 'Olá, {{1}}! Sua fatura da DW Telecom está disponível.\n\nValor: {{2}}\nVencimento: {{3}}\nBoleto: {{4}}\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 999 0338.',
       };
       const VARIAVEIS = ['Maria', 'R$ 100,00', '30/09/2026', 'https://boleto.exemplo/abc'];
       const ANTIGO = `variables=${VARIAVEIS.join('|')}||template=dw_fatura_mensal`;
@@ -313,7 +313,7 @@ describe('GET /api/integrations/sgp/messages', () => {
         expect(res.status).toBe(200);
         const job = enfileirado();
         expect(job).toMatchObject(CAMPOS_DA_META);
-        expect(job.content).toBe('Olá, Maria! Sua fatura da DW Telecom está disponível.\n\nValor: R$ 100,00\nVencimento: 30/09/2026\nBoleto: https://boleto.exemplo/abc\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 445 4546.');
+        expect(job.content).toBe('Olá, Maria! Sua fatura da DW Telecom está disponível.\n\nValor: R$ 100,00\nVencimento: 30/09/2026\nBoleto: https://boleto.exemplo/abc\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 999 0338.');
         expect(job.metadata).toEqual({ origem: 'sgp', gatewayId: 'gw-meta', modo: 'template', template: 'dw_fatura_mensal', textoModelo: DW_FATURA.bodyText, tipo: 'desconhecido' });
       });
 

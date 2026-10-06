@@ -35,7 +35,7 @@ beforeEach(() => {
 // só aqui agora).
 describe('iniciaisDaEmpresa', () => {
   test('pega a primeira letra de até duas palavras, em maiúsculas', () => {
-    expect(iniciaisDaEmpresa('Net Fibra Ltda')).toBe('NF');
+    expect(iniciaisDaEmpresa('Provedor Exemplo Ltda')).toBe('PE');
     expect(iniciaisDaEmpresa('provedor')).toBe('P');
   });
 
@@ -47,7 +47,7 @@ describe('iniciaisDaEmpresa', () => {
   });
 
   test('espaços sobrando não viram inicial vazia', () => {
-    expect(iniciaisDaEmpresa('  Net   Fibra  ')).toBe('NF');
+    expect(iniciaisDaEmpresa('  Provedor   Exemplo  ')).toBe('PE');
   });
 
   test('sem nome não há iniciais', () => {

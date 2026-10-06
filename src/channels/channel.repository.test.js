@@ -52,7 +52,7 @@ describe('channel repository', () => {
       type: 'meta_cloud',
       name: 'Primeiro',
       phoneNumber: '+5520999984546',
-      config: { phoneNumberId: '530351070168344', accessToken: 'tok' },
+      config: { phoneNumberId: '100000000000101', accessToken: 'tok' },
     });
 
     await expect(
@@ -60,7 +60,7 @@ describe('channel repository', () => {
         type: 'meta_cloud',
         name: 'Duplicado',
         phoneNumber: '+5520999984547',
-        config: { phoneNumberId: '530351070168344', accessToken: 'tok' },
+        config: { phoneNumberId: '100000000000101', accessToken: 'tok' },
       })
     ).rejects.toMatchObject({ code: '23505' });
   });
@@ -452,7 +452,7 @@ describe('convertChannelToMetaCloud', () => {
     await getPool().query('TRUNCATE channels CASCADE');
   });
 
-  const CONFIG_NOVA = { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' };
+  const CONFIG_NOVA = { phoneNumberId: '100000000000102', accessToken: 'tok-meta', wabaId: '1000000000000104' };
 
   test('converte um canal 360dialog mantendo id, telefone e nome', async () => {
     const original = await createChannel({
@@ -508,7 +508,7 @@ describe('convertChannelToMetaCloud', () => {
 
     await convertChannelToMetaCloud(original.id, CONFIG_NOVA);
 
-    const achado = await findChannelByMetaPhoneNumberId('613336748527998');
+    const achado = await findChannelByMetaPhoneNumberId('100000000000102');
     expect(achado.id).toBe(original.id);
   });
 
@@ -555,13 +555,13 @@ describe('updateChannelName', () => {
       type: 'meta_cloud',
       name: 'DW Telcom 1',
       phoneNumber: '+5520999984546',
-      config: { phoneNumberId: '530351070168344', accessToken: 'tok', wabaId: 'w1' },
+      config: { phoneNumberId: '100000000000101', accessToken: 'tok', wabaId: 'w1' },
     });
 
     const renomeado = await updateChannelName(canal.id, 'Comercial');
 
     expect(renomeado.phoneNumber).toBe('+5520999984546');
-    expect(renomeado.config).toEqual({ phoneNumberId: '530351070168344', accessToken: 'tok', wabaId: 'w1' });
+    expect(renomeado.config).toEqual({ phoneNumberId: '100000000000101', accessToken: 'tok', wabaId: 'w1' });
     expect(renomeado.type).toBe('meta_cloud');
   });
 

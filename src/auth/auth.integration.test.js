@@ -14,11 +14,11 @@ describe('auth integration (no mocks)', () => {
   });
 
   test('login with a real agent returns a token that requireAuth accepts', async () => {
-    const agent = await createAgent({ email: 'integration@dw.com', password: 'realpassword123', role: 'admin' });
+    const agent = await createAgent({ email: 'integration@dw.test', password: 'realpassword123', role: 'admin' });
 
     const loginRes = await request(app)
       .post('/api/auth/login')
-      .send({ email: 'integration@dw.com', password: 'realpassword123' });
+      .send({ email: 'integration@dw.test', password: 'realpassword123' });
 
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.token).toBeDefined();
@@ -37,11 +37,11 @@ describe('auth integration (no mocks)', () => {
   });
 
   test('login with wrong password returns 401', async () => {
-    await createAgent({ email: 'integration2@dw.com', password: 'realpassword123', role: 'agent' });
+    await createAgent({ email: 'integration2@dw.test', password: 'realpassword123', role: 'agent' });
 
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: 'integration2@dw.com', password: 'wrongpassword' });
+      .send({ email: 'integration2@dw.test', password: 'wrongpassword' });
 
     expect(res.status).toBe(401);
   });
@@ -53,7 +53,7 @@ describe('POST /api/auth/media-token', () => {
     await getPool().query('TRUNCATE agents CASCADE');
   });
 
-  async function logar(role = 'agent', email = 'media@dw.com') {
+  async function logar(role = 'agent', email = 'media@dw.test') {
     await createAgent({ name: 'Ana', email, password: 'secret123', role });
     const res = await request(app).post('/api/auth/login').send({ email, password: 'secret123' });
     return res.body.token;
@@ -90,11 +90,11 @@ describe('POST /api/auth/media-token', () => {
   test('administrador recebe a permissao de silent; atendente nao', async () => {
     const { verifyMediaToken } = require('./media-token.service');
 
-    const sessaoAdmin = await logar('admin', 'admin-media@dw.com');
+    const sessaoAdmin = await logar('admin', 'admin-media@dw.test');
     const doAdmin = await request(app).post('/api/auth/media-token').set('Authorization', `Bearer ${sessaoAdmin}`);
     expect(verifyMediaToken(doAdmin.body.mediaToken).podeVerSilent).toBe(true);
 
-    const sessaoAgente = await logar('agent', 'agente-media@dw.com');
+    const sessaoAgente = await logar('agent', 'agente-media@dw.test');
     const doAgente = await request(app).post('/api/auth/media-token').set('Authorization', `Bearer ${sessaoAgente}`);
     expect(verifyMediaToken(doAgente.body.mediaToken).podeVerSilent).toBe(false);
   });

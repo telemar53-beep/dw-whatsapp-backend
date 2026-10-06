@@ -94,7 +94,7 @@ describe('conversation repository', () => {
 
   test('claimConversation assigns an unassigned conversation atomically', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent1@dw.test', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conversation.id, agent.id);
     expect(claimed.status).toBe('assigned');
     expect(claimed.assignedAgentId).toBe(agent.id);
@@ -102,8 +102,8 @@ describe('conversation repository', () => {
 
   test('claimConversation returns null when already assigned', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent1 = await createAgent({ email: 'agent2@dw.com', password: 'secret123', role: 'agent' });
-    const agent2 = await createAgent({ email: 'agent3@dw.com', password: 'secret123', role: 'agent' });
+    const agent1 = await createAgent({ email: 'agent2@dw.test', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'agent3@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent1.id);
     const secondClaim = await claimConversation(conversation.id, agent2.id);
     expect(secondClaim).toBeNull();
@@ -111,8 +111,8 @@ describe('conversation repository', () => {
 
   test('transferConversation moves the conversation to another agent', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent1 = await createAgent({ email: 'agent4@dw.com', password: 'secret123', role: 'agent' });
-    const agent2 = await createAgent({ email: 'agent5@dw.com', password: 'secret123', role: 'agent' });
+    const agent1 = await createAgent({ email: 'agent4@dw.test', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'agent5@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent1.id);
     const transferred = await transferConversation(conversation.id, agent1.id, agent2.id);
     expect(transferred.assignedAgentId).toBe(agent2.id);
@@ -120,18 +120,18 @@ describe('conversation repository', () => {
 
   test('claimConversation returns null for a closed conversation', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const closingAgent = await createAgent({ email: 'agent6@dw.com', password: 'secret123', role: 'agent' });
+    const closingAgent = await createAgent({ email: 'agent6@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, closingAgent.id);
     await closeConversation(conversation.id, closingAgent.id);
-    const agent = await createAgent({ email: 'agent6b@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent6b@dw.test', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conversation.id, agent.id);
     expect(claimed).toBeNull();
   });
 
   test('transferConversation returns null for a closed conversation even if assigned_agent_id still matches fromAgentId', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent1 = await createAgent({ email: 'agent7@dw.com', password: 'secret123', role: 'agent' });
-    const agent2 = await createAgent({ email: 'agent8@dw.com', password: 'secret123', role: 'agent' });
+    const agent1 = await createAgent({ email: 'agent7@dw.test', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'agent8@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent1.id);
     await closeConversation(conversation.id, agent1.id);
     const transferred = await transferConversation(conversation.id, agent1.id, agent2.id);
@@ -140,8 +140,8 @@ describe('conversation repository', () => {
 
   test('transferConversation assigns a waiting conversation directly to an agent, without requiring it to be claimed first', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const callingAgent = await createAgent({ email: 'agent7b@dw.com', password: 'secret123', role: 'agent' });
-    const targetAgent = await createAgent({ email: 'agent7c@dw.com', password: 'secret123', role: 'agent' });
+    const callingAgent = await createAgent({ email: 'agent7b@dw.test', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent7c@dw.test', password: 'secret123', role: 'agent' });
     const transferred = await transferConversation(conversation.id, callingAgent.id, targetAgent.id);
     expect(transferred.status).toBe('assigned');
     expect(transferred.assignedAgentId).toBe(targetAgent.id);
@@ -150,9 +150,9 @@ describe('conversation repository', () => {
 
   test('transferConversation returns null when the conversation is already assigned to someone else', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent7d@dw.com', password: 'secret123', role: 'agent' });
-    const otherAgent = await createAgent({ email: 'agent7e@dw.com', password: 'secret123', role: 'agent' });
-    const targetAgent = await createAgent({ email: 'agent7f@dw.com', password: 'secret123', role: 'agent' });
+    const assignedAgent = await createAgent({ email: 'agent7d@dw.test', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'agent7e@dw.test', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent7f@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, assignedAgent.id);
     const transferred = await transferConversation(conversation.id, otherAgent.id, targetAgent.id);
     expect(transferred).toBeNull();
@@ -160,7 +160,7 @@ describe('conversation repository', () => {
 
   test('closeConversation marks the conversation closed and records who closed it', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent9@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent9@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     const closed = await closeConversation(conversation.id, agent.id);
     expect(closed.status).toBe('closed');
@@ -175,7 +175,7 @@ describe('conversation repository', () => {
 
   test('closeConversation records the reason_id when one is passed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent9e@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent9e@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     const reasonResult = await getPool().query(
       `INSERT INTO contact_reasons (name) VALUES ('Troca de senha') RETURNING id`
@@ -193,7 +193,7 @@ describe('conversation repository', () => {
 
   test('closeConversation leaves reason_id null when none is passed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent9f@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent9f@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     await closeConversation(conversation.id, agent.id);
@@ -207,8 +207,8 @@ describe('conversation repository', () => {
 
   test('closeConversation returns null when called by an agent other than the assigned one', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent9b@dw.com', password: 'secret123', role: 'agent' });
-    const otherAgent = await createAgent({ email: 'agent9c@dw.com', password: 'secret123', role: 'agent' });
+    const assignedAgent = await createAgent({ email: 'agent9b@dw.test', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'agent9c@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, assignedAgent.id);
     const closed = await closeConversation(conversation.id, otherAgent.id);
     expect(closed).toBeNull();
@@ -216,7 +216,7 @@ describe('conversation repository', () => {
 
   test('closeConversation closes a conversation that was never claimed (still waiting in the queue)', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent9d@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent9d@dw.test', password: 'secret123', role: 'agent' });
     const closed = await closeConversation(conversation.id, agent.id);
     expect(closed.status).toBe('closed');
     expect(closed.assignedAgentId).toBeNull();
@@ -224,8 +224,8 @@ describe('conversation repository', () => {
 
   test('adminTransferConversation moves the conversation even when called by someone other than the assigned agent', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-1@dw.com', password: 'secret123', role: 'agent' });
-    const targetAgent = await createAgent({ email: 'agent-admin-xfer-2@dw.com', password: 'secret123', role: 'agent' });
+    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-1@dw.test', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-2@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, assignedAgent.id);
 
     const transferred = await adminTransferConversation(conversation.id, targetAgent.id);
@@ -235,8 +235,8 @@ describe('conversation repository', () => {
 
   test('adminTransferConversation records the previously assigned agent as from_agent_id', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-3@dw.com', password: 'secret123', role: 'agent' });
-    const targetAgent = await createAgent({ email: 'agent-admin-xfer-4@dw.com', password: 'secret123', role: 'agent' });
+    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-3@dw.test', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-4@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, assignedAgent.id);
 
     await adminTransferConversation(conversation.id, targetAgent.id);
@@ -251,7 +251,7 @@ describe('conversation repository', () => {
 
   test('adminTransferConversation assigns an unclaimed waiting conversation directly', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const targetAgent = await createAgent({ email: 'agent-admin-xfer-5@dw.com', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-5@dw.test', password: 'secret123', role: 'agent' });
 
     const transferred = await adminTransferConversation(conversation.id, targetAgent.id);
 
@@ -260,8 +260,8 @@ describe('conversation repository', () => {
 
   test('adminTransferConversation returns null for a closed conversation', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-6@dw.com', password: 'secret123', role: 'agent' });
-    const targetAgent = await createAgent({ email: 'agent-admin-xfer-7@dw.com', password: 'secret123', role: 'agent' });
+    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-6@dw.test', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-7@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, assignedAgent.id);
     await closeConversation(conversation.id, assignedAgent.id);
 
@@ -272,8 +272,8 @@ describe('conversation repository', () => {
 
   test('adminCloseConversation closes the conversation even when called by an admin who never claimed it', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent-admin-close-1@dw.com', password: 'secret123', role: 'agent' });
-    const admin = await createAgent({ email: 'admin-close-1@dw.com', password: 'secret123', role: 'admin' });
+    const assignedAgent = await createAgent({ email: 'agent-admin-close-1@dw.test', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'admin-close-1@dw.test', password: 'secret123', role: 'admin' });
     await claimConversation(conversation.id, assignedAgent.id);
 
     const closed = await adminCloseConversation(conversation.id, admin.id, null);
@@ -283,8 +283,8 @@ describe('conversation repository', () => {
 
   test('adminCloseConversation records the admin as from_agent_id, not the originally assigned agent', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent-admin-close-2@dw.com', password: 'secret123', role: 'agent' });
-    const admin = await createAgent({ email: 'admin-close-2@dw.com', password: 'secret123', role: 'admin' });
+    const assignedAgent = await createAgent({ email: 'agent-admin-close-2@dw.test', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'admin-close-2@dw.test', password: 'secret123', role: 'admin' });
     await claimConversation(conversation.id, assignedAgent.id);
 
     await adminCloseConversation(conversation.id, admin.id, null);
@@ -298,7 +298,7 @@ describe('conversation repository', () => {
 
   test('adminCloseConversation records the reason_id when one is passed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const admin = await createAgent({ email: 'admin-close-3@dw.com', password: 'secret123', role: 'admin' });
+    const admin = await createAgent({ email: 'admin-close-3@dw.test', password: 'secret123', role: 'admin' });
     const reasonResult = await getPool().query(`INSERT INTO contact_reasons (name) VALUES ('Atendente ausente') RETURNING id`);
     const reasonId = reasonResult.rows[0].id;
 
@@ -313,8 +313,8 @@ describe('conversation repository', () => {
 
   test('adminCloseConversation returns null for an already closed conversation', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const assignedAgent = await createAgent({ email: 'agent-admin-close-4@dw.com', password: 'secret123', role: 'agent' });
-    const admin = await createAgent({ email: 'admin-close-4@dw.com', password: 'secret123', role: 'admin' });
+    const assignedAgent = await createAgent({ email: 'agent-admin-close-4@dw.test', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'admin-close-4@dw.test', password: 'secret123', role: 'admin' });
     await claimConversation(conversation.id, assignedAgent.id);
     await closeConversation(conversation.id, assignedAgent.id);
 
@@ -325,14 +325,14 @@ describe('conversation repository', () => {
 
   test('claimConversation returns protocolNumber as null before any protocol has been claimed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent-protocol@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent-protocol@dw.test', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conversation.id, agent.id);
     expect(claimed.protocolNumber).toBeNull();
   });
 
   test('closeConversation returns the protocol_number set for the conversation, if any', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent-protocol-2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent-protocol-2@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     await getPool().query("UPDATE conversations SET protocol_number = '42' WHERE id = $1", [conversation.id]);
 
@@ -379,7 +379,7 @@ describe('conversation repository', () => {
   });
 
   test('listConversationsByContact returns every conversation for that contact regardless of status, most recent first', async () => {
-    const agent = await createAgent({ email: 'by-contact-1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'by-contact-1@dw.test', password: 'secret123', role: 'agent' });
     const first = await createConversation(contactId, channelId);
     await claimConversation(first.id, agent.id);
     await closeConversation(first.id, agent.id);
@@ -561,7 +561,7 @@ describe('conversation repository', () => {
     const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const waitingConversation = await createConversation(contactId, channelId);
     const assignedConversation = await createConversation(otherContact.id, channelId);
-    const agent = await createAgent({ email: 'listagent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent1@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(assignedConversation.id, agent.id);
 
     const waiting = await listWaitingConversations();
@@ -628,8 +628,8 @@ describe('conversation repository', () => {
 
   test('listConversationsByAgent returns only that agent non-closed conversations', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'listagent2@dw.com', password: 'secret123', role: 'agent' });
-    const otherAgent = await createAgent({ email: 'listagent3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent2@dw.test', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'listagent3@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     const otherContact = await findOrCreateContactByPhoneNumber('+5511911119999', 'Outra Pessoa');
     const otherConversation = await createConversation(otherContact.id, channelId);
@@ -643,7 +643,7 @@ describe('conversation repository', () => {
   test('listConversationsByAgent includes the contact avatar path', async () => {
     await setContactAvatarPath(contactId, 'avatars/joao.jpg');
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'listagent4@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent4@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     const mine = await listConversationsByAgent(agent.id);
@@ -655,7 +655,7 @@ describe('conversation repository', () => {
     const city = await createCity({ name: 'Bahia' });
     await updateContact(contactId, { displayName: 'Joao', cityId: city.id });
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'listagent5@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent5@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     const mine = await listConversationsByAgent(agent.id);
@@ -667,7 +667,7 @@ describe('conversation repository', () => {
   test('listConversationsByAgent includes the contact sgp document', async () => {
     await setContactSgpLink(contactId, { sgpClientId: 9, sgpContractId: 17402, sgpDocument: '11122233344' });
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'listagent5b@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent5b@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     const mine = await listConversationsByAgent(agent.id);
@@ -677,7 +677,7 @@ describe('conversation repository', () => {
 
   test('listConversationsByAgent includes the last message preview and time', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'listagent6@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent6@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     await createMessage({
       conversationId: conversation.id,
@@ -695,7 +695,7 @@ describe('conversation repository', () => {
   });
 
   test('listClosedConversationsByContact returns only closed conversations, most recent first', async () => {
-    const agent = await createAgent({ email: 'histagent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'histagent1@dw.test', password: 'secret123', role: 'agent' });
     const older = await createConversation(contactId, channelId);
     await claimConversation(older.id, agent.id);
     await closeConversation(older.id, agent.id);
@@ -740,7 +740,7 @@ describe('conversation repository', () => {
 
   test('claimConversation completes any pending triage as part of the claim', async () => {
     const conversation = await createConversation(contactId, channelId, 'pending');
-    const agent = await createAgent({ email: 'triageagent@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'triageagent@dw.test', password: 'secret123', role: 'agent' });
 
     const claimed = await claimConversation(conversation.id, agent.id);
 
@@ -842,7 +842,7 @@ describe('conversation repository', () => {
   });
 
   test('findConversationStatusById devolve o status de cada estado possivel', async () => {
-    const agent = await createAgent({ email: 'status-1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'status-1@dw.test', password: 'secret123', role: 'agent' });
     const silenciosa = await createConversation(contactId, channelId, null, 'silent');
     expect(await findConversationStatusById(silenciosa.id)).toBe('silent');
 
@@ -892,7 +892,7 @@ describe('conversation repository', () => {
     const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const waitingConversation = await createConversation(otherContact.id, channelId);
     const assignedConversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'dash1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash1@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(assignedConversation.id, agent.id);
 
     const result = await listInProgressConversations();
@@ -907,7 +907,7 @@ describe('conversation repository', () => {
     const inTriageContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const inTriage = await createConversation(inTriageContact.id, channelId, 'pending');
     const assignedContact = await findOrCreateContactByPhoneNumber('+5511977774444', 'Terceira Pessoa');
-    const agent = await createAgent({ email: 'dash2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash2@dw.test', password: 'secret123', role: 'agent' });
     const assigned = await createConversation(assignedContact.id, channelId);
     await claimConversation(assigned.id, agent.id);
 
@@ -932,7 +932,7 @@ describe('conversation repository', () => {
     const inTriage = await createConversation(contactId, channelId, 'pending');
     const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const closedWhilePending = await createConversation(otherContact.id, channelId, 'pending');
-    const agent = await createAgent({ email: 'dash5@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash5@dw.test', password: 'secret123', role: 'agent' });
     await closeConversation(closedWhilePending.id, agent.id);
 
     const result = await listInAutomationConversations();
@@ -941,7 +941,7 @@ describe('conversation repository', () => {
   });
 
   test('countClosedSince counts only conversations closed at or after the given time', async () => {
-    const agent = await createAgent({ email: 'dash3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash3@dw.test', password: 'secret123', role: 'agent' });
     const oldEnough = await createConversation(contactId, channelId);
     await claimConversation(oldEnough.id, agent.id);
     await closeConversation(oldEnough.id, agent.id);
@@ -956,7 +956,7 @@ describe('conversation repository', () => {
   });
 
   test('listClosedSince returns closed conversations most recently closed first, with closedAt and pagination', async () => {
-    const agent = await createAgent({ email: 'dash4@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash4@dw.test', password: 'secret123', role: 'agent' });
     const first = await createConversation(contactId, channelId);
     await claimConversation(first.id, agent.id);
     await closeConversation(first.id, agent.id);
@@ -992,8 +992,8 @@ describe('conversation repository', () => {
         config: { phoneNumberId: '222', accessToken: 'tok' },
       });
       otherChannelId = otherChannel.id;
-      agentA = await createAgent({ email: 'filtro-a@dw.com', password: 'secret123', role: 'agent' });
-      agentB = await createAgent({ email: 'filtro-b@dw.com', password: 'secret123', role: 'agent' });
+      agentA = await createAgent({ email: 'filtro-a@dw.test', password: 'secret123', role: 'agent' });
+      agentB = await createAgent({ email: 'filtro-b@dw.test', password: 'secret123', role: 'agent' });
       sectorX = await createSector({ name: 'Suporte Filtro' });
       sectorY = await createSector({ name: 'Financeiro Filtro' });
 
@@ -1090,8 +1090,8 @@ describe('conversation repository', () => {
   });
 
   test('countClosedConversationsByAgent counts only that agent\'s closed conversations', async () => {
-    const agent = await createAgent({ email: 'my-closed-1@dw.com', password: 'secret123', role: 'agent' });
-    const otherAgent = await createAgent({ email: 'my-closed-2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'my-closed-1@dw.test', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'my-closed-2@dw.test', password: 'secret123', role: 'agent' });
     const mine = await createConversation(contactId, channelId);
     await claimConversation(mine.id, agent.id);
     await closeConversation(mine.id, agent.id);
@@ -1105,8 +1105,8 @@ describe('conversation repository', () => {
   });
 
   test('listClosedConversationsByAgent returns only that agent\'s closed conversations, most recently closed first, with pagination', async () => {
-    const agent = await createAgent({ email: 'my-closed-3@dw.com', password: 'secret123', role: 'agent' });
-    const otherAgent = await createAgent({ email: 'my-closed-4@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'my-closed-3@dw.test', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'my-closed-4@dw.test', password: 'secret123', role: 'agent' });
     const first = await createConversation(contactId, channelId);
     await claimConversation(first.id, agent.id);
     await closeConversation(first.id, agent.id);
@@ -1126,7 +1126,7 @@ describe('conversation repository', () => {
   });
 
   test('listClosedConversationsByAgent excludes a conversation still open for that agent', async () => {
-    const agent = await createAgent({ email: 'my-closed-5@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'my-closed-5@dw.test', password: 'secret123', role: 'agent' });
     const closed = await createConversation(contactId, channelId);
     await claimConversation(closed.id, agent.id);
     await closeConversation(closed.id, agent.id);
@@ -1140,8 +1140,8 @@ describe('conversation repository', () => {
   });
 
   test('listClosedConversationsByAgent still shows a conversation closed by an admin override', async () => {
-    const agent = await createAgent({ email: 'my-closed-6@dw.com', password: 'secret123', role: 'agent' });
-    const admin = await createAgent({ email: 'my-closed-admin@dw.com', password: 'secret123', role: 'admin' });
+    const agent = await createAgent({ email: 'my-closed-6@dw.test', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'my-closed-admin@dw.test', password: 'secret123', role: 'admin' });
     const conversation = await createConversation(contactId, channelId);
     await claimConversation(conversation.id, agent.id);
     await adminCloseConversation(conversation.id, admin.id, null);
@@ -1217,7 +1217,7 @@ describe('conversation repository', () => {
     const setor = (await getPool().query("INSERT INTO sectors (name) VALUES ('Suporte') RETURNING id")).rows[0].id;
     await concludeAiTriage(conv.id, { sectorId: setor, reasonId: null, confidence: 0.5, summary: 'resumo X', identifiedBy: 'cpf', lowConfidence: true, resolvedByAi: false });
 
-    const agent = await createAgent({ email: 'ai-triage-reads@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'ai-triage-reads@dw.test', password: 'secret123', role: 'agent' });
 
     const leituras = {
       getConversationWithContact: await getConversationWithContact(conv.id),
@@ -1263,7 +1263,7 @@ describe('conversation repository', () => {
       expect(c.aiTriageReasonName).toBe('Mudança de endereço');
     }
 
-    const agent = await createAgent({ email: 'ai-triage-reason-name@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'ai-triage-reason-name@dw.test', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conv.id, agent.id);
     expect(claimed).not.toBeNull();
 
@@ -1345,7 +1345,7 @@ describe('conversation repository', () => {
     });
 
     test('findRecentAiClosedConversation ignora encerramento feito por atendente', async () => {
-      const agent = await createAgent({ email: 'ai-close-human@dw.com', password: 'secret123', role: 'agent' });
+      const agent = await createAgent({ email: 'ai-close-human@dw.test', password: 'secret123', role: 'agent' });
       const conv = await createConversation(contactId, channelId);
       await claimConversation(conv.id, agent.id);
       await closeConversation(conv.id, agent.id, null);
@@ -1354,7 +1354,7 @@ describe('conversation repository', () => {
     });
 
     test('closeConversationByAi não toca conversa com atendente, já concluída ou fora de espera', async () => {
-      const agent = await createAgent({ email: 'ai-close@dw.com', password: 'secret123', role: 'agent' });
+      const agent = await createAgent({ email: 'ai-close@dw.test', password: 'secret123', role: 'agent' });
 
       const comAtendente = await createConversation(contactId, channelId, 'pending');
       await getPool().query("UPDATE conversations SET assigned_agent_id = $2, status = 'assigned' WHERE id = $1", [comAtendente.id, agent.id]);
@@ -1525,7 +1525,7 @@ describe('listClosedConversationsByContact — quem atendeu, quem encerrou e por
   });
 
   test('traz o nome de quem atendeu e de quem encerrou', async () => {
-    const tatiane = await createAgent({ email: 'tatiane@dw.com', password: 'secret123', role: 'agent', name: 'Tatiane' });
+    const tatiane = await createAgent({ email: 'tatiane@dw.test', password: 'secret123', role: 'agent', name: 'Tatiane' });
     const conversa = await createConversation(contactId, channelId);
     await claimConversation(conversa.id, tatiane.id);
     await closeConversation(conversa.id, tatiane.id);
@@ -1537,8 +1537,8 @@ describe('listClosedConversationsByContact — quem atendeu, quem encerrou e por
   });
 
   test('distingue o admin que encerrou do atendente que atendeu', async () => {
-    const tatiane = await createAgent({ email: 'tatiane2@dw.com', password: 'secret123', role: 'agent', name: 'Tatiane' });
-    const joaquim = await createAgent({ email: 'joaquim@dw.com', password: 'secret123', role: 'admin', name: 'Joaquim' });
+    const tatiane = await createAgent({ email: 'tatiane2@dw.test', password: 'secret123', role: 'agent', name: 'Tatiane' });
+    const joaquim = await createAgent({ email: 'joaquim@dw.test', password: 'secret123', role: 'admin', name: 'Joaquim' });
     const conversa = await createConversation(contactId, channelId);
     await claimConversation(conversa.id, tatiane.id);
     await adminCloseConversation(conversa.id, joaquim.id);
@@ -1550,7 +1550,7 @@ describe('listClosedConversationsByContact — quem atendeu, quem encerrou e por
   });
 
   test('traz o motivo do encerramento', async () => {
-    const tatiane = await createAgent({ email: 'tatiane3@dw.com', password: 'secret123', role: 'agent', name: 'Tatiane' });
+    const tatiane = await createAgent({ email: 'tatiane3@dw.test', password: 'secret123', role: 'agent', name: 'Tatiane' });
     const motivo = await createReason({ name: 'Segunda via de fatura' });
     const conversa = await createConversation(contactId, channelId);
     await claimConversation(conversa.id, tatiane.id);
@@ -1591,7 +1591,7 @@ describe('o que /queue e /mine devolvem depois de um F5', () => {
       phoneNumber: '+5511999990009',
       config: { phoneNumberId: '111', accessToken: 'tok' },
     });
-    const agent = await createAgent({ name: 'Maria Souza', email: 'maria@exemplo.com', password: 'segredo123', role: 'agent' });
+    const agent = await createAgent({ name: 'Maria Souza', email: 'maria@exemplo.test', password: 'segredo123', role: 'agent' });
     contactId = contact.id;
     channelId = channel.id;
     agentId = agent.id;
@@ -1720,7 +1720,7 @@ describe('localidade do contato nos resumos de conversa', () => {
 
   test('as consultas do atendente trazem a localidade', async () => {
     const { povoadoId, conversation } = await cenario();
-    const agent = await createAgent({ email: 'loc@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'loc@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     conferir((await listInProgressConversations())[0], povoadoId);
@@ -1729,7 +1729,7 @@ describe('localidade do contato nos resumos de conversa', () => {
 
   test('as consultas de encerrado trazem a localidade', async () => {
     const { povoadoId, conversation } = await cenario();
-    const agent = await createAgent({ email: 'loc2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'loc2@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     await closeConversation(conversation.id, agent.id);
 
@@ -1802,7 +1802,7 @@ describe('concludeAiTriage — só conclui conversa em triagem, em espera e sem 
     await getPool().query('TRUNCATE conversations, contacts, channels, agents, conversation_events, sectors CASCADE');
     contato = await findOrCreateContactByPhoneNumber('+5511977775555', 'Cliente Sintético');
     canal = await createChannel({ type: 'meta_cloud', name: 'Canal Guarda', phoneNumber: '+5511999990555', config: { phoneNumberId: '555', accessToken: 'tok' } });
-    agente = await createAgent({ email: 'guarda@dw.com', password: 'secret123', role: 'agent' });
+    agente = await createAgent({ email: 'guarda@dw.test', password: 'secret123', role: 'agent' });
   });
   afterEach(async () => {
     if (externa) { try { await externa.query('ROLLBACK'); } catch (_) { /* fechada */ } await externa.end().catch(() => {}); externa = null; }

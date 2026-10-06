@@ -77,7 +77,7 @@ describe('sector repository', () => {
   });
 
   test('setAgentSectors assigns the given sectors to an agent', async () => {
-    const agent = await createAgent({ email: 'sector-agent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-agent1@dw.test', password: 'secret123', role: 'agent' });
     const sectorA = await createSector({ name: 'Financeiro' });
     const sectorB = await createSector({ name: 'Comercial' });
 
@@ -91,7 +91,7 @@ describe('sector repository', () => {
   });
 
   test('setAgentSectors replaces the previous set of sectors entirely', async () => {
-    const agent = await createAgent({ email: 'sector-agent2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-agent2@dw.test', password: 'secret123', role: 'agent' });
     const sectorA = await createSector({ name: 'Financeiro' });
     const sectorB = await createSector({ name: 'Comercial' });
     await setAgentSectors(agent.id, [sectorA.id]);
@@ -103,7 +103,7 @@ describe('sector repository', () => {
   });
 
   test('setAgentSectors with an empty array clears all sectors for the agent', async () => {
-    const agent = await createAgent({ email: 'sector-agent3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-agent3@dw.test', password: 'secret123', role: 'agent' });
     const sectorA = await createSector({ name: 'Financeiro' });
     await setAgentSectors(agent.id, [sectorA.id]);
 
@@ -114,7 +114,7 @@ describe('sector repository', () => {
   });
 
   test('deleting a sector removes its memberships from agent_sectors', async () => {
-    const agent = await createAgent({ email: 'sector-cascade1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-cascade1@dw.test', password: 'secret123', role: 'agent' });
     const sector = await createSector({ name: 'Financeiro' });
     await setAgentSectors(agent.id, [sector.id]);
 
@@ -125,7 +125,7 @@ describe('sector repository', () => {
   });
 
   test('deleting an agent removes their memberships from agent_sectors', async () => {
-    const agent = await createAgent({ email: 'sector-cascade2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-cascade2@dw.test', password: 'secret123', role: 'agent' });
     const sector = await createSector({ name: 'Comercial' });
     await setAgentSectors(agent.id, [sector.id]);
 

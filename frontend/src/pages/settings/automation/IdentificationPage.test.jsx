@@ -28,7 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 't', agent: { role: 'admin' } });
   useAiConfig.mockReturnValue({ config: saved, status: 'ready', loading: false, refresh: vi.fn() });
-  useCompanyConfig.mockReturnValue({ config: { name: 'Net Fibra', acceptedPayeeNames: ['Net Fibra LTDA'] }, status: 'ready', refresh: vi.fn() });
+  useCompanyConfig.mockReturnValue({ config: { name: 'Provedor Exemplo', acceptedPayeeNames: ['Provedor Exemplo LTDA'] }, status: 'ready', refresh: vi.fn() });
   // O save relê a configuração antes de gravar: é assim que os campos das
   // outras duas páginas vão para o PUT com o valor atual do servidor, e não
   // com o que estava em cache aqui.
@@ -81,7 +81,7 @@ describe('IdentificationPage', () => {
   });
 
   test('sem nome aceito, o aviso de que nenhum comprovante confere aparece', () => {
-    useCompanyConfig.mockReturnValue({ config: { name: 'Net Fibra', acceptedPayeeNames: [] }, status: 'ready', refresh: vi.fn() });
+    useCompanyConfig.mockReturnValue({ config: { name: 'Provedor Exemplo', acceptedPayeeNames: [] }, status: 'ready', refresh: vi.fn() });
     renderInShell(<IdentificationPage />, { path: PATH });
     expect(screen.getByText('Nenhum nome cadastrado')).toBeInTheDocument();
     expect(screen.getByText(/nenhum comprovante confere/i)).toBeInTheDocument();

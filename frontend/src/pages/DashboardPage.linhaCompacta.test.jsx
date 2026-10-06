@@ -117,7 +117,7 @@ beforeEach(() => {
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
   useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(['c-minha', 'c-espera']), clearUnread: vi.fn() });
-  useCompanyName.mockReturnValue({ name: 'Net Fibra', status: 'ready' });
+  useCompanyName.mockReturnValue({ name: 'Provedor Exemplo', status: 'ready' });
   useTransferNotice.mockReturnValue({ notice: null, dismiss: vi.fn() });
 });
 afterEach(() => larguraDaJanela(LARGURA_PADRAO));

@@ -24,7 +24,7 @@ describe('App', () => {
   });
 
   test('logs in and reaches the dashboard', async () => {
-    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'agent-1', email: 'a@dw.com', role: 'agent' } });
+    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'agent-1', email: 'a@dw.test', role: 'agent' } });
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);
     api.listChannels.mockResolvedValue([]);
@@ -32,7 +32,7 @@ describe('App', () => {
 
     render(<App />);
 
-    await userEvent.type(screen.getByLabelText(/e-mail/i), 'a@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'a@dw.test');
     await userEvent.type(screen.getByLabelText(/senha/i), 'secret123');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
@@ -41,7 +41,7 @@ describe('App', () => {
 
   test('an already-authenticated non-admin visiting /admin/channels sees the access denied page', async () => {
     localStorage.setItem('dw_token', 'tok-123');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.test', role: 'agent' }));
     window.history.pushState({}, '', '/admin/channels');
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);
@@ -56,7 +56,7 @@ describe('App', () => {
 
   test('an authenticated non-admin can reach /metrics', async () => {
     localStorage.setItem('dw_token', 'tok-123');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.test', role: 'agent' }));
     window.history.pushState({}, '', '/metrics');
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);

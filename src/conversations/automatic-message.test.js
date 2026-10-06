@@ -2,8 +2,8 @@ const {
   ORIGENS_AUTOMATICAS, ehMensagemAutomatica, metadataDoDisparoSgp, metadataDaCampanha, resumoParaModelo,
 } = require('./automatic-message');
 
-const CORPO = 'Olá, {{1}}! Sua fatura da DW Telecom está disponível.\n\nValor: {{2}}\nVencimento: {{3}}\nBoleto: {{4}}\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 445 4546.';
-const MONTADO = 'Olá, Maria! Sua fatura da DW Telecom está disponível.\n\nValor: R$ 100,00\nVencimento: 30/09/2026\nBoleto: https://boleto.exemplo/abc123\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 445 4546.';
+const CORPO = 'Olá, {{1}}! Sua fatura da DW Telecom está disponível.\n\nValor: {{2}}\nVencimento: {{3}}\nBoleto: {{4}}\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 999 0338.';
+const MONTADO = 'Olá, Maria! Sua fatura da DW Telecom está disponível.\n\nValor: R$ 100,00\nVencimento: 30/09/2026\nBoleto: https://boleto.exemplo/abc123\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 999 0338.';
 
 describe('ORIGENS_AUTOMATICAS / ehMensagemAutomatica', () => {
   test('SGP e campanha são origens automáticas; o resto não', () => {

@@ -20,7 +20,7 @@ beforeEach(() => {
   api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
   api.listPlansForAdmin.mockResolvedValue([]);
   localStorage.setItem('dw_token', 'tok-123');
-  localStorage.setItem('dw_agent', JSON.stringify({ id: 'admin-1', email: 'a@x.com', role: 'admin' }));
+  localStorage.setItem('dw_agent', JSON.stringify({ id: 'admin-1', email: 'a@x.test', role: 'admin' }));
 });
 
 describe('rota de Planos', () => {

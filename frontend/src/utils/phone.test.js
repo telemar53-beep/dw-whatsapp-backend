@@ -11,15 +11,15 @@ describe('formatPhone', () => {
   });
 
   // Um 0800 não tem DDD: o prefixo tem três dígitos, e a regra de DDD cortava
-  // no lugar errado — o canal do 0800 445 4546 aparecia como "+55 (80) 0445-4546".
+  // no lugar errado — o canal do 0800 999 0338 aparecia como "+55 (80) 0999-0338".
   test('formata 0800 sem inventar DDD', () => {
-    expect(formatPhone('558004454546')).toBe('0800 445 4546');
+    expect(formatPhone('558009990338')).toBe('0800 999 0338');
   });
 
   test('formata os outros prefixos não geográficos', () => {
-    expect(formatPhone('553004454546')).toBe('0300 445 4546');
-    expect(formatPhone('555004454546')).toBe('0500 445 4546');
-    expect(formatPhone('559004454546')).toBe('0900 445 4546');
+    expect(formatPhone('553009990338')).toBe('0300 999 0338');
+    expect(formatPhone('555009990338')).toBe('0500 999 0338');
+    expect(formatPhone('559009990338')).toBe('0900 999 0338');
   });
 
   test('número fora do padrão brasileiro sai como veio', () => {

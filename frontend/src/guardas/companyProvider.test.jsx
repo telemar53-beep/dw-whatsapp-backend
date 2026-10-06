@@ -50,13 +50,13 @@ describe('nome da empresa: uma requisição por sessão', () => {
   // Consumidores somados: título da aba, LoginPage, depois SideNav e
   // DashboardPage. A sessão inteira continua com uma busca só.
   test('entrar pelo formulário e chegar ao Atendimento não busca de novo', async () => {
-    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'agent-1', email: 'a@dw.com', role: 'agent' } });
+    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'agent-1', email: 'a@dw.test', role: 'agent' } });
     window.history.pushState({}, '', '/login');
 
     render(<App />);
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Provedor X' })).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText(/e-mail/i), 'a@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'a@dw.test');
     await userEvent.type(screen.getByLabelText(/senha/i), 'secret123');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 

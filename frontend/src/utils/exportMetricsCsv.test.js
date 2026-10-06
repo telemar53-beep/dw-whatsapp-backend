@@ -26,7 +26,7 @@ describe('buildMetricsCsv', () => {
   test('builds three sections for admin scope, in order: by agent, by sector, by reason', () => {
     const csv = buildMetricsCsv({
       scope: 'admin',
-      byAgent: [{ agentName: 'Geovanna', closedCount: 10, avgResolutionMinutes: 8, avgFirstResponseMinutes: 1.5 }],
+      byAgent: [{ agentName: 'Fulana', closedCount: 10, avgResolutionMinutes: 8, avgFirstResponseMinutes: 1.5 }],
       bySector: [{ sectorName: 'Financeiro', closedCount: 4 }],
       byReason: [{ reasonName: 'Cobrança', closedCount: 2 }],
     });
@@ -35,7 +35,7 @@ describe('buildMetricsCsv', () => {
     expect(lines).toEqual([
       'Atendimentos por atendente',
       'Atendente;Atendimentos fechados;Tempo médio de atendimento (min);Tempo médio de primeira resposta (min)',
-      'Geovanna;10;8;1,5',
+      'Fulana;10;8;1,5',
       '',
       'Atendimentos por setor',
       'Setor;Atendimentos fechados',

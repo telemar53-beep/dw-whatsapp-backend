@@ -20,13 +20,13 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={onCreated} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Ana Souza');
-    await userEvent.type(screen.getByLabelText(/e-mail/i), 'ana@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'ana@dw.test');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp12345');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
       expect(api.createAgent).toHaveBeenCalledWith(
-        { name: 'Ana Souza', email: 'ana@dw.com', password: 'temp12345', role: 'agent' },
+        { name: 'Ana Souza', email: 'ana@dw.test', password: 'temp12345', role: 'agent' },
         'tok-123'
       )
     );
@@ -38,14 +38,14 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Beto Lima');
-    await userEvent.type(screen.getByLabelText(/e-mail/i), 'beto@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'beto@dw.test');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp67890');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'admin');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
       expect(api.createAgent).toHaveBeenCalledWith(
-        { name: 'Beto Lima', email: 'beto@dw.com', password: 'temp67890', role: 'admin' },
+        { name: 'Beto Lima', email: 'beto@dw.test', password: 'temp67890', role: 'admin' },
         'tok-123'
       )
     );
@@ -67,7 +67,7 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Marcia Reis');
-    await userEvent.type(screen.getByLabelText(/e-mail/i), 'marcia@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'marcia@dw.test');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp11223');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
     await userEvent.click(screen.getByLabelText(/pode gerenciar canais e integrações/i));
@@ -75,7 +75,7 @@ describe('CreateAgentForm', () => {
 
     await waitFor(() =>
       expect(api.createAgent).toHaveBeenCalledWith(
-        { name: 'Marcia Reis', email: 'marcia@dw.com', password: 'temp11223', role: 'manager', canManageIntegrations: true },
+        { name: 'Marcia Reis', email: 'marcia@dw.test', password: 'temp11223', role: 'manager', canManageIntegrations: true },
         'tok-123'
       )
     );
@@ -86,14 +86,14 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Nilo Reis');
-    await userEvent.type(screen.getByLabelText(/e-mail/i), 'nilo@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'nilo@dw.test');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp44556');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
       expect(api.createAgent).toHaveBeenCalledWith(
-        { name: 'Nilo Reis', email: 'nilo@dw.com', password: 'temp44556', role: 'manager', canManageIntegrations: false },
+        { name: 'Nilo Reis', email: 'nilo@dw.test', password: 'temp44556', role: 'manager', canManageIntegrations: false },
         'tok-123'
       )
     );
@@ -104,7 +104,7 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Ana Souza');
-    await userEvent.type(screen.getByLabelText(/e-mail/i), 'ana@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'ana@dw.test');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp12345');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 

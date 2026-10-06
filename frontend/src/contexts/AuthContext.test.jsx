@@ -12,7 +12,7 @@ function TestConsumer() {
     <div>
       <span data-testid="token">{token || 'no-token'}</span>
       <span data-testid="role">{agent ? agent.role : 'no-agent'}</span>
-      <button onClick={() => login('a@dw.com', 'secret123')}>Login</button>
+      <button onClick={() => login('a@dw.test', 'secret123')}>Login</button>
       <button onClick={logout}>Logout</button>
     </div>
   );
@@ -35,7 +35,7 @@ describe('AuthProvider', () => {
   });
 
   test('login stores the token and agent, and updates context', async () => {
-    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'a1', email: 'a@dw.com', role: 'admin' } });
+    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'a1', email: 'a@dw.test', role: 'admin' } });
     render(
       <AuthProvider>
         <TestConsumer />
@@ -47,12 +47,12 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(screen.getByTestId('token')).toHaveTextContent('tok-123'));
     expect(screen.getByTestId('role')).toHaveTextContent('admin');
     expect(localStorage.getItem('dw_token')).toBe('tok-123');
-    expect(JSON.parse(localStorage.getItem('dw_agent'))).toEqual({ id: 'a1', email: 'a@dw.com', role: 'admin' });
+    expect(JSON.parse(localStorage.getItem('dw_agent'))).toEqual({ id: 'a1', email: 'a@dw.test', role: 'admin' });
   });
 
   test('logout clears the token, agent, and localStorage', async () => {
     localStorage.setItem('dw_token', 'tok-123');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a1', email: 'a@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a1', email: 'a@dw.test', role: 'agent' }));
     render(
       <AuthProvider>
         <TestConsumer />
@@ -69,7 +69,7 @@ describe('AuthProvider', () => {
 
   test('restores token and agent from localStorage on mount', () => {
     localStorage.setItem('dw_token', 'tok-existing');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a2', email: 'b@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a2', email: 'b@dw.test', role: 'agent' }));
     render(
       <AuthProvider>
         <TestConsumer />

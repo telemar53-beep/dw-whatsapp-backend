@@ -23,7 +23,7 @@ beforeEach(() => {
   localStorage.setItem('dw_agent', JSON.stringify({ id: 'a1', name: 'Ana', role: 'agent' }));
   global.fetch = vi.fn((url, opcoes = {}) => {
     if (url.endsWith('/api/agents/me') && (!opcoes.method || opcoes.method === 'GET')) {
-      return resposta(200, { id: 'a1', name: 'Ana', email: 'ana@exemplo.com', phone: null, avatarPath: null });
+      return resposta(200, { id: 'a1', name: 'Ana', email: 'ana@exemplo.test', phone: null, avatarPath: null });
     }
     if (url.endsWith('/api/auth/password')) return respostaDaSenha();
     return resposta(404, { error: 'Not found' });

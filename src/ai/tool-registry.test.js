@@ -2024,10 +2024,11 @@ describe('enviar_boleto', () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
       const c = ctx();
       await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
-      expect(c.ofertaDoBoleto).toEqual({ faturaId: '9' });
+      // D8 (06/10/2026): a marca leva também a lista das faturas (faturaId continua, para a leitura compatível).
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '9', faturaIds: ['9'] });
       const repetida = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
       await findTool('gerar_pix').executar({ contratoId: 17402 }, repetida);
-      expect(repetida.ofertaDoBoleto).toEqual({ faturaId: '9' });
+      expect(repetida.ofertaDoBoleto).toEqual({ faturaId: '9', faturaIds: ['9'] });
     });
 
     test('(d7) sem boleto com link, nem a oferta nem a marca', async () => {
@@ -2108,6 +2109,57 @@ describe('enviar_boleto', () => {
       const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
       expect(r.enviado).toBe(true);
       expect(c.ofertaDoBoleto).toBeNull();
+    });
+
+    // D8 (06/10/2026, autorizado pelo proprietário): a marca guarda TODAS as ofertas pendentes do boleto, por fatura —
+    // duas faturas sem PIX no mesmo turno ficam as duas marcadas, a herdada continua junto da nova, e entregar o boleto de uma
+    // não apaga a outra. Leitura compatível com o formato já gravado ({ faturaId }); sem migração (metadata da mensagem).
+    const SEM_PIX_10 = { ...SEM_PIX_COM_BOLETO, id: '10' };
+    test('(d15) duas faturas sem PIX no mesmo turno: as duas ofertas ficam marcadas', async () => {
+      sgpClient.getDuplicateInvoice
+        .mockResolvedValueOnce({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] })
+        .mockResolvedValueOnce({ hasOpenInvoice: true, duplicates: [SEM_PIX_10] });
+      const c = ctx();
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '10', faturaIds: ['9', '10'] });
+    });
+
+    test('(d16) a oferta herdada da resposta anterior continua junto da nova oferta do turno', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_10] });
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '10', faturaIds: ['9', '10'] });
+    });
+
+    test('(d17) entregar o boleto de uma fatura não apaga a oferta da outra', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '10', faturaIds: ['9', '10'] }) };
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+      expect(r.enviado).toBe(true);
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '10', faturaIds: ['10'] });
+    });
+
+    test('(d18) a lista reconhece a oferta de qualquer fatura dela, não só a da última: a oferta não se repete', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, { ...ctx(), ...janelaComOferta({ faturaId: '10', faturaIds: ['9', '10'] }) });
+      expect(r.instrucao).toMatch(/Você já ofereceu o boleto desta mesma fatura/);
+    });
+
+    test('(d19) o formato antigo da marca ({ faturaId }) é lido como lista de uma fatura', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_10] });
+      const c = { ...ctx(), ...janelaComOferta({ faturaId: '9' }) };
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      expect(c.ofertaDoBoleto.faturaIds).toEqual(['9', '10']);
+    });
+
+    test('(d20) reprocessar a mesma oferta no turno não duplica a fatura na lista', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_COM_BOLETO] });
+      const c = ctx();
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      expect(c.ofertaDoBoleto).toEqual({ faturaId: '9', faturaIds: ['9'] });
     });
 
     test('(d12) o boleto da fatura da oferta herdada consome a oferta', async () => {

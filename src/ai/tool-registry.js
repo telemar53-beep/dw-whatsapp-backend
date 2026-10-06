@@ -920,12 +920,26 @@ async function instrucaoDoBoletoSemLink(contexto, contratoId, fatura) {
   return `${naoHouve} Também não há PIX desta fatura que eu consiga enviar agora. Diga isso com honestidade: não há outra forma de pagamento para oferecer por aqui agora. Se ele quiser, pode pedir para falar com um atendente. Não invente outro caminho.`;
 }
 
-// Comportamento da IA (05/10/2026): a fatura da oferta do boleto marcada na ÚLTIMA resposta da IA (a anterior a esta
-// mensagem do cliente), ou null. A marca vem da metadata da mensagem (worker), lida na janela em ordem.
-function ofertaDoBoletoNaUltimaResposta(contexto) {
+// Comportamento da IA (05/10/2026): as faturas das ofertas do boleto marcadas na ÚLTIMA resposta da IA (a anterior a esta
+// mensagem do cliente). A marca vem da metadata da mensagem (worker), lida na janela em ordem.
+// D8 (06/10/2026): a marca guarda todas as ofertas pendentes, por fatura — { faturaId: a última, faturaIds: [...] }; a
+// marca antiga ({ faturaId }) é lida como lista de uma, e o campo faturaId continua sendo gravado (leitura compatível).
+function faturasDaMarca(marca) {
+  if (!marca) return [];
+  if (Array.isArray(marca.faturaIds)) return marca.faturaIds.map(String);
+  return marca.faturaId != null ? [String(marca.faturaId)] : [];
+}
+function marcaDeOfertas(faturaIds) {
+  return faturaIds.length ? { faturaId: faturaIds[faturaIds.length - 1], faturaIds } : null;
+}
+function ofertasDoBoletoNaUltimaResposta(contexto) {
   const janela = contexto && Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela.filter(Boolean) : [];
   const ultima = [...janela].reverse().find((m) => m.de === 'ia');
-  return ultima && ultima.ofertaDoBoleto && ultima.ofertaDoBoleto.faturaId != null ? String(ultima.ofertaDoBoleto.faturaId) : null;
+  return ultima ? faturasDaMarca(ultima.ofertaDoBoleto) : [];
+}
+// As ofertas pendentes no turno: as marcadas neste turno ou, sem marca no turno, as herdadas da última resposta.
+function ofertasPendentes(contexto) {
+  return contexto.ofertaDoBoleto !== undefined ? faturasDaMarca(contexto.ofertaDoBoleto) : ofertasDoBoletoNaUltimaResposta(contexto);
 }
 
 async function instrucaoDoPixSemCodigo(contexto, contratoId, fatura) {
@@ -947,9 +961,11 @@ async function instrucaoDoPixSemCodigo(contexto, contratoId, fatura) {
     // diz que a oferta já foi feita. Se a mensagem atual aceita, quem chama enviar_boleto é o modelo — esta ferramenta não
     // envia nada; se ele recusou ou insiste no PIX, a oferta não se repete.
     const faturaId = String(identificadorDeFatura(fatura));
-    contexto.ofertaDoBoleto = { faturaId };
+    const jaOferecida = ofertasDoBoletoNaUltimaResposta(contexto).includes(faturaId);
+    // D8: a oferta desta fatura entra na lista das pendentes (sem repetir: o reprocessamento não duplica).
+    contexto.ofertaDoBoleto = marcaDeOfertas([...ofertasPendentes(contexto).filter((id) => id !== faturaId), faturaId]);
     const comContrato = contratoId ? ` com contratoId ${contratoId}` : '';
-    if (ofertaDoBoletoNaUltimaResposta(contexto) === faturaId) {
+    if (jaOferecida) {
       return `${naoHouve} Você já ofereceu o boleto desta mesma fatura na resposta anterior. Se a mensagem atual dele aceita a oferta, chame enviar_boleto${comContrato} agora — não ofereça de novo. Se ele recusou ou insiste no PIX, diga só que o PIX desta fatura não está disponível agora; não repita a oferta.`;
     }
     return `${naoHouve} Diga isso em uma frase e ofereça enviar o boleto desta mesma fatura; só envie (enviar_boleto${comContrato}) se ele aceitar.`;
@@ -2571,11 +2587,11 @@ const TOOLS = [
       await marcarDepoisDaEntrega(gate, contexto);
       // Comportamento da IA (05/10/2026; revisão da entrega 1): o boleto entregue consome a oferta — a resposta que o confirma
       // não sai marcada como oferta, e o turno não herda a da resposta anterior. 06/10: só a oferta DESTA fatura; a de outra
-      // fatura (marcada neste turno ou herdada) continua pendente.
-      const ofertaPendente = contexto.ofertaDoBoleto !== undefined
-        ? (contexto.ofertaDoBoleto && contexto.ofertaDoBoleto.faturaId != null ? String(contexto.ofertaDoBoleto.faturaId) : null)
-        : ofertaDoBoletoNaUltimaResposta(contexto);
-      if (ofertaPendente === null || ofertaPendente === identificadorDeFatura(primeira)) contexto.ofertaDoBoleto = null;
+      // fatura (marcada neste turno ou herdada) continua pendente. D8: sai da lista só a fatura entregue.
+      const pendentes = ofertasPendentes(contexto);
+      const entregue = identificadorDeFatura(primeira);
+      if (pendentes.length === 0) contexto.ofertaDoBoleto = null;
+      else if (pendentes.includes(entregue)) contexto.ofertaDoBoleto = marcaDeOfertas(pendentes.filter((id) => id !== entregue));
       const reativacaoDepois = Boolean(gate.decisao && gate.decisao.reativacaoDepois);
       // contratoUsado só aparece quando a fatura veio de OUTRO contrato do
       // mesmo cliente. O modelo de frase do dono sai DAQUI, e só depois do

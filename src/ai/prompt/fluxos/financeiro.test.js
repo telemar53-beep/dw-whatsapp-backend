@@ -1,4 +1,4 @@
-const { contemNomeReal } = require('../../../test-support/dados-reais');
+const { nomesEmModelosDeFrase } = require('../../../test-support/detector-de-dados');
 const financeiro = require('./financeiro');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -96,7 +96,7 @@ describe('módulo financeiro', () => {
       test('despedida usa marcador de nome, nunca o nome real', () => {
         expect(t).toMatch(/Imagina, \[nome\]! 😊 Qualquer dúvida/);
         expect(t).toMatch(/Imagina, \[nome\]! Qualquer dúvida…/);
-        expect(contemNomeReal(t)).toBe(false);
+        expect(nomesEmModelosDeFrase(t)).toEqual([]);
       });
 
       test('despedida do boleto não tem emoji; a das demais tem', () => {
@@ -121,7 +121,7 @@ describe('módulo financeiro', () => {
       // não recebeu nada. Os modelos de frase da ENTREGA saíram do prompt de
       // propósito — quem devolve o texto é a própria ferramenta, depois de
       // ter enviado. Nenhum pode voltar, nem com nome real de cliente junto.
-      test('nenhum modelo de frase de entrega vive no prompt, nem nome real de cliente', () => {
+      test('nenhum modelo de frase de entrega vive no prompt, nem nome próprio em modelo de frase', () => {
         expect(t).not.toMatch(/Enviei acima o PIX/);
         expect(t).not.toMatch(/Enviei acima o boleto/);
         expect(t).not.toMatch(/Agenor Costa/);
@@ -225,8 +225,9 @@ describe('módulo financeiro', () => {
       expect(t).not.toMatch(/\b(FINANCEIRO|COMERCIAL|SUPORTE|REATIVAÇÃO)\b/);
     });
 
-    test('nunca contém nome real de cliente', () => {
+    test('nunca contém nome próprio em modelo de frase', () => {
       const t = texto({ config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: 'r1' } });
+      expect(nomesEmModelosDeFrase(t)).toEqual([]);
     });
 
     test('nunca cita preço ou velocidade real, nem reintroduz nascimento/identidade fraca/gate de confiança', () => {

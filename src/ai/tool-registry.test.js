@@ -1376,9 +1376,9 @@ describe('esquecer_identificacao', () => {
   });
 });
 
-// Print 2026-09-16: "quero a fatura de Joel" + CPF dele → a IA disse
+// Print 2026-09-16 (nomes trocados por sintéticos): "quero a fatura de Sicrano" + CPF dele → a IA disse
 // "SEU contrato tem uma fatura em aberto" e o código gravou o vínculo do
-// contato da Marina com o cadastro do Joel (nome, contratos, cidade).
+// contato da Ciclana com o cadastro do Sicrano (nome, contratos, cidade).
 // No próximo atendimento ela seria tratada como ele. Entregar o boleto é
 // certo (o site do SGP faz o mesmo só com o CPF); o que não pode é o contato
 // mudar de dono.
@@ -1386,14 +1386,14 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.lookupClientByCpf.mockResolvedValue({
-      client: { id: 77, name: 'JOEL SOUZA', document: '22233344405' },
+      client: { id: 77, name: 'SICRANO DE TAL', document: '22233344405' },
       contracts: [{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }],
     });
   });
 
   const ctxTerceiro = () => ({
     conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' },
-    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Marina', contracts: [] },
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Ciclana', contracts: [] },
   });
 
   test('não grava o vínculo do contato, nem a cidade, nem a localidade, e mantém o primeiro nome de quem fala', async () => {
@@ -1411,7 +1411,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     expect(c.contact.cityId).toBe('cidade-de-quem-fala');
     expect(c.contact.localityId).toBeNull();
     expect(c.contact.sgpDocument).toBeUndefined();
-    expect(c.identidade.primeiroNome).toBe('Marina');
+    expect(c.identidade.primeiroNome).toBe('Ciclana');
   });
 
   // Substituída em 2026-09-18 (Task 6): até então este teste provava a
@@ -1426,7 +1426,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
   test('a instrução proíbe "seu contrato" e manda dizer de quem é', async () => {
     const r = await findTool('buscar_cliente').executar({ cpf: '22233344405', titularEOutraPessoa: true }, ctxTerceiro());
     expect(r.instrucao).toMatch(/NUNCA diga "seu contrato"/);
-    expect(r.instrucao).toMatch(/Joel/);
+    expect(r.instrucao).toMatch(/Sicrano/);
     expect(r.instrucao).toMatch(/registre no resumo que quem pediu não é o titular/);
   });
 
@@ -1434,7 +1434,7 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     const c = { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
     await findTool('buscar_cliente').executar({ cpf: '22233344405' }, c);
     expect(setContactSgpLink).toHaveBeenCalled();
-    expect(c.identidade.primeiroNome).toBe('Joel');
+    expect(c.identidade.primeiroNome).toBe('Sicrano');
   });
 
   test('validar aceita o booleano e ignora lixo', () => {

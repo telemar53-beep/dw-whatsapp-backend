@@ -49,11 +49,11 @@ describe('garantirSaudacao', () => {
     expect(garantirSaudacao('Olá! Como posso ajudar?', 'Ana', TARDE)).toBe('Olá! Como posso ajudar?');
   });
 
-  // Print 2026-09-16: "Boa tarde, Marina! Marina, vou encaminhar..." — o
+  // Print 2026-09-16 (nome trocado por um sintético): "Boa tarde, Ciclana! Ciclana, vou encaminhar..." — o
   // modelo começou chamando pelo nome e a saudação foi prefixada por cima.
   test('não duplica o nome quando o modelo já começou chamando a pessoa', () => {
-    expect(garantirSaudacao('Marina, vou verificar isso para você.', 'Marina', MANHA))
-      .toBe('Bom dia, Marina! Vou verificar isso para você.');
+    expect(garantirSaudacao('Ciclana, vou verificar isso para você.', 'Ciclana', MANHA))
+      .toBe('Bom dia, Ciclana! Vou verificar isso para você.');
     expect(garantirSaudacao('Joaquim, seu contrato está ativo.', 'Joaquim', NOITE))
       .toBe('Boa noite, Joaquim! Seu contrato está ativo.');
     // Nome diferente do começo do texto não é tocado.
@@ -61,19 +61,19 @@ describe('garantirSaudacao', () => {
       .toBe('Bom dia, Ana! Maria pediu o boleto.');
   });
 
-  // Print 2026-09-17 (18:05): "Boa noite, Roseane! Prontinho, Roseane! Enviei
+  // Print 2026-09-17 (18:05), com o nome do cliente trocado por um sintético: "Boa noite, Fulana! Prontinho, Fulana! Enviei
   // acima o PIX." — a instrução da entrega manda começar pelo nome e a
   // saudação garantida prefixou o nome de novo.
   test('quando o texto já cita o nome, a saudação entra sem repetir o nome', () => {
-    expect(garantirSaudacao('Prontinho, Roseane! Enviei acima o PIX.', 'Roseane', NOITE))
-      .toBe('Boa noite! Prontinho, Roseane! Enviei acima o PIX.');
+    expect(garantirSaudacao('Prontinho, Fulana! Enviei acima o PIX.', 'Fulana', NOITE))
+      .toBe('Boa noite! Prontinho, Fulana! Enviei acima o PIX.');
     expect(garantirSaudacao('Tudo certo, João — enviei o boleto.', 'João', MANHA))
       .toBe('Bom dia! Tudo certo, João — enviei o boleto.');
   });
 
   test('nome citado só lá no fim do texto não impede a saudação completa', () => {
-    const longo = 'Enviei acima o boleto em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Obrigado, Roseane!';
-    expect(garantirSaudacao(longo, 'Roseane', NOITE)).toBe(`Boa noite, Roseane! ${longo}`);
+    const longo = 'Enviei acima o boleto em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Obrigado, Fulana!';
+    expect(garantirSaudacao(longo, 'Fulana', NOITE)).toBe(`Boa noite, Fulana! ${longo}`);
   });
 
   test('texto vazio volta como veio', () => {

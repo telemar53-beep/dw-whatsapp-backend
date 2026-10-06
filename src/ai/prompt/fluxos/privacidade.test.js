@@ -1,4 +1,4 @@
-const { contemNomeReal } = require('../../../test-support/dados-reais');
+const { nomesEmModelosDeFrase } = require('../../../test-support/detector-de-dados');
 const privacidade = require('./privacidade');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -51,9 +51,9 @@ describe('módulo privacidade', () => {
     expect(texto).toContain('a senha da rede DELE mesmo, do contrato dele, é pedido legítimo — nunca recuse.');
   });
 
-  test('nunca contém nome real de cliente nem cita data de nascimento', () => {
+  test('nunca contém nome próprio em modelo de frase nem cita data de nascimento', () => {
     const texto = privacidade.linhas(estadoBase()).join('\n');
-    expect(contemNomeReal(texto)).toBe(false);
+    expect(nomesEmModelosDeFrase(texto)).toEqual([]);
     expect(texto).not.toMatch(/nascimento/i);
   });
 

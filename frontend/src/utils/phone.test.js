@@ -7,7 +7,7 @@ describe('formatPhone', () => {
   });
 
   test('formata fixo de oito dígitos', () => {
-    expect(formatPhone('559884454546')).toBe('+55 (98) 8445-4546');
+    expect(formatPhone('552099984546')).toBe('+55 (20) 9998-4546');
   });
 
   // Um 0800 não tem DDD: o prefixo tem três dígitos, e a regra de DDD cortava

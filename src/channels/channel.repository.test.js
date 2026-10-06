@@ -51,7 +51,7 @@ describe('channel repository', () => {
     await createChannel({
       type: 'meta_cloud',
       name: 'Primeiro',
-      phoneNumber: '+5598984454546',
+      phoneNumber: '+5520999984546',
       config: { phoneNumberId: '530351070168344', accessToken: 'tok' },
     });
 
@@ -59,7 +59,7 @@ describe('channel repository', () => {
       createChannel({
         type: 'meta_cloud',
         name: 'Duplicado',
-        phoneNumber: '+5598984454547',
+        phoneNumber: '+5520999984547',
         config: { phoneNumberId: '530351070168344', accessToken: 'tok' },
       })
     ).rejects.toMatchObject({ code: '23505' });
@@ -458,14 +458,14 @@ describe('convertChannelToMetaCloud', () => {
     const original = await createChannel({
       type: '360dialog',
       name: 'DW Telcom 3',
-      phoneNumber: '+5598970285660',
+      phoneNumber: '+5520999965660',
       config: { apiKey: 'd360-key', wabaId: 'waba-antiga', webhookToken: 'tok-webhook' },
     });
 
     const convertido = await convertChannelToMetaCloud(original.id, CONFIG_NOVA);
 
     expect(convertido.id).toBe(original.id);
-    expect(convertido.phoneNumber).toBe('+5598970285660');
+    expect(convertido.phoneNumber).toBe('+5520999965660');
     expect(convertido.name).toBe('DW Telcom 3');
     expect(convertido.type).toBe('meta_cloud');
   });
@@ -474,7 +474,7 @@ describe('convertChannelToMetaCloud', () => {
     const original = await createChannel({
       type: '360dialog',
       name: 'DW Telcom 3',
-      phoneNumber: '+5598970285661',
+      phoneNumber: '+5520999965661',
       config: { apiKey: 'd360-key', wabaId: 'waba-antiga', webhookToken: 'tok-webhook' },
     });
 
@@ -489,7 +489,7 @@ describe('convertChannelToMetaCloud', () => {
     const original = await createChannel({
       type: '360dialog',
       name: 'DW Telcom 3',
-      phoneNumber: '+5598970285662',
+      phoneNumber: '+5520999965662',
       config: { apiKey: 'd360-key', wabaId: 'w', webhookToken: 'tok-orfao' },
     });
 
@@ -502,7 +502,7 @@ describe('convertChannelToMetaCloud', () => {
     const original = await createChannel({
       type: 'baileys',
       name: 'automação',
-      phoneNumber: '+5598984129046',
+      phoneNumber: '+5520999979046',
       config: {},
     });
 
@@ -516,7 +516,7 @@ describe('convertChannelToMetaCloud', () => {
     const original = await createChannel({
       type: '360dialog',
       name: 'DW Telcom 3',
-      phoneNumber: '+5598970285663',
+      phoneNumber: '+5520999965663',
       config: { apiKey: 'k', wabaId: 'w', webhookToken: 't' },
     });
     await updateChannelWelcomeMessage(original.id, 'Olá! Bem-vindo.');
@@ -541,7 +541,7 @@ describe('updateChannelName', () => {
   });
 
   test('troca o nome e devolve o canal', async () => {
-    const canal = await createChannel({ type: 'baileys', name: 'automação', phoneNumber: '+5598984129046', config: {} });
+    const canal = await createChannel({ type: 'baileys', name: 'automação', phoneNumber: '+5520999979046', config: {} });
 
     const renomeado = await updateChannelName(canal.id, 'Suporte Técnico');
 
@@ -554,13 +554,13 @@ describe('updateChannelName', () => {
     const canal = await createChannel({
       type: 'meta_cloud',
       name: 'DW Telcom 1',
-      phoneNumber: '+5598984454546',
+      phoneNumber: '+5520999984546',
       config: { phoneNumberId: '530351070168344', accessToken: 'tok', wabaId: 'w1' },
     });
 
     const renomeado = await updateChannelName(canal.id, 'Comercial');
 
-    expect(renomeado.phoneNumber).toBe('+5598984454546');
+    expect(renomeado.phoneNumber).toBe('+5520999984546');
     expect(renomeado.config).toEqual({ phoneNumberId: '530351070168344', accessToken: 'tok', wabaId: 'w1' });
     expect(renomeado.type).toBe('meta_cloud');
   });

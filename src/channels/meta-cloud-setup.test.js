@@ -49,7 +49,7 @@ describe('checkMetaCloudSetup', () => {
   });
 
   test('recusa quando o Phone Number ID nao pertence aquela WABA', async () => {
-    wabaCom([{ id: '999999999999999', display_phone_number: '+55 98 8445-4546' }]);
+    wabaCom([{ id: '999999999999999', display_phone_number: '+55 20 9998-4546' }]);
 
     const resultado = await checkMetaCloudSetup(DADOS);
 
@@ -59,12 +59,12 @@ describe('checkMetaCloudSetup', () => {
   });
 
   test('recusa quando o telefone digitado e de outro numero, e diz qual e o certo', async () => {
-    wabaCom([{ id: '613336748527998', display_phone_number: '+55 98 8445-4546' }]);
+    wabaCom([{ id: '613336748527998', display_phone_number: '+55 20 9998-4546' }]);
 
     const resultado = await checkMetaCloudSetup(DADOS);
 
     expect(resultado.ok).toBe(false);
-    expect(resultado.error).toContain('+55 98 8445-4546');
+    expect(resultado.error).toContain('+55 20 9998-4546');
   });
 
   test('repassa o motivo da Meta quando o token nao vale', async () => {

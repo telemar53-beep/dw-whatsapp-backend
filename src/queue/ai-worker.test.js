@@ -266,6 +266,22 @@ describe('ai-worker — triagem', () => {
     });
   });
 
+  // Comportamento da IA (06/10/2026; A6/A7): o estado dos meios que a 2ª via comprovou viaja na metadata da mensagem.
+  describe('meios de pagamento comprovados na própria mensagem', () => {
+    test('a resposta sai com o estado dos meios do turno', async () => {
+      const meios = [{ contratoId: '17402', faturaId: '9', pix: false, boleto: false }];
+      runAiTurn.mockResolvedValue({ texto: 'Esta fatura não tem PIX nem boleto disponível por aqui agora.', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: null, meiosDaFatura: meios });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ sentBy: 'ai', metadata: { meiosDaFatura: meios } }));
+    });
+
+    test('sem estado, a mensagem sai sem metadata de meios', async () => {
+      runAiTurn.mockResolvedValue({ texto: 'Posso ajudar em algo mais?', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: null, meiosDaFatura: null });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage.mock.calls[0][0].metadata).toBeUndefined();
+    });
+  });
+
   describe('pedido de documento marcado na própria mensagem', () => {
     test('a resposta que pede o documento sai com a marca de quem é o documento', async () => {
       runAiTurn.mockResolvedValue({ texto: 'Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor.', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: { alvo: 'principal' } });

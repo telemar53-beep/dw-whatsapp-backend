@@ -7,6 +7,31 @@ describe('módulo fatos', () => {
     expect(fatos.entra(estadoBase())).toBe(true);
   });
 
+  // Comportamento da IA (06/10/2026; A6/A7): os meios que a 2ª via desta conversa comprovou viram fato do sistema; sem 2ª
+  // via, nenhuma linha (nada se afirma); o PIX que falhou não vira "não tem PIX".
+  describe('meios de pagamento comprovados pela 2ª via', () => {
+    const texto = (meiosDaFatura) => fatos.linhas(estadoBase({ meiosDaFatura })).join('\n');
+    test('sem 2ª via nesta conversa, nenhum fato de meio', () => {
+      expect(texto([])).not.toMatch(/FATO DO SISTEMA \(2ª via/);
+      expect(texto(undefined)).not.toMatch(/FATO DO SISTEMA \(2ª via/);
+    });
+    test('sem PIX e sem boleto: o fato e o único próximo passo', () => {
+      expect(texto([{ contratoId: '1', faturaId: '9', pix: false, boleto: false }])).toMatch(/a fatura 9 não tem PIX nem boleto disponível para envio por aqui\. Não ofereça nenhum dos dois nem sugira que ele peça de novo: o único próximo passo que existe é falar com um atendente/);
+    });
+    test('só sem PIX, só sem boleto', () => {
+      expect(texto([{ contratoId: '1', faturaId: '9', pix: false, boleto: true }])).toMatch(/a fatura 9 não tem PIX disponível; o boleto dela existe\. Não ofereça o PIX\./);
+      expect(texto([{ contratoId: '1', faturaId: '9', pix: true, boleto: false }])).toMatch(/a fatura 9 não tem boleto disponível; o PIX dela existe\. Não ofereça o boleto\./);
+    });
+    test('o PIX que falhou não vira "não tem PIX"', () => {
+      const t = texto([{ contratoId: '1', faturaId: '9', pix: null, boleto: true }]);
+      expect(t).toMatch(/o PIX dela não pôde ser confirmado \(falha ao pedi-lo ao sistema\): não diga que ela não tem PIX/);
+      expect(t).not.toMatch(/não tem PIX disponível/);
+    });
+    test('os dois existem: nada a dizer', () => {
+      expect(texto([{ contratoId: '1', faturaId: '9', pix: true, boleto: true }])).not.toMatch(/FATO DO SISTEMA \(2ª via/);
+    });
+  });
+
   test('data e hora vêm de estado.agora (determinístico), nunca do relógio', () => {
     const texto = fatos.linhas(estadoBase({ agora: new Date('2026-09-17T14:00:00.000Z') })).join('\n');
     expect(texto).toContain('Hoje é 17/09/2026 e agora são 11:00 em Brasília.');

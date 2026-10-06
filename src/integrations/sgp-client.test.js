@@ -234,6 +234,19 @@ describe('sgp-client', () => {
         expect.any(Object)
       );
       expect(result.duplicates[0].pixCode).toBe('000201-fresh-pix-emv');
+      expect(result.duplicates[0].pixFalhou).toBeUndefined();
+    });
+
+    // Comportamento da IA (06/10/2026; A6/A7): o SGP respondeu sem código PIX — aí sim a fatura não tem PIX agora.
+    test('pagamento/pix answers without a pix code: null pixCode and no failure flag', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post
+        .mockResolvedValueOnce({ data: { faturas: [] } })
+        .mockResolvedValueOnce({ data: { status: 1, links: [{ id: '999', vencimento: '2026-09-20', valor: 89.9, linhadigitavel: '836...', codigopix: '', link: 'https://x' }] } })
+        .mockResolvedValueOnce({ data: { status: 0, msg: 'Sem pix' } });
+      const result = await getDuplicateInvoice(17402);
+      expect(result.duplicates[0].pixCode).toBeNull();
+      expect(result.duplicates[0].pixFalhou).toBeUndefined();
     });
 
     test('does not abort when the titulos pre-call fails', async () => {
@@ -259,6 +272,8 @@ describe('sgp-client', () => {
       const result = await getDuplicateInvoice(17402);
 
       expect(result.duplicates[0].pixCode).toBeNull();
+      // Comportamento da IA (06/10/2026; A6/A7): falha ao pedir o PIX não é "sem PIX" — a ferramenta precisa saber.
+      expect(result.duplicates[0].pixFalhou).toBe(true);
     });
   });
 

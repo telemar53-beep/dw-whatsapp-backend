@@ -2253,6 +2253,59 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
       expect(r.ofertaDoBoleto).toEqual({ faturaId: '9' });
     });
 
+    // Comportamento da IA (06/10/2026; A6/A7): o estado dos meios que a 2ª via desta conversa comprovou viaja na metadata da
+    // resposta da IA, volta na janela, vira fato do prompt, e as guardas da resposta usam só ele.
+    describe('meios de pagamento comprovados pela 2ª via', () => {
+      const NADA = [{ contratoId: '17402', faturaId: '9', pix: false, boleto: false }];
+      const respostaAnterior = (meios) => ({ ...saida('Não há PIX nem boleto desta fatura disponível agora.'), id: 'out-meios', metadata: { meiosDaFatura: meios } });
+
+      test('a janela traz o estado da resposta anterior, o prompt recebe o fato e o turno devolve o estado para a próxima mensagem', async () => {
+        roteiro(final('Esta fatura não tem PIX nem boleto disponível por aqui agora.'));
+        ferramentas();
+        const r = await turno(['manda o pix', respostaAnterior(NADA), 'e agora?']);
+        expect(vistas[0].sistema).toMatch(/FATO DO SISTEMA \(2ª via desta conversa\): a fatura 9 não tem PIX nem boleto disponível para envio por aqui\./);
+        expect(vistas[0].sistema).toMatch(/o único próximo passo que existe é falar com um atendente/);
+        expect(r.meiosDaFatura).toEqual(NADA);
+      });
+
+      // Reprodução da avaliação real de 06/10 (E6 #2, fala 2, sem ferramenta): a resposta convidou a pedir de novo.
+      test('E6 #2 reprovado: a oferta do meio comprovadamente inexistente sai, e entra o fato com o único próximo passo', async () => {
+        roteiro(final('Você pode me pedir o boleto ou o PIX novamente, e eu verifico para te enviar se houver opção disponível.'));
+        ferramentas();
+        const r = await turno(['Oi, manda o pix da minha internet.', respostaAnterior(NADA), 'E agora, como eu pago?']);
+        expect(r.texto).toBe('Esta fatura não tem PIX nem boleto disponível por aqui agora. Se quiser, posso encaminhar você para um atendente.');
+      });
+
+      test('o pedido do PIX ao SGP falhou no turno: "não há PIX" sai, a falha é dita, e o resto da resposta fica', async () => {
+        roteiro(chamada('gerar_pix'), final('Não há código PIX disponível para essa fatura agora. Se quiser, posso te enviar o boleto.'));
+        executeTool.mockReset().mockImplementation(async (_n, _a, c) => {
+          c.meiosDaFatura = [{ contratoId: '17402', faturaId: '9', pix: null, boleto: true }];
+          return { ok: true, resultado: { sucesso: false, enviado: false, pixIndeterminado: true } };
+        });
+        const r = await turno(['manda o pix']);
+        expect(r.texto).toBe('Não consegui confirmar agora se o PIX está disponível para esta fatura. Se quiser, posso te enviar o boleto.');
+        expect(r.meiosDaFatura).toEqual([{ contratoId: '17402', faturaId: '9', pix: null, boleto: true }]);
+      });
+
+      test('a ferramenta de cobrança respondeu outra coisa (bloqueio): a frase dela fica, sem a troca da indisponibilidade não confirmada', async () => {
+        roteiro(chamada('enviar_boleto'), final('O boleto não está disponível por aqui para este caso.'));
+        executeTool.mockReset().mockImplementation(async (_n, _a, c) => {
+          c.cobrancaComResposta = true;
+          return { ok: true, resultado: { enviado: false, cobrancaBloqueada: 'reativacao' } };
+        });
+        const r = await turno(['manda o boleto']);
+        expect(r.texto).toBe('O boleto não está disponível por aqui para este caso.');
+      });
+
+      test('sem estado comprovado e com a resposta honesta de quem não sabe, nada muda', async () => {
+        roteiro(final('Você quer pagar por boleto ou por PIX? Assim que você escolher, eu vejo se ele está disponível para esta fatura.'));
+        ferramentas();
+        const r = await turno(['quero pagar minha fatura']);
+        expect(r.texto).toBe('Você quer pagar por boleto ou por PIX? Assim que você escolher, eu vejo se ele está disponível para esta fatura.');
+        expect(r.meiosDaFatura).toBeNull();
+      });
+    });
+
     test('"entrou na fila" depois de uma conclusão que falhou sai, e entra a frase de transferência não confirmada', async () => {
       roteiro(chamada('concluir_triagem'), final('Seu atendimento entrou na fila do setor Suporte.'), chamada('concluir_triagem'), final('Seu atendimento entrou na fila do setor Suporte.'));
       executeTool.mockReset().mockResolvedValue({ ok: false, motivo: 'execution_error', detalhe: 'banco fora', semConfirmacao: true, instrucao: 'x' });

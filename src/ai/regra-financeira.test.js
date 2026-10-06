@@ -262,6 +262,25 @@ describe('DIA', () => {
     }
   });
 
+  // Revisão de A6/A7 (06/10/2026, item 2): o estado dos meios é da FATURA. Com a fatura autorizada pela regra já conhecida
+  // (1 vencida) e diferente da que a 2ª via mostrou sem PIX, o PIX não é recusado antes da 2ª via.
+  test('14d. o PIX inexistente numa fatura antiga não recusa o PIX da fatura autorizada agora (outra)', async () => {
+    titulosPorContrato[100] = leitura([titulo(1471, -3)]);
+    viasPorContrato[100] = segundaVia(titulo(1471, -3));
+    const fala = 'A fatura 1470 já foi paga.';
+    const r = await findTool('gerar_pix').executar({ contratoId: 100 }, ctx({
+      falasDoCliente: ['manda o pix', 'me manda a próxima'],
+      ultimaFalaDaIa: fala,
+      mensagensDaJanela: [
+        { id: 'm1', de: 'cliente', texto: 'manda o pix' },
+        { id: 'm2', de: 'ia', texto: fala, meiosDaFatura: [{ contratoId: '100', faturaId: '1470', pix: false, boleto: true }] },
+        { id: 'm3', de: 'cliente', texto: 'me manda a próxima' },
+      ],
+    }));
+    expect(r.meioInexistente).toBeUndefined();
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+  });
+
   test('14b. o vencimento atualizado para hoje não esconde o atraso: 2 vencidas continuam 2', async () => {
     // As duas vencidas têm vencimento_atualizado = HOJE. Pela data atualizada seriam "do dia".
     titulosPorContrato[100] = leitura([titulo(1451, -35), titulo(1452, -5)]);
@@ -510,17 +529,58 @@ describe('PAGAMENTO — conferir_pagamento relê o MESMO título no SGP', () => 
     expect(r.instrucao).not.toMatch(/prefere boleto ou PIX/);
   });
 
-  test.each([
-    ['sem meio na mensagem', 'quero pagar minha fatura'],
-    // Revisão da entrega 1: "tanto faz" cita os dois meios — a ferramenta chamada entrega o meio dela (a trava aceita).
-    ['os dois meios citados, sem preferência', 'pode ser boleto ou pix, tanto faz'],
-  ])('20e. sem cobrança enviada, %s: a instrução manda a ferramenta de cobrança dizer o que existe, sem perguntar o meio por conta própria', async (_nome, fala) => {
+  // Comportamento da IA (06/10/2026; A6): a entrega 1 mandava chamar a ferramenta de cobrança para ela dizer o que existe —
+  // mas as ferramentas geram a 2ª via (e, sem código pronto, o PIX) no sistema antes da trava do meio, e na avaliação o
+  // modelo chamou o PIX só para consultar (E6 #2) ou respondeu "preciso verificar" sem fazer nada (E6 #1). Sem meio no
+  // turno: responder já, pelo que a conversa disse; o meio já escolhido continua; sem escolha, perguntar; a cobrança só com
+  // o meio escolhido, e o meio dito inexistente não conta como escolhido.
+  test('20e. sem cobrança enviada e sem meio na mensagem: responde já, pelo que a conversa disse, e não usa a cobrança para consultar', async () => {
     findLatestEnqueuedDelivery.mockResolvedValue(null);
-    const r = await conferir(ctx({ ultimaFalaDoCliente: fala }));
-    // Comportamento da IA (05/10/2026; E6 #1): a pergunta "boleto ou PIX" sai da ferramenta de cobrança, que sabe se os meios existem.
-    expect(r.instrucao).toMatch(/chame a ferramenta de cobrança/);
-    expect(r.instrucao).not.toMatch(/prefere boleto ou PIX/);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'quero pagar minha fatura' }));
+    expect(r.instrucao).toMatch(/não conclua e não diga que vai verificar: responda nesta mesma mensagem/);
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e uma resposta sua anterior nesta conversa já disse que esta fatura não tem PIX ou não tem boleto, siga isso: não ofereça nem chame a ferramenta do meio que não existe \(salvo se ele pedir esse meio nesta mensagem\), e, sem nenhum dos dois, diga que não há outra forma de pagamento por aqui agora\./);
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e ainda não escolheu: sem resposta sua dizendo que falta um meio, pergunte por qual meio ele quer pagar, sem afirmar que os dois estão disponíveis; se uma disse que falta só um, pergunte só se pode enviar o outro\./);
+    expect(r.instrucao).toMatch(/Só chame enviar_boleto ou gerar_pix com o meio que ele escolheu: elas geram a 2ª via no sistema e não servem para consultar quais meios existem\./);
+    expect(r.instrucao).not.toMatch(/chame a ferramenta de cobrança/);
     expect(r.instrucao).not.toMatch(/agora, sem perguntar/);
+  });
+
+  // Revisão do delta (06/10/2026, impeditivo): o caminho do E12 pelo conferir — ele perguntou se aceitam PIX, a IA ofereceu
+  // e ele disse "então quero pagar". A pergunta não pode voltar a quem já escolheu: o meio já escolhido continua.
+  test('20e3. sem meio na mensagem atual, mas com o meio já escolhido na conversa: a instrução manda chamar a ferramenta desse meio, não perguntar', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'Então quero pagar minha fatura.', mensagensDaJanela: [
+      { id: 'm1', de: 'cliente', texto: 'Oi, vocês aceitam pagamento por PIX?' }, { id: 'm2', de: 'ia', texto: 'Aceitamos sim! Quer que eu envie o PIX da sua fatura?' },
+      { id: 'm3', de: 'cliente', texto: 'Então quero pagar minha fatura.' },
+    ] }));
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e já escolheu nesta conversa um meio desta fatura que não foi dito inexistente \(pediu, aceitou uma oferta sua ou já recebeu\), chame a ferramenta desse meio agora\./);
+    expect(r.instrucao.indexOf('chame a ferramenta desse meio agora')).toBeLessThan(r.instrucao.indexOf('sem resposta sua dizendo que falta um meio'));
+  });
+
+  // Revisão do delta (06/10/2026): no turno do limite de perguntas, a triagem não pergunta nada (limite-perguntas.js) — a
+  // mesma saída da trava do meio: o meio já escolhido sai; sem escolha, conclui para o financeiro.
+  test('20i. sem meio na mensagem, no turno do limite de perguntas: não pergunta; meio escolhido sai, senão conclui', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'E agora, como eu pago?', triagem: { forcarConclusao: true } }));
+    expect(r.instrucao).toMatch(/esta é a última resposta da triagem, não pergunte nada e não diga que vai verificar/);
+    expect(r.instrucao).toMatch(/chame a ferramenta desse meio agora/);
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e não há meio escolhido, chame concluir_triagem para o setor que cuidar de financeiro, com "meio de pagamento não escolhido" no resumo\./);
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e uma resposta sua anterior nesta conversa já disse que esta fatura não tem PIX ou não tem boleto, siga isso: não ofereça nem chame a ferramenta do meio que não existe \(salvo se ele pedir esse meio nesta mensagem\), e, sem nenhum dos dois, diga que não há outra forma de pagamento por aqui agora\./);
+    expect(r.instrucao).toMatch(/Só chame enviar_boleto ou gerar_pix com o meio que ele escolheu: elas geram a 2ª via no sistema e não servem para consultar quais meios existem\./);
+    expect(r.instrucao).not.toMatch(/pergunte curto/);
+  });
+
+  // Revisão da entrega 1: "tanto faz" cita os dois meios — ele aceitou qualquer um, então a cobrança é pedida. Revisão do
+  // delta (06/10/2026): com os dois citados, vale também o pedido de um deles e o que a conversa já disse sobre os meios.
+  test('20e2. sem cobrança enviada e os dois meios citados: o pedido dele ou "tanto faz", seguindo o que a conversa disse', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'pode ser boleto ou pix, tanto faz' }));
+    expect(r.instrucao).toMatch(/Ele citou os dois meios nesta mensagem\. Se ainda não pagou e pediu um deles, não conclua: chame a ferramenta desse meio agora; se ainda não pagou e disse que tanto faz, chame enviar_boleto ou gerar_pix agora, sem perguntar o meio de novo\./);
+    expect(r.instrucao).toMatch(/não ofereça nem chame a ferramenta do meio que não existe/);
+    expect(r.instrucao).toMatch(/Se ainda não pagou, não diga que vai verificar\./);
+    expect(r.instrucao).toMatch(/Só chame enviar_boleto ou gerar_pix com o meio que ele escolheu: elas geram a 2ª via no sistema e não servem para consultar quais meios existem\./);
+    expect(r.instrucao).not.toMatch(/prefere boleto ou PIX/);
+    expect(r.instrucao).not.toMatch(/chame a ferramenta de cobrança/);
   });
 
   // Revisão do delta (04/10/2026): citar o meio não é pedir. "Já paguei o boleto" cita o boleto; a instrução não afirma que
@@ -539,20 +599,44 @@ describe('PAGAMENTO — conferir_pagamento relê o MESMO título no SGP', () => 
     const r = await conferir(ctx({ ultimaFalaDoCliente: 'quero o boleto', mensagensDaJanela: [
       { id: 'm1', de: 'cliente', texto: 'quero o boleto' }, { id: 'm2', de: 'ia', texto: 'Posso ajudar em algo mais?' }, { id: 'm3', de: 'cliente', texto: 'já paguei, pode ver?' },
     ] }));
-    expect(r.instrucao).toMatch(/chame a ferramenta de cobrança/);
+    // Conferência da v2 (06/10/2026): ele tinha pedido o boleto e agora diz que pagou — a continuidade do meio vale só para
+    // quem ainda não pagou; quem pagou segue o caminho de concluir, que vem antes.
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e já escolheu nesta conversa um meio desta fatura/);
+    expect(r.instrucao).not.toMatch(/\. Se ele já escolheu nesta conversa/);
+    expect(r.instrucao.indexOf('Se o cliente pagou por outro meio, chame concluir_triagem')).toBeLessThan(r.instrucao.indexOf('Se ele ainda não pagou e já escolheu'));
     expect(r.instrucao).not.toMatch(/Se ele pediu o boleto/);
   });
 
   // Comportamento da IA (05/10/2026; avaliação real E6 #1): sem PIX e sem boleto na fatura, "E agora, como eu pago?" veio
-  // para cá, e a instrução mandou perguntar "boleto ou PIX". A instrução não sabe a disponibilidade: manda chamar a
-  // ferramenta de cobrança, que sabe (os dois meios: pergunta; um: oferece só ele; nenhum: diz que não há outra forma).
-  test('20h. reprodução E6 #1 — "E agora, como eu pago?": a instrução não manda perguntar o meio; manda a ferramenta de cobrança dizer o que existe', async () => {
+  // para cá, e a instrução mandou perguntar "boleto ou PIX". 06/10 (A6): a resposta anterior da IA já tinha dito que não há
+  // nenhum dos dois — a instrução manda seguir isso, sem "vou verificar" e sem chamar a cobrança para consultar.
+  test('20h. reprodução E6 #1 — "E agora, como eu pago?" depois de "não há PIX nem boleto": segue o que a conversa disse, sem perguntar nem consultar pela cobrança', async () => {
     findLatestEnqueuedDelivery.mockResolvedValue(null);
-    const r = await conferir(ctx({ ultimaFalaDoCliente: 'E agora, como eu pago?' }));
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'E agora, como eu pago?', mensagensDaJanela: [
+      { id: 'm1', de: 'cliente', texto: 'Oi, manda o pix da minha internet.' },
+      { id: 'm2', de: 'ia', texto: 'Não há código PIX disponível para essa fatura agora, então não houve envio. Também não tenho outro meio de pagamento para oferecer por aqui neste momento.' },
+      { id: 'm3', de: 'cliente', texto: 'E agora, como eu pago?' },
+    ] }));
     expect(r.instrucao).not.toMatch(/boleto ou PIX/);
-    expect(r.instrucao).toMatch(/chame a ferramenta de cobrança \(enviar_boleto ou gerar_pix\) e siga a instrução dela/);
-    expect(r.instrucao).toMatch(/é ela que diz quais meios existem nesta fatura/);
-    expect(r.instrucao).toMatch(/Não pergunte nem ofereça um meio que a ferramenta não confirmou/);
+    expect(r.instrucao).toMatch(/não diga que vai verificar/);
+    expect(r.instrucao).toMatch(/sem nenhum dos dois, diga que não há outra forma de pagamento por aqui agora/);
+    // O PIX que ele pediu na fala 1 e que a resposta disse não existir não conta como escolhido.
+    expect(r.instrucao).toMatch(/não ofereça nem chame a ferramenta do meio que não existe \(salvo se ele pedir esse meio nesta mensagem\)/);
+    expect(r.instrucao).toMatch(/não servem para consultar quais meios existem/);
+    expect(r.instrucao).not.toMatch(/é ela que diz quais meios existem nesta fatura/);
+    // Conferência da v2: a pergunta do meio só vale sem resposta dizendo que falta um meio (I-A).
+    expect(r.instrucao).toMatch(/Se ele ainda não pagou e ainda não escolheu: sem resposta sua dizendo que falta um meio, pergunte por qual meio ele quer pagar, sem afirmar que os dois estão disponíveis; se uma disse que falta só um, pergunte só se pode enviar o outro\./);
+    expect(r.instrucao).not.toMatch(/Se ainda não escolheu, pergunte/);
+  });
+
+  // Conferência da v2 (06/10/2026): quem diz que pagou, citando os dois meios, segue o caminho de concluir; as frases do
+  // ramo dos dois meios valem só para quem ainda não pagou.
+  test('20j. "já paguei o boleto e o pix": o caminho de quem pagou vem antes, e as ordens do ramo dos dois meios são só para quem não pagou', async () => {
+    findLatestEnqueuedDelivery.mockResolvedValue(null);
+    const r = await conferir(ctx({ ultimaFalaDoCliente: 'Já paguei o boleto e o pix, pode ver?' }));
+    expect(r.instrucao.indexOf('Se o cliente pagou por outro meio, chame concluir_triagem')).toBeLessThan(r.instrucao.indexOf('Ele citou os dois meios'));
+    expect(r.instrucao).toMatch(/Se ainda não pagou, não diga que vai verificar\./);
+    expect(r.instrucao).not.toMatch(/\. Não diga que vai verificar\./);
   });
 
   test('21. cliente diz "paguei" e o título continua Gerado: NÃO confirma', async () => {

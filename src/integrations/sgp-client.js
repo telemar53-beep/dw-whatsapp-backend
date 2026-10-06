@@ -186,13 +186,16 @@ async function getDuplicateInvoice(contratoId) {
       // codigopix na 2ª via (o mesmo que o Financeiro usa). Só chamamos
       // pagamento/pix quando a fatura não trouxer nenhum código pronto.
       let pixCode = typeof link.codigopix === 'string' && link.codigopix.trim() ? link.codigopix : null;
+      let pixFalhou = false;
       if (!pixCode) {
         try {
           const pixResponse = await postSgp(config, `/api/ura/pagamento/pix/${link.id}`, { contrato: contratoId });
           if (pixResponse.data.pix) pixCode = pixResponse.data.pix;
         } catch (err) {
           // Sem codigopix no Financeiro e sem sucesso ao gerar: pixCode fica null
-          // em vez de falhar a ação inteira.
+          // em vez de falhar a ação inteira. Comportamento da IA (06/10/2026): a falha fica marcada — não é "a fatura
+          // não tem PIX" (o SGP não respondeu), e a ferramenta não pode afirmar indisponibilidade sem resultado.
+          pixFalhou = true;
         }
       }
       return {
@@ -201,6 +204,7 @@ async function getDuplicateInvoice(contratoId) {
         value: link.valor,
         barCode: link.linhadigitavel,
         pixCode,
+        ...(pixFalhou ? { pixFalhou: true } : {}),
         boletoLink: link.link,
       };
     })

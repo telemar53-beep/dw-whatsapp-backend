@@ -98,11 +98,34 @@ function descreverContrato(c) {
   return `contrato ${c.id} — ${plano} — ${c.endereco || 'endereço não informado'} — ${c.status}`;
 }
 
+// Comportamento da IA (06/10/2026; A6/A7): os meios de pagamento que a 2ª via DESTA conversa comprovou, como fato do
+// sistema. Sem 2ª via, nada se afirma (não há linha). null = o pedido do PIX ao SGP falhou: não se diz que ele não existe.
+function linhasDosMeiosDaFatura(meios) {
+  if (!Array.isArray(meios) || meios.length === 0) return [];
+  const linhas = [];
+  for (const m of meios) {
+    const prefixo = `FATO DO SISTEMA (2ª via desta conversa): a fatura ${m.faturaId}`;
+    if (m.pix === false && m.boleto === false) {
+      linhas.push(`${prefixo} não tem PIX nem boleto disponível para envio por aqui. Não ofereça nenhum dos dois nem sugira que ele peça de novo: o único próximo passo que existe é falar com um atendente, se ele quiser.`);
+    } else if (m.pix === false) {
+      linhas.push(`${prefixo} não tem PIX disponível; o boleto dela existe. Não ofereça o PIX.`);
+    } else if (m.boleto === false && m.pix === true) {
+      linhas.push(`${prefixo} não tem boleto disponível; o PIX dela existe. Não ofereça o boleto.`);
+    } else if (m.boleto === false) {
+      linhas.push(`${prefixo} não tem boleto disponível, e o PIX dela não pôde ser confirmado (falha ao pedi-lo ao sistema): não diga que ela não tem PIX.`);
+    } else if (m.pix === null) {
+      linhas.push(`${prefixo} tem boleto; o PIX dela não pôde ser confirmado (falha ao pedi-lo ao sistema): não diga que ela não tem PIX.`);
+    }
+  }
+  return linhas;
+}
+
 module.exports = {
   nome: 'fatos',
   entra() { return true; },
   linhas(estado) {
     const identidade = estado.identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contestado: false };
+    // (linhasDosMeiosDaFatura: os meios comprovados pela 2ª via desta conversa — ver no fim do módulo.)
     const contratos = estado.contratos || [];
     const l = [
       '',
@@ -135,6 +158,7 @@ module.exports = {
       'Com identidade confirmada você pode dizer há quantos dias/meses a fatura está vencida e quantas faturas estão vencidas (use a data de hoje, no alto, para contar). Conte SEMPRE pelo vencimento ORIGINAL, nunca pelo atualizado; quantas estão vencidas é o campo faturasVencidas que a ferramenta devolve. Fatura que vence hoje, fatura futura (o carnê) e fatura paga NÃO são atraso. Continua proibido dizer o VALOR.',
       'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
       fonteDoComercial(estado),
+      ...linhasDosMeiosDaFatura(estado.meiosDaFatura),
       'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',
     );
 

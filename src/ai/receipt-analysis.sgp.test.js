@@ -1,0 +1,113 @@
+// N3 (06/10/2026, autorizado pelo proprietário): a análise do comprovante pede a 2ª via de cada contrato SEM gerar PIX.
+// Ponta a ponta sem serviço real: o cliente SGP é o real, com o HTTP (axios) simulado; a conferência é a real. Prova que a
+// conferência dá o mesmo resultado (mesma fatura, mesmo contrato, mesmos motivos), que pagamento/pix nunca é chamado, e que
+// as falhas continuam tratadas como antes (um contrato fora não derruba os outros).
+jest.mock('axios');
+jest.mock('../integrations/sgp-query-config.repository');
+jest.mock('./openai-client');
+jest.mock('../company/company-config.repository');
+jest.mock('./receipt-usage.repository');
+jest.mock('../media/media-storage', () => ({
+  ...jest.requireActual('../media/media-storage'),
+  getMediaFilePath: jest.fn(() => '/tmp/comprovante.jpg'),
+}));
+jest.mock('fs', () => ({ ...jest.requireActual('fs'), promises: { stat: jest.fn(), readFile: jest.fn() } }));
+
+const fs = require('fs');
+const axios = require('axios');
+const { getSgpQueryConfig } = require('../integrations/sgp-query-config.repository');
+const { analyzeImage } = require('./openai-client');
+const { getCompanyConfig } = require('../company/company-config.repository');
+const { findReceiptUsage } = require('./receipt-usage.repository');
+const { analisarComprovante } = require('./receipt-analysis');
+
+const CONFIG_SGP = { baseUrl: 'https://sgp.exemplo.invalido', app: 'teste', token: 'tok-teste', enabled: true };
+const CONFIG = { apiKey: 'chave-de-teste', model: 'modelo-de-teste' };
+const IMAGEM = { id: 'msg-1', mediaPath: 'comprovante.jpg', mediaMimeType: 'image/jpeg' };
+// O dia de São Paulo (a conferência compara com ele); o de UTC faria o teste falhar das 21h às 23h59.
+const { hojeEmSaoPaulo } = require('./situacao-financeira');
+const HOJE = hojeEmSaoPaulo();
+const CONTRATOS = [{ id: 301 }, { id: 302 }];
+
+// O SGP simulado por URL: títulos (leitura), 2ª via por contrato e pagamento/pix (geração).
+function sgp({ codigoDaFatura301 = '', falha302 = false } = {}) {
+  axios.post.mockImplementation(async (url, corpo) => {
+    const contrato = /contrato=(\d+)/.exec(String(corpo))?.[1];
+    if (url.endsWith('/api/central/titulos')) return { data: { faturas: [] } };
+    if (url.endsWith('/api/ura/fatura2via')) {
+      if (contrato === '302' && falha302) throw new Error('SGP fora');
+      const links = contrato === '301'
+        ? [{ id: '3011', vencimento: '2026-10-10', valor: 100, linhadigitavel: '836-301', codigopix: codigoDaFatura301, link: 'https://x/3011' }]
+        : [{ id: '3021', vencimento: '2026-10-12', valor: 50, linhadigitavel: '836-302', codigopix: '000201-302', link: 'https://x/3021' }];
+      return { data: { status: 1, links } };
+    }
+    if (url.includes('/api/ura/pagamento/pix/')) return { data: { status: 1, pix: '000201-gerado' } };
+    throw new Error(`URL inesperada no teste: ${url}`);
+  });
+}
+const pediuPix = () => axios.post.mock.calls.filter(([url]) => url.includes('pagamento/pix'));
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  getSgpQueryConfig.mockResolvedValue(CONFIG_SGP);
+  fs.promises.stat.mockResolvedValue({ size: 1024 });
+  fs.promises.readFile.mockResolvedValue(Buffer.from('imagem'));
+  getCompanyConfig.mockResolvedValue({ acceptedPayeeNames: ['EMPRESA DE TESTE'] });
+  findReceiptUsage.mockResolvedValue(null);
+  analyzeImage.mockResolvedValue({ ehComprovante: true, tipo: 'pix', valor: 100, data: HOJE, favorecido: 'EMPRESA DE TESTE', confianca: 0.95, idTransacao: 'E-TESTE-1' });
+});
+
+test('a conferência casa a fatura certa do contrato certo, e pagamento/pix nunca é chamado', async () => {
+  sgp();
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(r).toMatchObject({ analisado: true, valido: true, faturaId: '3011', contratoId: 301, jaUtilizado: false });
+  expect(pediuPix()).toEqual([]);
+  expect(axios.post.mock.calls.filter(([url]) => url.endsWith('/api/ura/fatura2via'))).toHaveLength(2);
+});
+
+test('mesmo resultado com e sem código PIX pronto na 2ª via (a conferência não depende do PIX)', async () => {
+  sgp({ codigoDaFatura301: '' });
+  const semCodigo = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  sgp({ codigoDaFatura301: '000201-pronto' });
+  const comCodigo = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(semCodigo).toEqual(comCodigo);
+  expect(pediuPix()).toEqual([]);
+});
+
+test('mesmo resultado que o caminho antigo, que gerava o PIX (a 2ª via pedida no padrão)', async () => {
+  sgp();
+  const sgpClient = require('../integrations/sgp-client');
+  const real = sgpClient.getDuplicateInvoice;
+  // O caminho antigo: a 2ª via no padrão, ignorando a opção — e aí o PIX da fatura sem código é gerado.
+  const antigo = jest.spyOn(sgpClient, 'getDuplicateInvoice').mockImplementation((id) => real(id));
+  const resultadoAntigo = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(pediuPix().length).toBeGreaterThan(0);
+  antigo.mockRestore();
+  axios.post.mockClear();
+  const resultadoNovo = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(resultadoNovo).toEqual(resultadoAntigo);
+  expect(pediuPix()).toEqual([]);
+});
+
+test('valor que não bate com nenhuma fatura: o mesmo motivo de sempre', async () => {
+  sgp();
+  analyzeImage.mockResolvedValue({ ehComprovante: true, tipo: 'pix', valor: 77, data: HOJE, favorecido: 'EMPRESA DE TESTE', confianca: 0.95, idTransacao: 'E-TESTE-2' });
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(r).toMatchObject({ analisado: true, valido: false, faturaId: null, contratoId: null });
+  expect(r.motivos).toContain('valor não corresponde a nenhuma fatura em aberto');
+  expect(pediuPix()).toEqual([]);
+});
+
+test('a 2ª via de um contrato falha: a conferência segue com o outro, como antes', async () => {
+  sgp({ falha302: true });
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(r).toMatchObject({ analisado: true, valido: true, faturaId: '3011', contratoId: 301 });
+  expect(pediuPix()).toEqual([]);
+});
+
+test('SGP fora para todos: sem exceção, sem fatura para casar, sem PIX pedido', async () => {
+  axios.post.mockRejectedValue(new Error('SGP fora'));
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(r).toMatchObject({ analisado: true, valido: false, faturaId: null });
+  expect(pediuPix()).toEqual([]);
+});

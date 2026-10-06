@@ -167,7 +167,8 @@ function prepararMundo({ config, conversa, contact, historico, entregas }) {
 
   getConversationWithContact.mockImplementation(async () => ({ ...conversa, contactSgpDocument: contact.sgpDocument }));
   concludeAiTriage.mockImplementation(async (id, dados) => {
-    if (conversa.triageState !== 'pending') return null;
+    // A mesma elegibilidade do UPDATE real: triagem pendente, em espera e sem atendente.
+    if (conversa.triageState !== 'pending' || conversa.status !== 'waiting' || conversa.assignedAgentId) return null;
     conversa.triageState = 'completed';
     conversa.sectorId = dados.sectorId;
     conversa.aiTriageSummary = dados.summary;

@@ -47,6 +47,7 @@ const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findEnqueuedDeliveryOfInvoice, findLatestEnqueuedDeliveryOfOtherInvoice,
+  findLatestEnqueuedDelivery,
 } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { listarPlanosDisponiveis } = require('../plans/plan.repository');
@@ -142,6 +143,16 @@ beforeEach(() => {
       if (conversa === conversationId && ferramenta === tool && fatura === String(invoiceId) && registro.enqueuedAt) return { ...registro };
     }
     return null;
+  });
+  // Comportamento da IA (06/10/2026; A6/A7): a última entrega enfileirada da conversa (qualquer fatura), do mesmo armazenamento
+  // — a verificação da escolha antes da 2ª via só a usa para saber se houve entrega (continuidade e reenvio).
+  findLatestEnqueuedDelivery.mockImplementation(async (conversationId) => {
+    let ultima = null;
+    for (const { porFatura, registro } of entregas.values()) {
+      const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
+      if (conversa === conversationId && registro.enqueuedAt && (!ultima || registro.enqueuedAt >= ultima.enqueuedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
+    }
+    return ultima;
   });
   // Fechamento limitado (04/10/2026): a última entrega enfileirada de OUTRA fatura nesta conversa, do mesmo armazenamento.
   findLatestEnqueuedDeliveryOfOtherInvoice.mockImplementation(async ({ conversationId, invoiceId, exceptoMensagem = null }) => {
@@ -486,6 +497,39 @@ describe('consultar_faturas_todos_contratos executar', () => {
     expect(tool.validar({ contratoId: 999 })).toEqual({ ok: true, args: {} });
   });
 
+  // Comportamento da IA (06/10/2026; A6/A7): a descrição dizia "NÃO gera boleto nem PIX", mas a ferramenta pede a 2ª via de
+  // cada contrato (geração no SGP). Na triagem, sem meio escolhido, ela fica só na listagem (leitura pura); a 2ª via só
+  // depois da escolha — o mesmo critério das ferramentas de cobrança.
+  describe('sem geração no SGP antes da escolha (triagem)', () => {
+    const ctxTriagem = (falasDoCliente, extra = {}) => ({ contracts: [CONTRATO_A, CONTRATO_B], identidade: { nivel: 'forte' }, conversationId: 'c-cons', falasDoCliente, ...extra });
+
+    test('a descrição não afirma mais que não gera nada e diz quando pede a 2ª via', () => {
+      const { descricao } = findTool('consultar_faturas_todos_contratos');
+      expect(descricao).not.toMatch(/NÃO gera boleto nem PIX/);
+      expect(descricao).toMatch(/leitura/);
+      expect(descricao).toMatch(/pede a 2ª via de cada contrato ao sistema/);
+    });
+
+    test('sem meio escolhido: só a listagem — nenhuma 2ª via é pedida, e a resposta diz isso', async () => {
+      sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA] });
+      const r = await findTool('consultar_faturas_todos_contratos').executar({}, ctxTriagem(['quanto eu devo?']));
+      expect(sgpClient.listInvoices).toHaveBeenCalledTimes(2);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+      expect(r.segundaViaNaoPedida).toBe(true);
+      expect(r.contratos.map((c) => c.temFaturaEmAberto)).toEqual([null, null]);
+      expect(r.instrucao).toMatch(/a 2ª via não foi pedida/);
+      expect(r.instrucao).toMatch(/sem afirmar que os dois estão disponíveis/);
+    });
+
+    test('com o meio escolhido: a 2ª via de cada contrato, como no fluxo de pagamento de sempre', async () => {
+      sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA] });
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9' }] });
+      const r = await findTool('consultar_faturas_todos_contratos').executar({}, ctxTriagem(['quero o boleto da minha internet']));
+      expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(2);
+      expect(r.segundaViaNaoPedida).toBeUndefined();
+    });
+  });
+
   // 3º teste real do boleto (2026-09-13): o modelo viu que só um contrato
   // tinha fatura e ainda assim perguntou o endereço. A 2ª via de cada
   // contrato diz o que está em aberto, e a ferramenta devolve a instrução.
@@ -529,10 +573,14 @@ describe('consultar_faturas_todos_contratos executar', () => {
       expect(r.contratosComFaturaEmAberto).toEqual([{ contratoId: 2, endereco: 'AV Y, 2', plano: '300MB' }]);
     });
 
-    test('fora da triagem (assistente), traz os dados mas não a instrução', async () => {
+    // Revisão de A6/A7 (06/10/2026, item 6): ferramenta de CONSULTA não gera documento. No assistente ela roda sem a
+    // aprovação da atendente (categoria CONSULTA), então fica só na listagem — a 2ª via é gerar_segunda_via, com aprovação.
+    test('fora da triagem (assistente): só a listagem, nenhuma 2ª via, e sem a instrução', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue(segundaVia(true));
       const r = await findTool('consultar_faturas_todos_contratos').executar({}, { contracts: [CONTRATO_A, CONTRATO_B] });
-      expect(r.contratosComFaturaEmAberto).toHaveLength(2);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+      expect(r.contratos.map((c) => c.temFaturaEmAberto)).toEqual([null, null]);
+      expect(r.contratosComFaturaEmAberto).toEqual([]);
       expect(r.instrucao).toBeUndefined();
     });
   });
@@ -2039,8 +2087,8 @@ describe('enviar_boleto', () => {
       expect(c.ofertaDoBoleto).toBeUndefined();
     });
 
-    // Revisão do delta da entrega 1 (05/10/2026): o boleto sem link também diz o que existe na fatura — a instrução do
-    // conferir_pagamento manda a ferramenta de cobrança dizer, e as duas precisam saber.
+    // Revisão do delta da entrega 1 (05/10/2026): o boleto sem link também diz o que existe na fatura — quem pediu o boleto
+    // precisa saber da alternativa que existe, como quem pediu o PIX.
     test.each([
       ['só o PIX existe', { pixCode: '000201-pix-emv' }, null, /ofereça o PIX desta mesma fatura; só gere \(gerar_pix com contratoId 17402\) se ele aceitar/],
       ['nem PIX nem boleto', { pixCode: null }, null, /não há outra forma de pagamento para oferecer por aqui/],
@@ -4100,16 +4148,262 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   describe('meio de pagamento escolhido antes da entrega', () => {
     const comFalas = (falasDoCliente, extra = {}) => ctx({ falasDoCliente, ...extra });
 
+    // Comportamento da IA (06/10/2026; A6/A7, autorizado pelo proprietário): a escolha do meio é conferida ANTES da 2ª via,
+    // na parte que não depende dela — a 2ª via (e, sem código pronto, o PIX) é geração no SGP, não consulta. Os testes
+    // olham o efeito no SGP simulado (getDuplicateInvoice), não só a ausência de mensagem ao cliente.
+    describe('geração no SGP só depois da escolha', () => {
+      const SEM_PIX = { ...FATURA, pixCode: null };
+      const SEM_PIX_SEM_BOLETO = { ...FATURA, pixCode: null, boletoLink: null };
+      const ofertaFeita = (extra = {}) => comFalas(['manda o pix', 'Pode ser, manda sim.'], {
+        ultimaFalaDaIa: 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?',
+        mensagensDaJanela: [
+          { id: 'm1', de: 'cliente', texto: 'manda o pix' },
+          { id: 'm2', de: 'ia', texto: 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?', ofertaDoBoleto: { faturaId: '9', faturaIds: ['9'] }, meiosDaFatura: [{ contratoId: '17402', faturaId: '9', pix: false, boleto: true }] },
+          { id: 'm3', de: 'cliente', texto: 'Pode ser, manda sim.' },
+        ],
+        ...extra,
+      });
+      const nadaDisponivel = (turno) => comFalas(['manda o pix', turno], {
+        ultimaFalaDaIa: 'Não há PIX nem boleto desta fatura disponível agora.',
+        mensagensDaJanela: [
+          { id: 'm1', de: 'cliente', texto: 'manda o pix' },
+          { id: 'm2', de: 'ia', texto: 'Não há PIX nem boleto desta fatura disponível agora.', meiosDaFatura: [{ contratoId: '17402', faturaId: '9', pix: false, boleto: false }] },
+          { id: 'm3', de: 'cliente', texto: turno },
+        ],
+      });
+
+      test('sem meio escolhido, nenhuma 2ª via nem PIX é pedido ao SGP, nada é reservado, e a pergunta não afirma que os dois existem', async () => {
+        sgpClient.getDuplicateInvoice.mockClear();
+        const p = await pix({ contratoId: 17402 }, comFalas(['Oi, quero pagar minha fatura.']));
+        const b = await boleto({ contratoId: 17402 }, comFalas(['Oi, quero pagar minha fatura.']));
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        expect(claimDelivery).not.toHaveBeenCalled();
+        for (const r of [p, b]) {
+          expect(r).toMatchObject({ enviado: false, meioNaoEscolhido: true, geracaoEvitada: true });
+          expect(r.instrucao).toMatch(/NADA foi pedido ao sistema nem enviado/);
+          expect(r.instrucao).toMatch(/sem afirmar que os dois estão disponíveis/);
+          expect(r.instrucao).toMatch(/Você quer pagar por boleto ou por PIX\? Assim que você escolher, eu vejo se ele está disponível para esta fatura\./);
+        }
+      });
+
+      test('pedido explícito continua: a 2ª via é pedida uma vez e o PIX sai', async () => {
+        sgpClient.getDuplicateInvoice.mockClear();
+        const r = await pix({ contratoId: 17402 }, comFalas(['manda o pix da minha internet']));
+        expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+        expect(r.enviado).toBe(true);
+      });
+
+      test('aceite do boleto não chama PIX: gerar_pix não pede 2ª via e manda enviar_boleto; enviar_boleto entrega', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX] });
+        sgpClient.getDuplicateInvoice.mockClear();
+        const p = await pix({ contratoId: 17402 }, ofertaFeita());
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        expect(p).toMatchObject({ enviado: false, geracaoEvitada: true });
+        expect(p.instrucao).toMatch(/chame enviar_boleto com contratoId 17402 agora/);
+        const b = await boleto({ contratoId: 17402 }, ofertaFeita());
+        expect(b.enviado).toBe(true);
+      });
+
+      test('meio confirmado indisponível não é oferecido nem gerado de novo; com novo pedido dele no turno, é pedido de novo', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_SEM_BOLETO] });
+        sgpClient.getDuplicateInvoice.mockClear();
+        const p = await pix({ contratoId: 17402 }, nadaDisponivel('E agora, como eu pago?'));
+        const b = await boleto({ contratoId: 17402 }, nadaDisponivel('E agora, como eu pago?'));
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        for (const r of [p, b]) {
+          expect(r).toMatchObject({ enviado: false, meioInexistente: true, geracaoEvitada: true });
+          expect(r.instrucao).toMatch(/não há forma de pagamento por aqui agora/);
+          expect(r.instrucao).toMatch(/sem sugerir que ele peça de novo nem que você vai verificar depois/);
+          expect(r.instrucao).toMatch(/O único próximo passo que existe é falar com um atendente/);
+        }
+        await pix({ contratoId: 17402 }, nadaDisponivel('manda o pix de novo, por favor'));
+        expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+      });
+
+      test('falha ao pedir o PIX ao SGP não vira indisponibilidade: a instrução não afirma que a fatura não tem PIX, e o estado fica desconhecido', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null, pixFalhou: true }] });
+        const c = comFalas(['manda o pix']);
+        const r = await pix({ contratoId: 17402 }, c);
+        expect(r).toMatchObject({ enviado: false, pixIndeterminado: true });
+        expect(r.instrucao).not.toMatch(/não tem código PIX disponível/);
+        expect(r.instrucao).toMatch(/isso NÃO quer dizer que esta fatura não tem PIX/);
+        expect(c.meiosDaFatura).toEqual([{ contratoId: '17402', faturaId: '9', pix: null, boleto: true }]);
+      });
+
+      test('boleto sem link com o PIX que falhou: a instrução não diz que não há PIX', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null, pixFalhou: true, boletoLink: null }] });
+        const r = await boleto({ contratoId: 17402 }, comFalas(['manda o boleto']));
+        expect(r.instrucao).toMatch(/não tem boleto disponível/);
+        expect(r.instrucao).not.toMatch(/não há PIX desta fatura/);
+        expect(r.instrucao).toMatch(/o PIX desta fatura não pôde ser confirmado agora/);
+      });
+
+      test('os dois meios disponíveis continuam permitindo escolha: sem escolha pergunta; depois da escolha, sai; o estado registra os dois', async () => {
+        sgpClient.getDuplicateInvoice.mockClear();
+        expect((await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']))).meioNaoEscolhido).toBe(true);
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        const c = comFalas(['quero pagar minha fatura', 'pode ser no PIX']);
+        expect((await pix({ contratoId: 17402 }, c)).enviado).toBe(true);
+        expect(c.meiosDaFatura).toEqual([{ contratoId: '17402', faturaId: '9', pix: true, boleto: true }]);
+      });
+
+      test('o estado dos meios registra a fatura sem PIX e sem boleto que a 2ª via mostrou', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX_SEM_BOLETO] });
+        const c = comFalas(['manda o pix']);
+        await pix({ contratoId: 17402 }, c);
+        expect(c.meiosDaFatura).toEqual([{ contratoId: '17402', faturaId: '9', pix: false, boleto: false }]);
+      });
+
+      test('a IA disse que não há PIX e ofereceu o boleto (só o estado dos meios, sem a marca da oferta): o boleto sai', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX] });
+        const fala = 'Não há PIX para esta fatura agora. Posso enviar o boleto dela?';
+        const r = await boleto({ contratoId: 17402 }, comFalas(['quero pagar', 'pode ser'], { ultimaFalaDaIa: fala, mensagensDaJanela: [{ id: 'm2', de: 'ia', texto: fala, meiosDaFatura: [{ contratoId: '17402', faturaId: '9', pix: false, boleto: true }] }] }));
+        expect(r.enviado).toBe(true);
+      });
+
+      test('a marca antiga da oferta (gravada antes desta versão, sem o estado dos meios) continua valendo como oferta: o boleto sai', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [SEM_PIX] });
+        const fala = 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?';
+        const r = await boleto({ contratoId: 17402 }, comFalas(['manda o pix', 'sim, pode mandar'], { ultimaFalaDaIa: fala, mensagensDaJanela: [{ id: 'm2', de: 'ia', texto: fala, ofertaDoBoleto: { faturaId: '9' } }] }));
+        expect(r.enviado).toBe(true);
+      });
+
+      test('consulta multi-contrato sem a escolha do cliente: só a listagem (as entregas nem são lidas)', async () => {
+        findLatestEnqueuedDelivery.mockRejectedValue(new Error('banco fora'));
+        sgpClient.getDuplicateInvoice.mockClear();
+        sgpClient.listInvoices.mockResolvedValue({ faturas: [] });
+        const r = await findTool('consultar_faturas_todos_contratos').executar({}, comFalas(['quanto devo?']));
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        expect(r.segundaViaNaoPedida).toBe(true);
+        findLatestEnqueuedDelivery.mockReset();
+      });
+
+      // Revisão de A6/A7 (06/10/2026, item 5): na consulta, só a escolha do cliente (fala dele) ou a oferta marcada pela
+      // ferramenta abrem a 2ª via — nem a fala da IA nem uma entrega anterior de outra coisa.
+      test('consulta multi-contrato: a fala da IA ou uma entrega anterior não abrem a 2ª via de todos os contratos', async () => {
+        sgpClient.listInvoices.mockResolvedValue({ faturas: [] });
+        sgpClient.getDuplicateInvoice.mockClear();
+        findLatestEnqueuedDelivery.mockResolvedValue({ id: 'entrega-anterior' });
+        const consultar = (c) => findTool('consultar_faturas_todos_contratos').executar({}, c);
+        expect((await consultar(comFalas(['quanto devo nos outros endereços?'], { ultimaFalaDaIa: 'Quer que eu envie o PIX?' }))).segundaViaNaoPedida).toBe(true);
+        expect((await consultar(comFalas(['quanto devo nos outros endereços?']))).segundaViaNaoPedida).toBe(true);
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        findLatestEnqueuedDelivery.mockReset();
+      });
+
+      // Revisão de A6/A7 (06/10/2026, I2): o PIX que falhou manda oferecer o boleto, e a oferta tem de ficar marcada — sem a
+      // marca, o aceite ("pode ser, manda") era recusado antes da 2ª via e a IA voltava a perguntar.
+      const pixFalhou = () => ({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null, pixFalhou: true }] });
+      const depoisDoPixQueFalhou = (t1, turno) => {
+        const fala = 'Não consegui gerar o PIX agora. Se preferir, posso enviar o boleto desta fatura.';
+        return comFalas(['manda o pix', turno], {
+          messageId: 'msg-2', ultimaFalaDaIa: fala,
+          mensagensDaJanela: [
+            { id: 'm1', de: 'cliente', texto: 'manda o pix' },
+            { id: 'm2', de: 'ia', texto: fala, ofertaDoBoleto: t1.ofertaDoBoleto, meiosDaFatura: t1.meiosDaFatura },
+            { id: 'm3', de: 'cliente', texto: turno },
+          ],
+        });
+      };
+
+      test('PIX que falhou com o boleto disponível: a oferta do boleto fica marcada e o aceite entrega o boleto (2ª via pedida)', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue(pixFalhou());
+        const t1 = comFalas(['manda o pix'], { messageId: 'msg-1' });
+        expect(await pix({ contratoId: 17402 }, t1)).toMatchObject({ enviado: false, pixIndeterminado: true });
+        expect(t1.ofertaDoBoleto).toEqual({ faturaId: '9', faturaIds: ['9'] });
+        sgpClient.getDuplicateInvoice.mockClear();
+        const b = await boleto({ contratoId: 17402 }, depoisDoPixQueFalhou(t1, 'pode ser, manda'));
+        expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+        expect(b.enviado).toBe(true);
+      });
+
+      test('PIX que falhou e boleto oferecido: o aceite não chama o PIX de novo; um novo pedido do PIX chama', async () => {
+        sgpClient.getDuplicateInvoice.mockResolvedValue(pixFalhou());
+        const t1 = comFalas(['manda o pix'], { messageId: 'msg-1' });
+        await pix({ contratoId: 17402 }, t1);
+        sgpClient.getDuplicateInvoice.mockClear();
+        const p = await pix({ contratoId: 17402 }, depoisDoPixQueFalhou(t1, 'pode ser, manda'));
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        expect(p).toMatchObject({ enviado: false, geracaoEvitada: true });
+        expect(p.instrucao).toMatch(/chame enviar_boleto com contratoId 17402 agora/);
+        await pix({ contratoId: 17402 }, depoisDoPixQueFalhou(t1, 'tenta o pix de novo'));
+        expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+      });
+
+      test('a oferta do boleto de uma fatura de OUTRO contrato não segura o PIX pedido para este', async () => {
+        sgpClient.getDuplicateInvoice.mockClear();
+        const fala = 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?';
+        const r = await pix({ contratoId: 555 }, comFalas(['manda o pix', 'e o do outro endereço?'], {
+          contracts: [{ id: 17402 }, { id: 555 }], ultimaFalaDaIa: fala,
+          mensagensDaJanela: [
+            { id: 'm1', de: 'cliente', texto: 'manda o pix' },
+            { id: 'm2', de: 'ia', texto: fala, ofertaDoBoleto: { faturaId: '9', faturaIds: ['9'] }, meiosDaFatura: [{ contratoId: '17402', faturaId: '9', pix: false, boleto: true }] },
+            { id: 'm3', de: 'cliente', texto: 'e o do outro endereço?' },
+          ],
+        }));
+        expect(r.ofertaDoBoletoPendente).toBeUndefined();
+        expect(sgpClient.getDuplicateInvoice).toHaveBeenCalled();
+      });
+
+      // Revisão de A6/A7 (06/10/2026, item 1): sem escolha e com o outro meio já comprovado inexistente, a pergunta é só
+      // pelo meio que existe — "boleto ou PIX?" ofereceria o inexistente.
+      test('sem escolha, com o PIX já comprovado inexistente: pergunta só pelo boleto, sem pedir nada ao SGP', async () => {
+        sgpClient.getDuplicateInvoice.mockClear();
+        const fala = 'A fatura vence no dia 20.';
+        const b = await boleto({ contratoId: 17402 }, comFalas(['manda o pix', 'qual o vencimento?', 'ok, pode ser'], {
+          ultimaFalaDaIa: fala,
+          mensagensDaJanela: [
+            { id: 'm2', de: 'ia', texto: fala, meiosDaFatura: [{ contratoId: '17402', faturaId: '9', pix: false, boleto: true }] },
+            { id: 'm3', de: 'cliente', texto: 'ok, pode ser' },
+          ],
+        }));
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        expect(b).toMatchObject({ enviado: false, meioNaoEscolhido: true });
+        expect(b.instrucao).toMatch(/Pergunte se ele quer o boleto desta fatura/);
+        expect(b.instrucao).not.toMatch(/boleto ou por PIX/);
+      });
+
+      // Revisão de A6/A7 (06/10/2026, item 7): a exceção da 2ª via não é "a ferramenta respondeu" — sem resultado, a guarda
+      // da indisponibilidade não confirmada continua valendo.
+      test('2ª via com exceção no SGP: a cobrança não fica marcada como respondida', async () => {
+        sgpClient.getDuplicateInvoice.mockRejectedValueOnce(new Error('SGP fora'));
+        const c = comFalas(['manda o pix']);
+        await expect(pix({ contratoId: 17402 }, c)).rejects.toThrow('SGP fora');
+        expect(c.cobrancaComResposta).toBeFalsy();
+      });
+
+      test('sem conseguir ler as entregas da conversa, nada é gerado (a verificação fecha)', async () => {
+        findLatestEnqueuedDelivery.mockRejectedValueOnce(new Error('banco fora'));
+        sgpClient.getDuplicateInvoice.mockClear();
+        const r = await pix({ contratoId: 17402 }, comFalas(['pode mandar']));
+        expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
+        expect(r.meioNaoEscolhido).toBe(true);
+      });
+
+      test('reenvio: com entrega anterior na conversa, a 2ª via é pedida e a trava de depois decide pela fatura', async () => {
+        expect((await pix({ contratoId: 17402 }, comFalas(['manda o pix'], { messageId: 'msg-1' }))).enviado).toBe(true);
+        sgpClient.getDuplicateInvoice.mockClear();
+        const r = await pix({ contratoId: 17402, reenviar: true }, comFalas(['não achei, manda de novo'], { messageId: 'msg-2' }));
+        expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+        expect(r.enviado).toBe(true);
+      });
+    });
+
     test('pedido genérico ("quero pagar minha fatura"): nem PIX nem boleto saem, nada é reservado, e o modelo lê a pergunta', async () => {
       const p = await pix({ contratoId: 17402 }, comFalas(['Oi, quero pagar minha fatura.']));
       expect(p).toMatchObject({ enviado: false, meioNaoEscolhido: true });
-      expect(p.instrucao).toMatch(/Pergunte só: "Você prefere boleto ou PIX\?"/);
+      // A6/A7 (06/10/2026): sem escolha, nada é pedido ao SGP — a pergunta não afirma que os dois meios existem.
+      expect(p.instrucao).toMatch(/Você quer pagar por boleto ou por PIX\?/);
       const b = await boleto({ contratoId: 17402 }, comFalas(['Oi, quero pagar minha fatura.']));
       expect(b).toMatchObject({ enviado: false, meioNaoEscolhido: true });
       expect(claimDelivery).not.toHaveBeenCalled();
       expect(enviarPix).not.toHaveBeenCalled();
       expect(documentos()).toHaveLength(0);
     });
+
+    // Comportamento da IA (06/10/2026; A6/A7) — caracterização, não mudança: a trava age DEPOIS da 2ª via do SGP (é ela
+    // que diz se o PIX e o boleto existem nesta fatura). Chamar a cobrança sem meio escolhido não envia nem reserva nada,
+    // mas já gera a 2ª via no sistema; por isso as instruções não mandam usar a cobrança para descobrir os meios.
 
     test('o meio que o cliente escreveu sai: PIX e boleto', async () => {
       expect((await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura', 'pode ser no PIX']))).enviado).toBe(true);
@@ -4125,7 +4419,8 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       // Revisão do incremento (04/10/2026): a fatura coerente com a fala — sem código PIX. Com os dois meios existindo, a fala
       // da IA que cita os dois não estabelece nenhum (testes acima).
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
-      const r = await boleto({ contratoId: 17402 }, comFalas(['manda o pix', 'sim, pode mandar'], { ultimaFalaDaIa: 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?' }));
+      // A6/A7 (06/10/2026): a oferta é reconhecida antes da 2ª via pela marca que a ferramenta gravou no turno da oferta.
+      const r = await boleto({ contratoId: 17402 }, comFalas(['manda o pix', 'sim, pode mandar'], { ultimaFalaDaIa: 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?', mensagensDaJanela: [{ id: 'm2', de: 'ia', texto: 'Esta fatura não tem PIX agora. Posso enviar o boleto desta mesma fatura?', ofertaDoBoleto: { faturaId: '9', faturaIds: ['9'] }, meiosDaFatura: [{ contratoId: '17402', faturaId: '9', pix: false, boleto: true }] }] }));
       expect(r.enviado).toBe(true);
     });
 
@@ -4171,21 +4466,27 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
     // o que existe.
     test('PIX sem código: a trava não pergunta; sai a recusa honesta do PIX sem código', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
-      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      // A6/A7 (06/10/2026): sem escolha não há 2ª via; com o PIX pedido, a recusa honesta do PIX sem código.
+      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura', 'pode ser no pix']));
       expect(p.meioNaoEscolhido).toBeUndefined();
       expect(p).toMatchObject({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
     });
 
     test('boleto sem link: a trava não pergunta; sai a recusa de sempre', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, boletoLink: null }] });
-      const b = await boleto({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      // A6/A7 (06/10/2026): sem escolha não há 2ª via; com o boleto pedido, a recusa de sempre.
+      const b = await boleto({ contratoId: 17402 }, comFalas(['quero pagar minha fatura', 'manda o boleto']));
       expect(b.meioNaoEscolhido).toBeUndefined();
       expect(b).toMatchObject({ enviado: false, motivo: 'Boleto sem link para download' });
     });
 
     test('só o boleto existe (PIX sem código): a pergunta oferece só o boleto', async () => {
+      // A6/A7 (06/10/2026): a trava de depois só pergunta quando a 2ª via foi pedida sem o meio estabelecido — aqui, com uma
+      // entrega anterior de outra fatura na conversa.
+      sgpClient.getDuplicateInvoice.mockResolvedValueOnce({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: '8' }] });
+      expect((await pix({ contratoId: 17402 }, comFalas(['manda o pix'], { messageId: 'msg-1' }))).enviado).toBe(true);
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
-      const b = await boleto({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      const b = await boleto({ contratoId: 17402 }, comFalas(['quero pagar a outra fatura'], { messageId: 'msg-2' }));
       expect(b).toMatchObject({ meioNaoEscolhido: true });
       expect(b.instrucao).toMatch(/só tem o boleto disponível agora/);
       expect(b.instrucao).not.toMatch(/boleto ou PIX/);
@@ -4193,13 +4494,17 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
 
     test('a IA ofereceu o boleto dizendo que não há PIX (PIX sem código): o boleto sai na resposta dele', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
-      const r = await boleto({ contratoId: 17402 }, comFalas(['quero pagar', 'pode ser'], { ultimaFalaDaIa: 'Não há PIX para esta fatura agora. Posso enviar o boleto ou prefere esperar?' }));
+      // A6/A7 (06/10/2026): a fala que cita os dois meios só vale como oferta com o PIX confirmado inexistente pela 2ª via.
+      const r = await boleto({ contratoId: 17402 }, comFalas(['quero pagar', 'pode ser'], { ultimaFalaDaIa: 'Não há PIX para esta fatura agora. Posso enviar o boleto ou prefere esperar?', mensagensDaJanela: [{ id: 'm2', de: 'ia', texto: 'Não há PIX para esta fatura agora. Posso enviar o boleto ou prefere esperar?', ofertaDoBoleto: { faturaId: '9', faturaIds: ['9'] }, meiosDaFatura: [{ contratoId: '17402', faturaId: '9', pix: false, boleto: true }] }] }));
       expect(r.enviado).toBe(true);
     });
 
     test('só o PIX existe (boleto sem link): a pergunta oferece só o PIX', async () => {
+      // A6/A7 (06/10/2026): idem — entrega anterior de outra fatura na conversa.
+      sgpClient.getDuplicateInvoice.mockResolvedValueOnce({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: '8' }] });
+      expect((await boleto({ contratoId: 17402 }, comFalas(['manda o boleto'], { messageId: 'msg-1' }))).enviado).toBe(true);
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, boletoLink: null }] });
-      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar minha fatura']));
+      const p = await pix({ contratoId: 17402 }, comFalas(['quero pagar a outra fatura'], { messageId: 'msg-2' }));
       expect(p).toMatchObject({ meioNaoEscolhido: true });
       expect(p.instrucao).toMatch(/só tem o PIX disponível agora/);
       expect(p.instrucao).not.toMatch(/boleto ou PIX/);

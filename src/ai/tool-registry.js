@@ -1,5 +1,6 @@
 const sgpClient = require('../integrations/sgp-client');
 const { normalizeContract, normalizeConnection, normalizeInvoices } = require('./sgp-normalizer');
+const { meiosDoTurno } = require('./meios-de-pagamento');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
@@ -634,11 +635,23 @@ async function aplicarTravaNoturna(decisao, contexto, contratoId) {
  * - { busca, fatura, decisao } — a ferramenta segue com a `busca` de sempre (varios,
  *   semFaturaEmNenhum e fora do alvo continuam respondidos por ela) e entrega `fatura`.
  */
-async function cobrancaAutorizada(contratoPedido, contexto) {
+/**
+ * Comportamento da IA (06/10/2026; A6/A7): a fase do gate que NÃO pede 2ª via — os títulos (listagem, leitura pura com
+ * nao_gerar_os), a regra 0/1/2+ e a trava noturna. Devolve { bloqueio } ou { decisao }. A escolha do meio é conferida
+ * entre esta fase e a 2ª via (meioNaoEscolhidoAntesDaGeracao): o bloqueio continua vindo antes da pergunta do meio.
+ */
+async function decisaoSemGeracao(contratoPedido, contexto) {
   const decisao = await aplicarTravaNoturna(decisaoDaCobranca(contexto, await situacaoFinanceira(contexto, contratoPedido)), contexto, contratoPedido);
   if (decisao.acao === 'reativacao' || decisao.acao === 'humano') {
     return { bloqueio: await bloqueioDaCobranca(decisao, contexto) };
   }
+  return { decisao };
+}
+
+async function cobrancaAutorizada(contratoPedido, contexto, decidida) {
+  const fase = decidida || await decisaoSemGeracao(contratoPedido, contexto);
+  if (fase.bloqueio) return { bloqueio: fase.bloqueio };
+  const { decisao } = fase;
   if (decisao.acao === 'entregar') {
     const resultado = await sgpClient.getDuplicateInvoice(contratoPedido);
     return casarFaturaAutorizada({ resultado, contratoId: contratoPedido, trocouContrato: false }, decisao, contexto);
@@ -802,7 +815,7 @@ function falasDoTurno(contexto) {
   return ultima ? [ultima] : [];
 }
 
-async function meioNaoEstabelecido({ meio, tool, contexto, fatura, outroDisponivel }) {
+async function meioNaoEstabelecido({ meio, tool, contexto, fatura, outroDisponivel, outroIndeterminado = false }) {
   if (!contexto || !Array.isArray(contexto.falasDoCliente)) return null;
   const cita = (texto, m) => MEIO_CITADO[m].test(normalizarFala(texto));
   const outro = meio === 'pix' ? 'boleto' : 'pix';
@@ -857,6 +870,9 @@ async function meioNaoEstabelecido({ meio, tool, contexto, fatura, outroDisponiv
     instrucao = deOutraFatura
       ? 'NADA foi enviado: o meio que saiu antes nesta conversa foi o de outra fatura e não vale para esta. Pergunte só: "Você prefere boleto ou PIX?" e espere a resposta dele. Não escolha por ele e não diga que enviou.'
       : 'NADA foi enviado: o cliente ainda não escolheu o meio de pagamento nesta conversa. Pergunte só: "Você prefere boleto ou PIX?" e espere a resposta dele. Não escolha por ele e não diga que enviou.';
+  } else if (outroIndeterminado) {
+    // Comportamento da IA (06/10/2026): o pedido do outro meio ao SGP falhou — não se afirma que ele não existe.
+    instrucao = `NADA foi enviado: o cliente ainda não escolheu o meio de pagamento; o ${NOME_DO_MEIO[meio]} desta fatura existe, e o ${NOME_DO_MEIO[meio === 'pix' ? 'boleto' : 'pix']} não pôde ser confirmado agora (falha ao pedi-lo ao sistema). Pergunte só se pode enviar o ${NOME_DO_MEIO[meio]} desta fatura, sem dizer que ela não tem o outro meio. Não diga que enviou.`;
   } else {
     instrucao = `NADA foi enviado: o cliente ainda não escolheu o meio de pagamento, e esta fatura só tem o ${NOME_DO_MEIO[meio]} disponível agora. Pergunte só se pode enviar o ${NOME_DO_MEIO[meio]} desta fatura e espere a resposta dele. Não diga que enviou.`;
   }
@@ -898,8 +914,8 @@ function respostaDeDuplicata(registro, item, messageId) {
  * entrega anterior não é afirmada (cai na oferta, que só envia se ele aceitar).
  */
 /**
- * Comportamento da IA (05/10/2026; revisão da entrega 1): o boleto sem link voltava ao modelo sem instrução — e a
- * instrução do conferir_pagamento sem cobrança manda a ferramenta de cobrança dizer o que existe na fatura. Simétrica à do
+ * Comportamento da IA (05/10/2026; revisão da entrega 1): o boleto sem link voltava ao modelo sem instrução — quem pediu o
+ * boleto não ouvia nada sobre o que existe na fatura. Simétrica à do
  * PIX sem código: o PIX desta mesma fatura já saiu; o PIX dela existe e pode ser oferecido; ou não há outra forma de
  * pagamento por aqui. Nada é enviado nem agendado. Falha ao ler o registro: o envio anterior não é afirmado.
  */
@@ -916,6 +932,10 @@ async function instrucaoDoBoletoSemLink(contexto, contratoId, fatura) {
   }
   if (fatura.pixCode) {
     return `${naoHouve} Diga isso em uma frase e ofereça o PIX desta mesma fatura; só gere (gerar_pix${contratoId ? ` com contratoId ${contratoId}` : ''}) se ele aceitar.`;
+  }
+  if (fatura.pixFalhou) {
+    // Comportamento da IA (06/10/2026): o pedido do PIX ao SGP falhou — não se afirma que a fatura não tem PIX.
+    return `${naoHouve} E o PIX desta fatura não pôde ser confirmado agora (falha ao pedi-lo ao sistema): não diga que ela não tem PIX. Diga que não conseguiu agora e que ele pode pedir o PIX de novo daqui a pouco, ou falar com um atendente se quiser.`;
   }
   return `${naoHouve} Também não há PIX desta fatura que eu consiga enviar agora. Diga isso com honestidade: não há outra forma de pagamento para oferecer por aqui agora. Se ele quiser, pode pedir para falar com um atendente. Não invente outro caminho.`;
 }
@@ -940,6 +960,131 @@ function ofertasDoBoletoNaUltimaResposta(contexto) {
 // As ofertas pendentes no turno: as marcadas neste turno ou, sem marca no turno, as herdadas da última resposta.
 function ofertasPendentes(contexto) {
   return contexto.ofertaDoBoleto !== undefined ? faturasDaMarca(contexto.ofertaDoBoleto) : ofertasDoBoletoNaUltimaResposta(contexto);
+}
+
+/**
+ * Comportamento da IA (06/10/2026; A6/A7): o estado dos meios de cada fatura que a 2ª via DESTA conversa mostrou —
+ * { contratoId, faturaId, pix, boleto }: true (existe), false (a 2ª via veio sem ele) ou null (não deu para saber: o pedido
+ * do PIX ao SGP falhou). É fato do sistema, não leitura do texto: vai na metadata da resposta da IA (worker), é herdado da
+ * resposta mais recente que o traz, e o turno atualiza a fatura que a 2ª via voltar a mostrar. Sem 2ª via, nada se sabe —
+ * a listagem de títulos (leitura pura) traz linha digitável e código PIX, mas nada prova que eles batem com a 2ª via.
+ */
+function meiosConhecidos(contexto) {
+  return meiosDoTurno(contexto);
+}
+function registrarMeiosDaFatura(contexto, contratoId, fatura) {
+  const faturaId = identificadorDeFatura(fatura);
+  if (!faturaId || !perfilTriagem(contexto)) return;
+  const estado = { contratoId: String(contratoId), faturaId, pix: fatura.pixCode ? true : (fatura.pixFalhou ? null : false), boleto: Boolean(fatura.boletoLink) };
+  contexto.meiosDaFatura = [...meiosConhecidos(contexto).filter((x) => String(x.faturaId) !== faturaId), estado];
+}
+
+const FERRAMENTA_DO_MEIO = { pix: 'gerar_pix', boleto: 'enviar_boleto' };
+
+/**
+ * Comportamento da IA (06/10/2026; A6/A7, autorizado pelo proprietário): a escolha do meio conferida ANTES da 2ª via, na
+ * parte que não depende dela. A 2ª via (e, sem código pronto, o PIX) é geração no SGP: sem escolha, nada é pedido. Só
+ * passa (null) quando o código vê o meio estabelecido sem a fatura: o cliente o escreveu numa fala da janela; a última
+ * fala da IA o citou sem citar o outro (ou citando o outro já confirmado inexistente); a última resposta tem a oferta do
+ * boleto (marca da ferramenta); ou houve entrega nesta conversa — continuidade e reenvio só se decidem com a fatura, e a
+ * trava de depois (meioNaoEstabelecido) decide. Nenhum campo preenchido pelo modelo conta. O meio que a 2ª via desta
+ * conversa já mostrou inexistente não é pedido de novo sem um novo pedido dele no turno. Falha ao ler as entregas: fecha.
+ */
+async function meioNaoEscolhidoAntesDaGeracao({ meio, contexto, contratoId, decisao = null }) {
+  if (!contexto || !Array.isArray(contexto.falasDoCliente)) return null;
+  const outro = meio === 'pix' ? 'boleto' : 'pix';
+  // Revisão (06/10/2026, item 2): o estado é da FATURA — com a fatura autorizada já conhecida pela regra (1 vencida), só o
+  // estado dela vale; o de uma fatura antiga do mesmo contrato não recusa a nova.
+  const faturaSabida = decisao && decisao.faturaPermitida != null ? String(decisao.faturaPermitida) : null;
+  const doContrato = meiosConhecidos(contexto)
+    .filter((x) => String(x.contratoId) === String(contratoId) && (!faturaSabida || String(x.faturaId) === faturaSabida));
+  const inexistente = (m) => doContrato.length > 0 && doContrato.every((x) => x[m] === false);
+  const pediuNoTurno = falasDoTurno(contexto).some((f) => MEIO_CITADO[meio].test(normalizarFala(f)));
+  if (inexistente(meio) && !pediuNoTurno) return recusaDoMeioInexistente({ meio, outro, outroInexistente: inexistente(outro), contexto, contratoId });
+  // Revisão (06/10/2026, I2): com o boleto deste contrato oferecido na resposta anterior (PIX sem código ou que falhou), o
+  // PIX chamado sem um novo pedido dele no turno é aceite ou recusa da oferta, não pedido de PIX: nada é gerado.
+  if (meio === 'pix' && !pediuNoTurno && boletoOferecidoNoContrato(contexto, contratoId)) {
+    return {
+      enviado: false, geracaoEvitada: true, ofertaDoBoletoPendente: true,
+      motivo: 'O boleto desta fatura foi oferecido na resposta anterior; nada foi pedido ao sistema.',
+      instrucao: `NADA foi pedido ao sistema nem enviado. Você já ofereceu o boleto desta fatura na resposta anterior: se a mensagem atual dele aceita a oferta, chame enviar_boleto${contratoId ? ` com contratoId ${contratoId}` : ''} agora — não ofereça de novo. Se ele recusou, não repita a oferta.`,
+    };
+  }
+  if (await meioEstabelecidoSemFatura({ meio, contexto, contratoId })) return null;
+  const instrucao = contexto.triagem && contexto.triagem.forcarConclusao
+    ? 'NADA foi pedido ao sistema nem enviado: o cliente ainda não escolheu o meio de pagamento, e esta é a última resposta da triagem. Não pergunte: chame concluir_triagem para o setor que cuidar de financeiro, com "meio de pagamento não escolhido" no resumo.'
+    // Revisão (06/10/2026, item 1): com o outro meio já comprovado inexistente, "boleto ou PIX?" ofereceria o inexistente.
+    : inexistente(outro)
+      ? `NADA foi pedido ao sistema nem enviado: o cliente ainda não escolheu. A 2ª via desta conversa já mostrou que esta fatura não tem ${NOME_DO_MEIO[outro]} disponível: não ofereça o ${NOME_DO_MEIO[outro]}. Pergunte se ele quer o ${NOME_DO_MEIO[meio]} desta fatura (só envie depois que ele disser que sim). Não diga que enviou.`
+      : 'NADA foi pedido ao sistema nem enviado: o cliente ainda não escolheu o meio de pagamento. Só dá para saber se o boleto e o PIX desta fatura estão disponíveis gerando o documento no sistema, e isso só acontece depois da escolha dele. Pergunte por qual meio ele quer pagar sem afirmar que os dois estão disponíveis — por exemplo: "Você quer pagar por boleto ou por PIX? Assim que você escolher, eu vejo se ele está disponível para esta fatura." Não diga que enviou.';
+  return { enviado: false, meioNaoEscolhido: true, geracaoEvitada: true, motivo: 'O cliente ainda não escolheu o meio de pagamento; nada foi pedido ao sistema.', instrucao };
+}
+
+// A oferta do boleto marcada na resposta anterior é deste contrato — pelo estado dos meios da fatura ofertada; a marca de
+// uma fatura sem estado (gravada antes desta versão) conta para qualquer contrato (sem saber, nada é gerado).
+function boletoOferecidoNoContrato(contexto, contratoId) {
+  const conhecidos = meiosConhecidos(contexto);
+  return ofertasDoBoletoNaUltimaResposta(contexto).some((id) => {
+    const estado = conhecidos.find((x) => String(x.faturaId) === id);
+    return !estado || String(estado.contratoId) === String(contratoId);
+  });
+}
+
+// Revisão (06/10/2026, item 5): para a CONSULTA multi-contrato, só a escolha do cliente — uma fala dele na janela que cita
+// o boleto ou o PIX — ou a oferta do boleto marcada pela ferramenta. A fala da IA e uma entrega anterior não contam.
+function escolhaDoClienteSemFatura(contexto) {
+  const citaMeio = (f) => MEIO_CITADO.pix.test(normalizarFala(f)) || MEIO_CITADO.boleto.test(normalizarFala(f));
+  return contexto.falasDoCliente.some(citaMeio) || ofertasDoBoletoNaUltimaResposta(contexto).length > 0;
+}
+
+/**
+ * O meio estabelecido SEM a fatura (antes de qualquer 2ª via), pelos fatos que o código vê: o cliente o escreveu numa fala
+ * da janela; a última fala da IA o citou sem citar o outro (ou citando o outro que a 2ª via desta conversa já mostrou
+ * inexistente); a última resposta tem a oferta do boleto (marca da ferramenta); ou houve entrega nesta conversa
+ * (continuidade e reenvio só se decidem pela fatura, na trava de depois). Falha ao ler as entregas: false — sem saber,
+ * nada é pedido ao SGP.
+ */
+async function meioEstabelecidoSemFatura({ meio, contexto, contratoId = null }) {
+  const outro = meio === 'pix' ? 'boleto' : 'pix';
+  const cita = (texto, m) => MEIO_CITADO[m].test(normalizarFala(texto));
+  if (contexto.falasDoCliente.some((f) => cita(f, meio))) return true;
+  const conhecidos = meiosConhecidos(contexto).filter((x) => contratoId == null || String(x.contratoId) === String(contratoId));
+  const outroInexistente = conhecidos.length > 0 && conhecidos.every((x) => x[outro] === false);
+  const daIa = contexto.ultimaFalaDaIa;
+  if (daIa && cita(daIa, meio) && (!cita(daIa, outro) || outroInexistente)) return true;
+  if (meio === 'boleto' && ofertasDoBoletoNaUltimaResposta(contexto).length > 0) return true;
+  try {
+    return Boolean(await findLatestEnqueuedDelivery(contexto.conversationId));
+  } catch (err) {
+    console.error(`${FERRAMENTA_DO_MEIO[meio]}: entregas não lidas na conversa ${contexto.conversationId}; nada é pedido ao SGP: ${mensagemSegura(err)}`);
+    return false;
+  }
+}
+
+function recusaDoMeioInexistente({ meio, outro, outroInexistente, contexto, contratoId }) {
+  const base = `A 2ª via desta conversa já mostrou que esta fatura não tem ${NOME_DO_MEIO[meio]} disponível: NADA foi pedido ao sistema de novo nem enviado.`;
+  const comContrato = contratoId ? ` com contratoId ${contratoId}` : '';
+  let instrucao;
+  if (contexto.triagem && contexto.triagem.forcarConclusao) {
+    instrucao = `${base} Esta é a última resposta da triagem: não pergunte; chame concluir_triagem para o setor que cuidar de financeiro${outroInexistente ? ', com "sem meio de pagamento disponível" no resumo' : ''}.`;
+  } else if (outroInexistente) {
+    instrucao = `${base} O ${NOME_DO_MEIO[outro]} dela também não está disponível. Diga isso com honestidade, sem sugerir que ele peça de novo nem que você vai verificar depois: não há forma de pagamento por aqui agora. O único próximo passo que existe é falar com um atendente, se ele quiser.`;
+  } else if (meio === 'pix' && ofertasDoBoletoNaUltimaResposta(contexto).length > 0) {
+    instrucao = `${base} Você já ofereceu o boleto desta fatura na resposta anterior: se a mensagem atual dele aceita, chame enviar_boleto${comContrato} agora; se ele recusou ou insiste no PIX, diga só que o PIX desta fatura não está disponível agora, sem repetir a oferta.`;
+  } else {
+    instrucao = `${base} Não chame ${FERRAMENTA_DO_MEIO[meio]} de novo sem um novo pedido dele. Se ele quer pagar, ofereça o ${NOME_DO_MEIO[outro]} desta fatura (só envie se ele aceitar).`;
+  }
+  return { enviado: false, meioInexistente: true, geracaoEvitada: true, motivo: `${NOME_DO_MEIO[meio]} desta fatura indisponível (confirmado pela 2ª via nesta conversa).`, instrucao };
+}
+
+function instrucaoDoPixIndeterminado(contexto, contratoId, fatura) {
+  const naoHouve = 'NÃO houve envio de PIX: o sistema falhou ao gerar o código agora, e isso NÃO quer dizer que esta fatura não tem PIX — não diga isso. Diga que não conseguiu gerar o PIX agora e que ele pode pedir de novo daqui a pouco.';
+  if (!fatura.boletoLink) return `${naoHouve} Esta fatura não tem boleto disponível agora. Se ele quiser, pode pedir para falar com um atendente.`;
+  // Revisão (06/10/2026, I2): a oferta do boleto fica marcada, como no PIX sem código (D8: lista por fatura) — sem a marca, o
+  // aceite era recusado antes da 2ª via e a IA voltava a perguntar o meio.
+  const faturaId = String(identificadorDeFatura(fatura));
+  contexto.ofertaDoBoleto = marcaDeOfertas([...ofertasPendentes(contexto).filter((id) => id !== faturaId), faturaId]);
+  return `${naoHouve} Se ele preferir, ofereça o boleto desta mesma fatura; só envie (enviar_boleto${contratoId ? ` com contratoId ${contratoId}` : ''}) se ele aceitar.`;
 }
 
 async function instrucaoDoPixSemCodigo(contexto, contratoId, fatura) {
@@ -1471,7 +1616,10 @@ const TOOLS = [
   {
     nome: 'consultar_faturas_todos_contratos',
     categoria: 'CONSULTA',
-    descricao: 'Lista as faturas de TODOS os contratos do cliente identificado, agrupadas por contrato com endereço e plano, numa chamada só. Prefira esta a consultar_faturas quando o cliente tem mais de um contrato e pergunta sobre conta, fatura, atraso ou quanto deve. NÃO gera boleto nem PIX.',
+    // Comportamento da IA (06/10/2026; A6/A7): a descrição dizia "NÃO gera boleto nem PIX", mas a ferramenta pede a 2ª via
+    // de cada contrato (geração no SGP). Agora diz o que faz: a 2ª via só na triagem e depois da escolha do cliente; sem
+    // ela, e sempre no assistente, fica só na listagem.
+    descricao: 'Lista as faturas de TODOS os contratos do cliente identificado (leitura), agrupadas por contrato com endereço e plano, numa chamada só. Prefira esta a consultar_faturas quando o cliente tem mais de um contrato e pergunta sobre conta, fatura, atraso ou quanto deve. Só na triagem, depois que o cliente escolheu boleto ou PIX, ela também pede a 2ª via de cada contrato ao sistema para saber qual tem fatura em aberto (isso gera a 2ª via no sistema; nada é enviado ao cliente). Fora da triagem, é só a listagem.',
     // Isento: não recebe id nenhum do modelo — percorre contexto.contracts, que
     // o servidor carregou pelo CPF do próprio contato. Existe porque "consulte
     // contrato a contrato" estourava o limite de ferramentas do turno no
@@ -1483,8 +1631,8 @@ const TOOLS = [
     // propósito: a triagem de Reativação/Suporte depende deles e nenhum dos
     // dois carrega valor ou endereço.
     exigeIdentidadeForte: true,
-    // Além da listagem, consulta a 2ª via de cada contrato (até 3 chamadas ao
-    // SGP por contrato, em paralelo): mesmo orçamento de gerar_pix.
+    // Além da listagem, na triagem e depois da escolha, consulta a 2ª via de cada
+    // contrato (até 3 chamadas ao SGP por contrato, em paralelo): mesmo orçamento de gerar_pix.
     timeoutMs: 40000,
     parametros: { type: 'object', properties: {} },
     validar() {
@@ -1504,11 +1652,19 @@ const TOOLS = [
       // dela que sai a instrução do fim: no 3º teste real do boleto o modelo
       // viu que só um contrato tinha fatura e ainda assim perguntou o
       // endereço; agora a própria ferramenta diz o que fazer.
+      // Comportamento da IA (06/10/2026; A6/A7): na triagem, sem meio escolhido (o mesmo critério das ferramentas de
+      // cobrança), a 2ª via não é pedida — pedir gera o documento no SGP; a listagem (leitura pura) responde o resto.
+      // Revisão (06/10/2026, itens 5 e 6): só a escolha do CLIENTE abre a 2ª via (escolhaDoClienteSemFatura), e fora da
+      // triagem (assistente, onde a CONSULTA roda sem a aprovação da atendente) a 2ª via nunca é pedida aqui.
+      const naTriagem = perfilTriagem(contexto);
+      const semEscolha = naTriagem && Array.isArray(contexto.falasDoCliente) && !escolhaDoClienteSemFatura(contexto);
+      const pedeSegundaVia = naTriagem && !semEscolha;
       const [resultados, segundasVias] = await Promise.all([
         Promise.allSettled(contratos.map((c) => sgpClient.listInvoices(c.id))),
-        Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id))),
+        pedeSegundaVia ? Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id))) : Promise.resolve(null),
       ]);
       const temAberta = (i) => {
+        if (!segundasVias) return null;
         const r = segundasVias[i];
         return r.status === 'fulfilled' ? Boolean(r.value && r.value.hasOpenInvoice) : null;
       };
@@ -1520,7 +1676,9 @@ const TOOLS = [
           return { contratoId: c.id, endereco: n.endereco, plano: n.plano };
         });
       let instrucao;
-      if (perfilTriagem(contexto)) {
+      if (semEscolha) {
+        instrucao = 'Consulta só de leitura: a 2ª via não foi pedida, porque ele ainda não escolheu boleto nem PIX — pedir a 2ª via gera o documento no sistema, e isso só acontece depois da escolha. Responda o que ele perguntou com as faturas listadas (se há fatura em aberto em cada contrato fica sem resposta aqui). Se ele quer pagar, pergunte por qual meio, sem afirmar que os dois estão disponíveis.';
+      } else if (perfilTriagem(contexto)) {
         if (contratosComFaturaEmAberto.length === 1) {
           const unico = contratosComFaturaEmAberto[0];
           instrucao = `Só o contrato ${unico.contratoId} (${unico.endereco}) tem fatura em aberto: se o cliente pediu boleto ou PIX, entregue dele AGORA com enviar_boleto ou gerar_pix (contratoId ${unico.contratoId}), sem perguntar nada.`;
@@ -1531,6 +1689,7 @@ const TOOLS = [
         }
       }
       return {
+        ...(semEscolha ? { segundaViaNaoPedida: true } : {}),
         contratosComFaturaEmAberto,
         ...(instrucao ? { instrucao } : {}),
         contratos: contratos.map((c, i) => {
@@ -1862,7 +2021,17 @@ const TOOLS = [
       // Vale para os DOIS ramos (triagem e assistente): o atendente humano
       // também pedia o PIX do contrato errado e ouvia "não há fatura".
       // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
-      const gate = await cobrancaAutorizada(args.contratoId, contexto);
+      // Comportamento da IA (06/10/2026; A6/A7): a escolha do meio também, na parte que não depende da 2ª via.
+      const decidida = await decisaoSemGeracao(args.contratoId, contexto);
+      if (decidida.bloqueio) {
+        contexto.cobrancaComResposta = true;
+        return { sucesso: false, enviado: false, ...decidida.bloqueio };
+      }
+      const antes = await meioNaoEscolhidoAntesDaGeracao({ meio: 'pix', contexto, contratoId: args.contratoId, decisao: decidida.decisao });
+      if (antes) return { sucesso: false, ...antes };
+      const gate = await cobrancaAutorizada(args.contratoId, contexto, decidida);
+      // Revisão (06/10/2026, item 7): só depois que o gate voltou — a exceção da 2ª via não é "a ferramenta respondeu".
+      contexto.cobrancaComResposta = true;
       if (gate.bloqueio) return { sucesso: false, enviado: false, ...gate.bloqueio };
       const busca = gate.busca;
       if (busca.varios) {
@@ -1888,6 +2057,7 @@ const TOOLS = [
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;
+      registrarMeiosDaFatura(contexto, busca.contratoId, primeira);
 
       // Fora da triagem (assistente clássico, humano no comando): mantém o
       // comportamento antigo — só sugere o código para o atendente decidir.
@@ -1920,6 +2090,10 @@ const TOOLS = [
         // Regra do Financeiro: sem código PIX no SGP, não há o que enviar.
         if (!primeira.pixCode) {
           await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix sem código PIX');
+          // Comportamento da IA (06/10/2026): o pedido do PIX ao SGP falhou — sem resultado, não se afirma indisponibilidade.
+          if (primeira.pixFalhou) {
+            return { sucesso: false, enviado: false, pixIndeterminado: true, motivo: 'O sistema não confirmou o código PIX agora (falha ao pedir o PIX).', instrucao: instrucaoDoPixIndeterminado(contexto, busca.contratoId, primeira) };
+          }
           return { sucesso: false, motivo: 'Fatura sem código PIX no SGP', instrucao: await instrucaoDoPixSemCodigo(contexto, busca.contratoId, primeira) };
         }
 
@@ -1999,12 +2173,30 @@ const TOOLS = [
         const doTurno = normalizarFala(falasDoTurno(contexto).join(' '));
         const citaBoleto = MEIO_CITADO.boleto.test(doTurno);
         const citaPix = MEIO_CITADO.pix.test(doTurno);
-        const querPagar = citaBoleto !== citaPix
-          ? `Se ele pediu o ${citaBoleto ? 'boleto' : 'PIX'} e ainda não pagou, não conclua: chame ${citaBoleto ? 'enviar_boleto' : 'gerar_pix'} agora, sem perguntar o meio de novo.`
-          // Comportamento da IA (05/10/2026; avaliação real E6 #1): sem PIX e sem boleto na fatura, esta instrução mandou
-          // perguntar "boleto ou PIX". Ela não sabe o que existe na fatura; a ferramenta de cobrança sabe (os dois meios:
-          // pergunta; um: oferece só ele; nenhum: diz que não há outra forma por aqui).
-          : 'Se ele ainda não pagou e quer pagar, não conclua: chame a ferramenta de cobrança (enviar_boleto ou gerar_pix) e siga a instrução dela — é ela que diz quais meios existem nesta fatura. Não pergunte nem ofereça um meio que a ferramenta não confirmou.';
+        // Comportamento da IA (05/10/2026; avaliação real E6 #1): sem PIX e sem boleto na fatura, esta instrução mandou
+        // perguntar "boleto ou PIX". 06/10 (A6): mandar a ferramenta de cobrança dizer o que existe também não serve — ela
+        // gera a 2ª via (e, sem código pronto, o PIX) no SGP antes da trava do meio; na avaliação o modelo chamou o PIX só
+        // para consultar (E6 #2) ou respondeu "preciso verificar" sem fazer nada (E6 #1). Agora: responder já, pelo que a
+        // conversa disse sobre os meios desta fatura; o meio já escolhido continua (revisão: a pergunta não pode voltar a
+        // quem já escolheu); sem escolha, perguntar; a cobrança só com o meio escolhido, e o meio dito inexistente não conta
+        // como escolhido. No turno do limite de perguntas, nada de pergunta (a mesma saída da trava do meio). Os dois meios
+        // citados: o pedido dele, ou "tanto faz". Conferência da v2: toda frase que manda cobrar ou perguntar vale só para quem
+        // ainda não pagou (quem diz que pagou segue o caminho de cima), e a pergunta do meio não volta quando uma resposta já
+        // disse que falta um meio (com um só, pergunta-se só pelo outro; sem nenhum, diz-se que não há outra forma).
+        const ditoInexistente = 'Se ele ainda não pagou e uma resposta sua anterior nesta conversa já disse que esta fatura não tem PIX ou não tem boleto, siga isso: não ofereça nem chame a ferramenta do meio que não existe (salvo se ele pedir esse meio nesta mensagem), e, sem nenhum dos dois, diga que não há outra forma de pagamento por aqui agora.';
+        const jaEscolhido = 'Se ele ainda não pagou e já escolheu nesta conversa um meio desta fatura que não foi dito inexistente (pediu, aceitou uma oferta sua ou já recebeu), chame a ferramenta desse meio agora.';
+        const pergunta = 'Se ele ainda não pagou e ainda não escolheu: sem resposta sua dizendo que falta um meio, pergunte por qual meio ele quer pagar, sem afirmar que os dois estão disponíveis; se uma disse que falta só um, pergunte só se pode enviar o outro.';
+        const naoConsulta = 'Só chame enviar_boleto ou gerar_pix com o meio que ele escolheu: elas geram a 2ª via no sistema e não servem para consultar quais meios existem.';
+        let querPagar;
+        if (citaBoleto !== citaPix) {
+          querPagar = `Se ele pediu o ${citaBoleto ? 'boleto' : 'PIX'} e ainda não pagou, não conclua: chame ${citaBoleto ? 'enviar_boleto' : 'gerar_pix'} agora, sem perguntar o meio de novo.`;
+        } else if (citaBoleto) {
+          querPagar = `Ele citou os dois meios nesta mensagem. Se ainda não pagou e pediu um deles, não conclua: chame a ferramenta desse meio agora; se ainda não pagou e disse que tanto faz, chame enviar_boleto ou gerar_pix agora, sem perguntar o meio de novo. ${ditoInexistente} Se ainda não pagou, não diga que vai verificar. ${naoConsulta}`;
+        } else if (contexto.triagem && contexto.triagem.forcarConclusao) {
+          querPagar = `Se ele ainda não pagou e quer pagar: esta é a última resposta da triagem, não pergunte nada e não diga que vai verificar. ${ditoInexistente} ${jaEscolhido} Se ele ainda não pagou e não há meio escolhido, chame concluir_triagem para o setor que cuidar de financeiro, com "meio de pagamento não escolhido" no resumo. ${naoConsulta}`;
+        } else {
+          querPagar = `Se ele ainda não pagou e quer pagar, não conclua e não diga que vai verificar: responda nesta mesma mensagem. ${ditoInexistente} ${jaEscolhido} ${pergunta} ${naoConsulta}`;
+        }
         return {
           pagamentoConfirmado: false,
           motivo: 'Nenhum boleto ou PIX foi enviado nesta conversa.',
@@ -2488,7 +2680,17 @@ const TOOLS = [
       // não reabrir com um identidade: null bugado.
       if (!perfilTriagem(contexto)) return erro('enviar_boleto is only available during AI triage');
       // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
-      const gate = await cobrancaAutorizada(args.contratoId, contexto);
+      // Comportamento da IA (06/10/2026; A6/A7): a escolha do meio também, na parte que não depende da 2ª via.
+      const decidida = await decisaoSemGeracao(args.contratoId, contexto);
+      if (decidida.bloqueio) {
+        contexto.cobrancaComResposta = true;
+        return { enviado: false, ...decidida.bloqueio };
+      }
+      const antes = await meioNaoEscolhidoAntesDaGeracao({ meio: 'boleto', contexto, contratoId: args.contratoId, decisao: decidida.decisao });
+      if (antes) return antes;
+      const gate = await cobrancaAutorizada(args.contratoId, contexto, decidida);
+      // Revisão (06/10/2026, item 7): só depois que o gate voltou — a exceção da 2ª via não é "a ferramenta respondeu".
+      contexto.cobrancaComResposta = true;
       if (gate.bloqueio) return { enviado: false, ...gate.bloqueio };
       const busca = gate.busca;
       if (busca.varios) {
@@ -2514,13 +2716,14 @@ const TOOLS = [
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;
+      registrarMeiosDaFatura(contexto, busca.contratoId, primeira);
       // Idempotência: o claim vem DEPOIS de faturaEmAlgumContrato (só aqui
       // primeira.id existe) e ANTES de qualquer trabalho externo — antes do
       // download do PDF, antes de gravar o arquivo, antes de enfileirar.
       // Pendências do atendimento (04/10/2026): sem meio escolhido ou estabelecido, nada é reservado nem enviado.
       // Revisão: só quando o boleto existe nesta fatura — sem link, sai a recusa de sempre (mais abaixo).
       const semMeio = primeira.boletoLink
-        ? await meioNaoEstabelecido({ meio: 'boleto', tool: 'enviar_boleto', contexto, fatura: primeira, outroDisponivel: Boolean(primeira.pixCode) })
+        ? await meioNaoEstabelecido({ meio: 'boleto', tool: 'enviar_boleto', contexto, fatura: primeira, outroDisponivel: Boolean(primeira.pixCode), outroIndeterminado: Boolean(primeira.pixFalhou) })
         : null;
       if (semMeio) return semMeio;
       const entrega = await reivindicarEntrega({

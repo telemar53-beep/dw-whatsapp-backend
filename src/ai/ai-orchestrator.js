@@ -5,6 +5,7 @@ const { montarContexto } = require('./prompt/montar');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
 const { recordAiInteraction, listAiInteractionsByConversation } = require('./ai-interaction.repository');
 const { promessasSemEvidencia, respostaSemPromessas } = require('./promessas-sem-evidencia');
+const { meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada } = require('./meios-de-pagamento');
 const { listRecentMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { resumoParaModelo, encontrarDisparoRelacionado, fatoDoDisparo } = require('../conversations/automatic-message');
 const { linhasDoDisparoRecente } = require('./prompt/fluxos/disparo-recente');
@@ -476,6 +477,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           pediuDocumento: Boolean(m.metadata && m.metadata.pedidoDeDocumento),
           // Comportamento da IA (05/10/2026): a oferta do boleto marcada na resposta da IA (gerar_pix sem código).
           ofertaDoBoleto: (m.metadata && m.metadata.ofertaDoBoleto) || null,
+          // Comportamento da IA (06/10/2026; A6/A7): o estado dos meios que a 2ª via desta conversa comprovou.
+          meiosDaFatura: (m.metadata && Array.isArray(m.metadata.meiosDaFatura)) ? m.metadata.meiosDaFatura : null,
         })),
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
       // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
@@ -515,6 +518,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       terceiro,
       // Conclusão do atendimento: o fato do encaminhamento não concluído (fluxos/acoes-pendentes.js).
       acoesPendentes: encaminhamentoNaoConcluido ? { encaminhamento: encaminhamentoNaoConcluido } : null,
+      // Comportamento da IA (06/10/2026; A6/A7): os meios que a 2ª via desta conversa comprovou (fatos.js).
+      meiosDaFatura: meiosDaJanela(contexto.mensagensDaJanela),
       agora: new Date(),
     };
     systemContent = montarContexto(estadoDoPrompt);
@@ -940,6 +945,23 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     texto = respostaSeguraDoAviso(contexto.avisoCidade);
   }
 
+  // Comportamento da IA (06/10/2026; A6/A7): as guardas restritas aos meios que a 2ª via desta conversa comprovou —
+  // a oferta de um meio inexistente sai (e entra o fato com o único próximo passo), e a indisponibilidade afirmada sem
+  // resultado sai (e entra que não deu para confirmar). Não interpretam o pedido do cliente (meios-de-pagamento.js).
+  if (perfil === 'triagem' && texto) {
+    const meios = meiosDoTurno(contexto);
+    const semOferta = respostaSemOfertaDeMeioInexistente(texto, meios);
+    if (semOferta.alterado) {
+      console.warn(`Resposta da IA oferecia meio de pagamento que a 2ª via mostrou inexistente na conversa ${conversation.id}; trocada pelo fato`);
+      texto = semOferta.texto;
+    }
+    const semAfirmacao = respostaSemIndisponibilidadeNaoConfirmada(texto, meios, { cobrancaComResposta: Boolean(contexto.cobrancaComResposta) });
+    if (semAfirmacao.alterado) {
+      console.warn(`Resposta da IA afirmava meio indisponível sem resultado na conversa ${conversation.id}; frase trocada`);
+      texto = semAfirmacao.texto;
+    }
+  }
+
   // C4#3 (03/10/2026): encaminhamento só se afirma com a conclusão confirmada. Quando concluir_triagem foi tentada
   // neste turno e NÃO confirmou (erro ou tempo esgotado — o resultado pode ser desconhecido —, ou recusa), a guarda
   // de anúncio exige a conclusão uma vez só, e o texto escrito depois de uma segunda tentativa sem sucesso saía como
@@ -1028,6 +1050,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // Comportamento da IA (05/10/2026; E15 #1): a oferta do boleto que a ferramenta mandou fazer, só se a resposta final de
     // fato cita o boleto. O worker grava isto na metadata da mensagem; o próximo turno lê na janela.
     ofertaDoBoleto: perfil === 'triagem' && texto && CITA_BOLETO.test(texto) ? ofertaDoBoletoDoTurno(contexto) : null,
+    // Comportamento da IA (06/10/2026; A6/A7): o estado dos meios (gravado no turno ou herdado), para a metadata da mensagem.
+    meiosDaFatura: perfil === 'triagem' && meiosDoTurno(contexto).length > 0 ? meiosDoTurno(contexto) : null,
   };
 }
 

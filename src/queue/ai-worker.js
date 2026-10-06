@@ -659,6 +659,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   const textoDoModelo = corrigirPeriodoDaSaudacao(paraWhatsApp(textoDoTurno));
   // Revisão da entrega 1: a marca da oferta foi calculada sobre o texto do modelo; a mensagem composta pelos fatos não a leva.
   const ofertaDaMensagem = textoDoTurno === turno.texto ? turno.ofertaDoBoleto : null;
+  const meiosDaMensagem = Array.isArray(turno.meiosDaFatura) && turno.meiosDaFatura.length > 0 ? turno.meiosDaFatura : null;
   // O nome pode ter sido descoberto DENTRO do turno (buscar_cliente com o CPF
   // que o cliente acabou de mandar): a identidade do fim do turno vem antes da
   // que foi resolvida no começo (print 2026-09-17, entrega sem nome nenhum).
@@ -678,9 +679,12 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     await enqueueOutboundMessage({
       conversationId: conversation.id, channelId: conversation.channelId, content: texto, sentBy: 'ai',
       // Comportamento da IA (05/10/2026): a oferta do boleto também viaja na metadata (o próximo turno sabe que foi feita).
-      ...((turno.pedidoDeDocumento || ofertaDaMensagem) ? { metadata: {
+      // Comportamento da IA (06/10/2026; A6/A7): o estado dos meios que a 2ª via comprovou é fato da fatura, não da redação —
+      // viaja mesmo quando a mensagem é composta pelos fatos.
+      ...((turno.pedidoDeDocumento || ofertaDaMensagem || meiosDaMensagem) ? { metadata: {
         ...(turno.pedidoDeDocumento ? { pedidoDeDocumento: turno.pedidoDeDocumento } : {}),
         ...(ofertaDaMensagem ? { ofertaDoBoleto: ofertaDaMensagem } : {}),
+        ...(meiosDaMensagem ? { meiosDaFatura: meiosDaMensagem } : {}),
       } } : {}),
     });
   } else if (noturnoAtivo && turno.desbloqueioRealizado && !concluiuAqui && !encerrouAqui) {

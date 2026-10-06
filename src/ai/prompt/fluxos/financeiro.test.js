@@ -50,10 +50,24 @@ describe('módulo financeiro', () => {
       expect(t).toMatch(/tem prioridade sobre qualquer roteiro de diagnóstico, mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo\./);
       expect(t).toMatch(/Se ele disse o meio \(boleto ou PIX\), entregue esse meio AGORA \(enviar_boleto ou gerar_pix\)\./);
       // Reavaliação r2 (04/10/2026): volta à redação avaliada na rodada inicial (a imperativa regrediu o E6 #6).
-      expect(t).toMatch(/Num pedido genérico de pagamento .* continue com o meio já escolhido nesta conversa .*; se nenhum foi escolhido, pergunte curto: "Você prefere boleto ou PIX\?" — sem meio escolhido, a entrega não sai\./);
+      // A6/A7 (06/10/2026): a pergunta não afirma que os dois meios existem — sem a 2ª via (que só sai depois da escolha), nada se sabe.
+      expect(t).toMatch(/Num pedido genérico de pagamento .* continue com o meio já escolhido nesta conversa .*; se nenhum foi escolhido, pergunte por qual meio ele quer pagar sem afirmar que os dois estão disponíveis \(só se sabe gerando o documento, depois da escolha\): "Você quer pagar por boleto ou por PIX\? Assim que você escolher, eu vejo se ele está disponível para esta fatura\." — sem meio escolhido, nada é pedido ao sistema nem entregue\./);
       // Fechamento limitado (04/10/2026): o meio de outra fatura não conta.
       expect(t).toMatch(/continue com o meio já escolhido nesta conversa para esta mesma fatura \(o que ele pediu ou recebeu antes; o meio usado em outra fatura não conta\)/);
       expect(t).not.toMatch(/NÃO escolha por ele/);
+    });
+
+    // Comportamento da IA (06/10/2026; A7, revisão da entrega 1): a pergunta "boleto ou PIX" valia mesmo quando uma
+    // resposta da conversa já tinha dito que um dos meios não existe nesta fatura. E as ferramentas de cobrança geram a
+    // 2ª via (e, sem código pronto, o PIX) no sistema antes da trava do meio: não servem para descobrir o que existe.
+    test('pedido genérico: não oferece o meio que a conversa já disse que não existe, e não usa a cobrança para consultar', () => {
+      const t = texto();
+      // Revisão do delta: só sem meio escolhido (a oferta aceita segue para a entrega), e o meio dito inexistente não conta
+      // como escolhido (o PIX pedido e recusado não é chamado de novo para consultar).
+      expect(t).toMatch(/Se ainda não há meio escolhido e uma resposta desta conversa já disse que esta fatura não tem um dos meios, não o ofereça: pergunte só se pode enviar o outro, ou, sem nenhum dos dois, diga que não há outra forma de pagamento por aqui agora\./);
+      expect(t).toMatch(/O meio que uma resposta desta conversa já disse que não existe nesta fatura não conta como escolhido: não chame a ferramenta dele de novo, salvo se ele pedir esse meio nesta mensagem\./);
+      expect(t).toMatch(/Não chame enviar_boleto nem gerar_pix só para descobrir quais meios existem/);
+      expect(t).toMatch(/chame com o meio escolhido \(pedido por ele, aceito numa oferta sua ou já recebido para esta fatura\)/);
     });
 
     test('identidade já confirmada: não pede CPF, entrega direto por ferramenta', () => {

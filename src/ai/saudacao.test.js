@@ -27,7 +27,7 @@ describe('comecaComSaudacao', () => {
 
   test('não confunde palavras parecidas nem texto sem saudação', () => {
     expect(comecaComSaudacao('Oitava fatura em aberto')).toBe(false);
-    expect(comecaComSaudacao('Perfeito, Willemberg — vou encaminhar')).toBe(false);
+    expect(comecaComSaudacao('Perfeito, Joaquim — vou encaminhar')).toBe(false);
     expect(comecaComSaudacao('')).toBe(false);
     expect(comecaComSaudacao(null)).toBe(false);
   });
@@ -35,8 +35,8 @@ describe('comecaComSaudacao', () => {
 
 describe('garantirSaudacao', () => {
   test('prefixa saudação da hora e primeiro nome quando o texto não cumprimenta', () => {
-    expect(garantirSaudacao('Enviei o PIX da sua fatura. Precisa de mais alguma coisa?', 'Willemberg', MANHA))
-      .toBe('Bom dia, Willemberg! Enviei o PIX da sua fatura. Precisa de mais alguma coisa?');
+    expect(garantirSaudacao('Enviei o PIX da sua fatura. Precisa de mais alguma coisa?', 'Joaquim', MANHA))
+      .toBe('Bom dia, Joaquim! Enviei o PIX da sua fatura. Precisa de mais alguma coisa?');
   });
 
   test('sem nome, cumprimenta sem nome', () => {
@@ -45,17 +45,17 @@ describe('garantirSaudacao', () => {
   });
 
   test('não duplica quando o modelo já cumprimentou', () => {
-    expect(garantirSaudacao('Bom dia, Willemberg! Enviei o PIX.', 'Willemberg', MANHA)).toBe('Bom dia, Willemberg! Enviei o PIX.');
+    expect(garantirSaudacao('Bom dia, Joaquim! Enviei o PIX.', 'Joaquim', MANHA)).toBe('Bom dia, Joaquim! Enviei o PIX.');
     expect(garantirSaudacao('Olá! Como posso ajudar?', 'Ana', TARDE)).toBe('Olá! Como posso ajudar?');
   });
 
-  // Print 2026-09-16: "Boa tarde, Agnieska! Agnieska, vou encaminhar..." — o
+  // Print 2026-09-16: "Boa tarde, Marina! Marina, vou encaminhar..." — o
   // modelo começou chamando pelo nome e a saudação foi prefixada por cima.
   test('não duplica o nome quando o modelo já começou chamando a pessoa', () => {
-    expect(garantirSaudacao('Agnieska, vou verificar isso para você.', 'Agnieska', MANHA))
-      .toBe('Bom dia, Agnieska! Vou verificar isso para você.');
-    expect(garantirSaudacao('Willemberg, seu contrato está ativo.', 'Willemberg', NOITE))
-      .toBe('Boa noite, Willemberg! Seu contrato está ativo.');
+    expect(garantirSaudacao('Marina, vou verificar isso para você.', 'Marina', MANHA))
+      .toBe('Bom dia, Marina! Vou verificar isso para você.');
+    expect(garantirSaudacao('Joaquim, seu contrato está ativo.', 'Joaquim', NOITE))
+      .toBe('Boa noite, Joaquim! Seu contrato está ativo.');
     // Nome diferente do começo do texto não é tocado.
     expect(garantirSaudacao('Maria pediu o boleto.', 'Ana', MANHA))
       .toBe('Bom dia, Ana! Maria pediu o boleto.');
@@ -84,9 +84,9 @@ describe('garantirSaudacao', () => {
 
 describe('corrigirPeriodoDaSaudacao', () => {
   test('troca a saudação do período errado pela certa, preservando o resto', () => {
-    // Teste real: "Bom dia, Willemberg!" às 14:56.
-    expect(corrigirPeriodoDaSaudacao('Bom dia, Willemberg! Verifiquei aqui que sua conexão está offline.', TARDE))
-      .toBe('Boa tarde, Willemberg! Verifiquei aqui que sua conexão está offline.');
+    // Teste real: "Bom dia, [nome]!" às 14:56.
+    expect(corrigirPeriodoDaSaudacao('Bom dia, Joaquim! Verifiquei aqui que sua conexão está offline.', TARDE))
+      .toBe('Boa tarde, Joaquim! Verifiquei aqui que sua conexão está offline.');
     expect(corrigirPeriodoDaSaudacao('boa noite, tudo bem?', MANHA)).toBe('bom dia, tudo bem?');
     expect(corrigirPeriodoDaSaudacao('👋 Boa tarde!', NOITE)).toBe('👋 Boa noite!');
   });
@@ -105,7 +105,7 @@ describe('corrigirPeriodoDaSaudacao', () => {
 describe('removerSaudacao', () => {
   test('tira a saudação de período do começo, com ou sem nome, e recapitaliza', () => {
     expect(removerSaudacao('Bom dia! Como posso ajudar você hoje?')).toBe('Como posso ajudar você hoje?');
-    expect(removerSaudacao('Boa noite, Willemberg! Verifiquei seu contrato.')).toBe('Verifiquei seu contrato.');
+    expect(removerSaudacao('Boa noite, Joaquim! Verifiquei seu contrato.')).toBe('Verifiquei seu contrato.');
     expect(removerSaudacao('😊 Boa tarde, Ana! tudo certo por aqui.')).toBe('Tudo certo por aqui.');
   });
 

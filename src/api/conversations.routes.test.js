@@ -1134,7 +1134,7 @@ describe('POST /api/conversations/:id/transfer', () => {
   test('o aviso tambem diz o nome quando quem transferiu foi um admin', async () => {
     adminTransferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
-    findAgentById.mockResolvedValue({ id: 'admin-1', name: 'Willemberg' });
+    findAgentById.mockResolvedValue({ id: 'admin-1', name: 'Joaquim' });
 
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
@@ -1144,7 +1144,7 @@ describe('POST /api/conversations/:id/transfer', () => {
     expect(emitToAgent).toHaveBeenCalledWith(
       'agent-2',
       'conversation:assigned',
-      expect.objectContaining({ transferredBy: { id: 'admin-1', name: 'Willemberg' } })
+      expect.objectContaining({ transferredBy: { id: 'admin-1', name: 'Joaquim' } })
     );
   });
 

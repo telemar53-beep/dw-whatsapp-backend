@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const reativacao = require('./reativacao');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -95,7 +96,7 @@ describe('módulo reativacao', () => {
     });
 
     test('nunca contém nome real de cliente', () => {
-      expect(texto()).not.toMatch(/Willemberg/);
+      expect(contemNomeReal(texto())).toBe(false);
     });
   });
 });

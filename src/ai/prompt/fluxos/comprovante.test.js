@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const comprovante = require('./comprovante');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -124,7 +125,7 @@ describe('módulo comprovante', () => {
       const t = comprovante.linhas(comFerramenta({
         triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
       })).join('\n');
-      expect(t).not.toMatch(/Willemberg/);
+      expect(contemNomeReal(t)).toBe(false);
       expect(t).not.toMatch(/R\$\s*\d/);
       expect(t).not.toMatch(/\d+\s*mega/i);
       expect(t).not.toMatch(/nascimento/i);

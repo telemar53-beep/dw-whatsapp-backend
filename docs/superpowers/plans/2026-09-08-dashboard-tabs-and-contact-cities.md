@@ -1564,7 +1564,7 @@ Add this test right after the existing `'switches to the Setores tab and shows t
 ```js
   test('switches to the Cidades tab and shows the city management UI', async () => {
     useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598912345678', status: 'connected' }],
       loading: false,
       refresh: vi.fn(),
     });

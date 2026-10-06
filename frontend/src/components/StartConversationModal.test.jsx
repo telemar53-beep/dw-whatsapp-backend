@@ -68,9 +68,9 @@ describe('StartConversationModal', () => {
     render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
     await screen.findByText('Berg');
-    await userEvent.type(screen.getByLabelText(/telefone/i), '98 98500-4187');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '98 91234-5678');
 
-    expect(screen.getByText('Número completo: 5598985004187')).toBeInTheDocument();
+    expect(screen.getByText('Número completo: 5598912345678')).toBeInTheDocument();
   });
 
   test('builds the phone number with the selected country code', async () => {

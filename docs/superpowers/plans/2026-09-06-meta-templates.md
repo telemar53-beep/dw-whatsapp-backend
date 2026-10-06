@@ -2297,7 +2297,7 @@ test('lets an admin edit the WABA ID of a meta_cloud channel', async () => {
 
 test('does not show a WABA ID field for a baileys channel', () => {
   useChannels.mockReturnValue({
-    channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+    channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598912345678', status: 'connected' }],
     loading: false,
     refresh: vi.fn(),
   });

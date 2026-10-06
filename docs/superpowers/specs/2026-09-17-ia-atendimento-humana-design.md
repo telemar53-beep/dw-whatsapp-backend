@@ -131,7 +131,7 @@ Só o que está **fora** dos blocos que vêm do painel.
 | `ai-orchestrator.js` (~20 pontos) | `Financeiro`, `Suporte`, `Comercial`, `Reativação`, motivo `Comprovante` como string literal | Operação que nomear os setores de outro jeito perde os roteiros |
 | `tool-registry.js:559, 921, 953, 1116, 1203, 1288` | mesmos nomes de setor/motivo literais, agora em retorno de ferramenta | idem |
 | `courtesy-message.js:26` | `'dw', 'telecom'` no classificador de cortesia | "obrigado DW Telecom" é reconhecido como cortesia; "obrigado [outro provedor]" vira atendimento novo |
-| `ai-orchestrator.js:468, 504, 505, 617, 621` | nomes reais de clientes (Willemberg, Laureny, Jureildson) e cidade real em modelos de frase | risco de o modelo colar literalmente; e são nomes de pessoas reais versionados no repositório |
+| `ai-orchestrator.js:468, 504, 505, 617, 621` | nomes reais de clientes ([nome], [nome], [nome]) e cidade real em modelos de frase | risco de o modelo colar literalmente; e são nomes de pessoas reais versionados no repositório |
 | `trust-unlock-rules.js:108` | `'Só é possível uma liberação em confiança a cada 30 dias.'` com o "30" escrito à mão | mudar a constante `DIAS_ENTRE_LIBERACOES` faz a mensagem ao cliente mentir |
 | `migrations/1788960000000:1` | `Você é a assistente virtual da DW Telecom` | valor semeado no banco em instalação nova; fora do escopo desta entrega, registrado |
 

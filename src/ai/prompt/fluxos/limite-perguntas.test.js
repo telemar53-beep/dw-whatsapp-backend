@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const limitePerguntas = require('./limite-perguntas');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -54,7 +55,7 @@ describe('módulo limite-perguntas', () => {
 
     test('nunca contém nome real de cliente, preço ou velocidade real', () => {
       const t = texto({ config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: 'r1' } });
-      expect(t).not.toMatch(/Willemberg/);
+      expect(contemNomeReal(t)).toBe(false);
       expect(t).not.toMatch(/R\$\s*\d/);
       expect(t).not.toMatch(/\d+\s*mega/i);
     });

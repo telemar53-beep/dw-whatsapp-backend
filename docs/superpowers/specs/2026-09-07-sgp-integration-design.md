@@ -105,7 +105,7 @@ esquema de hash já usado para senha de agente — `bcrypt`), e:
 **Corpo esperado:**
 ```json
 {
-  "phoneNumber": "5598985004187",
+  "phoneNumber": "5598912345678",
   "content": "Seu boleto vence dia 10/09, valor R$ 150,00: https://...",
   "referenceId": "boleto-123456"
 }

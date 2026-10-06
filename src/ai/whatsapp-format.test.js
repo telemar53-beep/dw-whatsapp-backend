@@ -77,9 +77,9 @@ describe('paraWhatsApp', () => {
     test('descarta a frase colada do modelo quando ela repete a frase do próprio texto', () => {
       // Observado em produção (2026-09-13): o modelo escreveu com as palavras
       // dele e, na linha seguinte, colou o modelo de frase do prompt.
-      const texto = 'Bom dia, Willemberg! 😊 Vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?\n'
+      const texto = 'Bom dia, Joaquim! 😊 Vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?\n'
         + 'Claro, vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?';
-      expect(paraWhatsApp(texto)).toBe('Bom dia, Willemberg! 😊 Vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?');
+      expect(paraWhatsApp(texto)).toBe('Bom dia, Joaquim! 😊 Vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?');
     });
 
     test('também com linha em branco entre as duas versões', () => {

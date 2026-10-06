@@ -25,7 +25,7 @@ describe('GET /api/channels', () => {
         id: 'channel-1',
         type: 'baileys',
         name: 'Berg',
-        phoneNumber: '5598985004187',
+        phoneNumber: '5598912345678',
         config: { sessionPath: '/secret/path' },
         status: 'connected',
       },
@@ -37,7 +37,7 @@ describe('GET /api/channels', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { id: 'channel-1', type: 'baileys', name: 'Berg', phoneNumber: '5598985004187', status: 'connected' },
+      { id: 'channel-1', type: 'baileys', name: 'Berg', phoneNumber: '5598912345678', status: 'connected' },
     ]);
   });
 

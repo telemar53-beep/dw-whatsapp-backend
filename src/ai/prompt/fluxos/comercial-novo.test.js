@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const comercialNovo = require('./comercial-novo');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -233,7 +234,7 @@ describe('módulo comercial-novo', () => {
     });
 
     test('nunca contém nome real de cliente', () => {
-      expect(texto()).not.toMatch(/Willemberg/);
+      expect(contemNomeReal(texto())).toBe(false);
     });
 
     test('nunca reintroduz data de nascimento, identidade fraca ou gate de confiança', () => {

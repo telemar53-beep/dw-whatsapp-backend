@@ -17,7 +17,7 @@
 // pedia trocar "Suporte"/"Financeiro" literais por referência de papel neste
 // bloco, mas o texto atual de ai-orchestrator.js (o que existe de verdade
 // hoje, linhas 422-423) não nomeia setor nenhum aqui — não havia nada para
-// trocar. Os dois nomes reais de cliente do brief ("Laureny", "Jureildson")
+// trocar. Os dois nomes reais de cliente do brief ("[nome]", "[nome]")
 // também não aparecem neste bloco: eles são do texto que foi para
 // fluxos/terceiros.js.
 module.exports = {

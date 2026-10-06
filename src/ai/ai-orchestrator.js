@@ -151,7 +151,7 @@ function respostaSemEncaminhamentoNaoConfirmado(texto) {
 const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b|\b(enviei|mandei|gerei|segue|seguem)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo|pdf|linha digit[áa]vel)\b/i;
 function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
 
-// Teste real 2026-09-15 (produção, gpt-5.4-mini): "Boa noite, Willemberg! كيف
+// Teste real 2026-09-15 (produção, gpt-5.4-mini): "Boa noite, [nome]! كيف
 // posso ajudar você hoje?". O prompt-base já pede português; quando o texto
 // final traz letra de outro alfabeto, o turno faz UMA chamada extra, sem
 // ferramentas, pedindo a mesma resposta em português. Se ainda vier estranha

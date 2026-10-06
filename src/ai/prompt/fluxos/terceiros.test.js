@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../../test-support/dados-reais');
 const terceiros = require('./terceiros');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -76,8 +77,7 @@ describe('módulo terceiros', () => {
 
   test('nunca contém nome real de cliente (só marcador)', () => {
     const texto = terceiros.linhas(estadoBase()).join('\n');
-    expect(texto).not.toMatch(/Laureny/);
-    expect(texto).not.toMatch(/Jureildson/);
+    expect(contemNomeReal(texto)).toBe(false);
     expect(texto).toContain('[nome]');
   });
 

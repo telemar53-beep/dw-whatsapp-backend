@@ -2033,8 +2033,8 @@ Expected: FAIL — os esqueletos devolvem `false` e `[]`.
 `privacidade.js` migra `ai-orchestrator.js:497-503` (a recusa de dado de outra pessoa, a ressalva de que relatar problema do vizinho não é pedido de dado, e a senha da rede do próprio cliente). Troque `Suporte`/`Financeiro` literais pela referência de papel.
 
 **Nos dois módulos, troque os nomes reais de clientes por marcador.** As linhas 504 e 505
-do original usam "a fatura da cliente Laureny" e "quero a fatura do Jureildson" como
-exemplo: viram "a fatura da cliente [nome]" e "quero a fatura do [nome]". São nomes de
+do original usam um nome real de cliente em cada exemplo:
+viram "a fatura da cliente [nome]" e "quero a fatura do [nome]". São nomes de
 pessoas reais versionados no repositório, e o próprio código já documenta um caso em que o
 modelo copiou um exemplo ao pé da letra.
 
@@ -2243,7 +2243,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Preencher**
 
-`financeiro.js` migra `:453-480` (entrega, despedida, sem fatura), `:551` (prioridade do pedido de pagamento) e `:579` (a internet volta depois de pagar). Setores por papel, e **a despedida da linha 468 perde o nome real**: `"Imagina, Willemberg! 😊 …"` vira `"Imagina, [nome]! 😊 …"`, nas duas ocorrências da linha (a com emoji e a sem).
+`financeiro.js` migra `:453-480` (entrega, despedida, sem fatura), `:551` (prioridade do pedido de pagamento) e `:579` (a internet volta depois de pagar). Setores por papel, e **a despedida da linha 468 perde o nome real** (vira `"Imagina, [nome]! 😊 …"`), nas duas ocorrências da linha (a com emoji e a sem).
 
 `reativacao.js` migra `:577`, trocando `"vai para o setor de Reativação"` por `"vai para o setor que cuidar de reativação ou retorno de clientes, se houver um na lista de setores acima; se não houver, vá para o que cuidar de financeiro"`.
 

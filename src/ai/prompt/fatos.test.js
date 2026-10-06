@@ -1,3 +1,4 @@
+const { contemNomeReal } = require('../../test-support/dados-reais');
 const fatos = require('./fatos');
 const { estadoBase } = require('./estado-de-teste');
 
@@ -199,7 +200,7 @@ describe('módulo fatos', () => {
     // conteúdo de fluxos/privacidade.js e fluxos/terceiros.js (Task 13), não
     // de fatos.js — deixá-los aqui duplicaria o bloco quando a Task 13
     // preencher os dois módulos. O texto original em ai-orchestrator.js tem
-    // dois nomes reais de cliente ("Laureny", "Jureildson"); a guarda abaixo
+    // dois nomes reais de cliente ("[nome]", "[nome]"); a guarda abaixo
     // também serve de tripwire para eles não voltarem por aqui.
     test.each(['none', 'forte'])('não emite mais o bloco de privacidade/terceiros (identidade %s)', (nivel) => {
       const texto = fatos.linhas(estadoBase({
@@ -227,8 +228,7 @@ describe('módulo fatos', () => {
       const texto = fatos.linhas(estadoBase({
         identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [], contestado: false },
       })).join('\n');
-      expect(texto).not.toMatch(/Laureny/);
-      expect(texto).not.toMatch(/Jureildson/);
+      expect(contemNomeReal(texto)).toBe(false);
     });
 
     test('nunca menciona data de nascimento em nenhum cenário', () => {

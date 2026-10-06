@@ -1518,9 +1518,9 @@ describe('listClosedConversationsByContact — quem atendeu, quem encerrou e por
 
   beforeEach(async () => {
     await getPool().query('TRUNCATE conversations, contacts, channels, agents, contact_reasons CASCADE');
-    const contact = await findOrCreateContactByPhoneNumber('+5598984454546', 'Noah Gabriel');
+    const contact = await findOrCreateContactByPhoneNumber('+5520999984546', 'Contato Teste');
     contactId = contact.id;
-    const channel = await createChannel({ type: 'baileys', name: 'DW Telcom 1', phoneNumber: '+5598984129046', config: {} });
+    const channel = await createChannel({ type: 'baileys', name: 'DW Telcom 1', phoneNumber: '+5520999979046', config: {} });
     channelId = channel.id;
   });
 

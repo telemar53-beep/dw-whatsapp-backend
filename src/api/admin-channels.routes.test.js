@@ -1250,7 +1250,7 @@ describe('GET /api/admin/channels — estado da conexao do canal oficial', () =>
 
   test('inclui o estado da conexao de um canal meta_cloud', async () => {
     listChannels.mockResolvedValue([
-      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5598984454546', config: { phoneNumberId: '530351070168344', wabaId: '510099572194362' }, status: 'connected' },
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5520999984546', config: { phoneNumberId: '530351070168344', wabaId: '510099572194362' }, status: 'connected' },
     ]);
     getChannelConnection.mockResolvedValue({ state: 'connected', quality: 'GREEN' });
 
@@ -1264,7 +1264,7 @@ describe('GET /api/admin/channels — estado da conexao do canal oficial', () =>
 
   test('repassa o motivo quando o token do canal caiu', async () => {
     listChannels.mockResolvedValue([
-      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5598984454546', config: { phoneNumberId: '530351070168344', wabaId: 'w1' }, status: 'connected' },
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5520999984546', config: { phoneNumberId: '530351070168344', wabaId: 'w1' }, status: 'connected' },
     ]);
     getChannelConnection.mockResolvedValue({ state: 'error', motivo: '(190) Session has expired' });
 
@@ -1277,8 +1277,8 @@ describe('GET /api/admin/channels — estado da conexao do canal oficial', () =>
 
   test('omite o campo quando o canal nao e meta_cloud', async () => {
     listChannels.mockResolvedValue([
-      { id: 'channel-1', type: 'baileys', name: 'automação', phoneNumber: '+5598984129046', config: {}, status: 'connected' },
-      { id: 'channel-2', type: '360dialog', name: 'DW Telcom 3', phoneNumber: '+5598970285660', config: { wabaId: 'w2' }, status: 'connected' },
+      { id: 'channel-1', type: 'baileys', name: 'automação', phoneNumber: '+5520999979046', config: {}, status: 'connected' },
+      { id: 'channel-2', type: '360dialog', name: 'DW Telcom 3', phoneNumber: '+5520999965660', config: { wabaId: 'w2' }, status: 'connected' },
     ]);
 
     const res = await request(buildApp())
@@ -1303,7 +1303,7 @@ describe('GET /api/admin/channels — estado da conexao do canal oficial', () =>
 
   test('a lista carrega mesmo se a consulta de conexao falhar', async () => {
     listChannels.mockResolvedValue([
-      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5598984454546', config: { phoneNumberId: '1', wabaId: 'w1' }, status: 'connected' },
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5520999984546', config: { phoneNumberId: '1', wabaId: 'w1' }, status: 'connected' },
     ]);
     getChannelConnection.mockRejectedValue(new Error('graph api fora do ar'));
 
@@ -1411,7 +1411,7 @@ describe('POST /api/admin/channels/:id/meta-cloud-credentials', () => {
     id: 'channel-360',
     type: '360dialog',
     name: 'DW Telcom 3',
-    phoneNumber: '+5598970285660',
+    phoneNumber: '+5520999965660',
     config: { apiKey: 'd360-key', wabaId: 'waba-antiga', webhookToken: 'tok-webhook' },
     status: 'connected',
   };
@@ -1437,7 +1437,7 @@ describe('POST /api/admin/channels/:id/meta-cloud-credentials', () => {
 
     expect(checkMetaCloudSetup).toHaveBeenCalledWith({
       ...CREDENCIAIS,
-      phoneNumber: '+5598970285660',
+      phoneNumber: '+5520999965660',
     });
   });
 
@@ -1535,7 +1535,7 @@ describe('POST /api/admin/channels/:id/meta-cloud-credentials', () => {
 });
 
 describe('PATCH /api/admin/channels/:id — renomear o canal', () => {
-  const CANAL = { id: 'channel-1', type: 'baileys', name: 'automação', phoneNumber: '+5598984129046', config: {}, status: 'connected' };
+  const CANAL = { id: 'channel-1', type: 'baileys', name: 'automação', phoneNumber: '+5520999979046', config: {}, status: 'connected' };
 
   beforeEach(() => {
     jest.clearAllMocks();

@@ -148,14 +148,14 @@ describe('loadConfig — conteudo das variaveis em producao', () => {
     process.env = { ...originalEnv };
     process.env.NODE_ENV = 'production';
     process.env.DATABASE_URL = 'postgresql://user:pass@host/db';
-    process.env.JWT_SECRET = 'eaf84e75960169653f9e1530ef8ad38dd6d471f5ce273c8760da1b7f6248ab04';
-    process.env.REDIS_URL = 'redis://red-dae80fgu01pc73df9vh0:6379';
-    process.env.META_VERIFY_TOKEN = 'f12d98931e78124cedc72f95348c8047a184aef835389514';
-    process.env.META_APP_SECRET = '3f8b1c2d4e5a6b7c8d9e0f1a2b3c4d5e';
+    process.env.JWT_SECRET = 'jwt-sintetico-de-teste-0000000000000000000000000000';
+    process.env.REDIS_URL = 'redis://redis-sintetico.invalid:6379';
+    process.env.META_VERIFY_TOKEN = 'verify-token-sintetico-de-teste';
+    process.env.META_APP_SECRET = 'abcdef0123456789abcdef0123456789';
     process.env.BAILEYS_SESSIONS_DIR = '/var/data/baileys-sessions';
     process.env.MEDIA_STORAGE_DIR = '/var/data/media';
     process.env.PUBLIC_BASE_URL = 'https://dw-whatsapp-backend.onrender.com';
-    process.env.MEDIA_TOKEN_SECRET = '9c1f0b7a4e2d8f6c3b5a7e9d1c4f8b2a6e0d3c7f5b9a1e4d8c2f6b0a3e7d5c9f';
+    process.env.MEDIA_TOKEN_SECRET = 'midia-sintetica-de-teste-1111111111111111111111111111';
   });
 
   afterAll(() => {
@@ -172,7 +172,7 @@ describe('loadConfig — conteudo das variaveis em producao', () => {
   });
 
   test('recusa META_APP_SECRET hexadecimal de tamanho errado', () => {
-    process.env.META_APP_SECRET = '3f8b1c2d4e5a6b7c';
+    process.env.META_APP_SECRET = 'abcdef0123456789';
     expect(() => loadConfig()).toThrow(/META_APP_SECRET/);
   });
 

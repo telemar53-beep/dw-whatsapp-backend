@@ -1,4 +1,4 @@
-const { contemNomeReal } = require('../../test-support/dados-reais');
+const { nomesEmModelosDeFrase } = require('../../test-support/detector-de-dados');
 const fatos = require('./fatos');
 const { estadoBase } = require('./estado-de-teste');
 
@@ -249,11 +249,13 @@ describe('módulo fatos', () => {
       expect(comContestar).not.toMatch(/identificação foi descartada/);
     });
 
-    test('nunca contém nome real de cliente (só marcador ou nome de teste genérico)', () => {
+    test('nunca contém nome próprio em modelo de frase (só marcador ou nome de teste genérico)', () => {
       const texto = fatos.linhas(estadoBase({
         identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [], contestado: false },
       })).join('\n');
-      expect(contemNomeReal(texto)).toBe(false);
+      // D9 (06/10/2026): a guarda estrutural acusa nome próprio em modelo de frase; o primeiro nome que vem do estado (o
+      // cliente do turno) é dado do turno, não modelo fixo.
+      expect(nomesEmModelosDeFrase(texto).filter((n) => n !== 'João')).toEqual([]);
     });
 
     test('nunca menciona data de nascimento em nenhum cenário', () => {

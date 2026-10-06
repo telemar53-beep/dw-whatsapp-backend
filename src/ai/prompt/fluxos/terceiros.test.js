@@ -1,4 +1,4 @@
-const { contemNomeReal } = require('../../../test-support/dados-reais');
+const { nomesEmModelosDeFrase } = require('../../../test-support/detector-de-dados');
 const terceiros = require('./terceiros');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -75,9 +75,9 @@ describe('módulo terceiros', () => {
     expect(texto).toMatch(/se ela expirar, peça o CPF ou CNPJ do titular de novo/);
   });
 
-  test('nunca contém nome real de cliente (só marcador)', () => {
+  test('nunca contém nome próprio em modelo de frase (só marcador)', () => {
     const texto = terceiros.linhas(estadoBase()).join('\n');
-    expect(contemNomeReal(texto)).toBe(false);
+    expect(nomesEmModelosDeFrase(texto)).toEqual([]);
     expect(texto).toContain('[nome]');
   });
 

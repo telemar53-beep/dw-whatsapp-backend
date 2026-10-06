@@ -196,7 +196,7 @@ describe('ingestInboundMessage', () => {
       findRecentAiClosedConversation.mockResolvedValue(ENCERRADA);
 
       const result = await ingestInboundMessage({
-        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C1',
+        channelId: 'channel-1', fromPhoneNumber: '+5520999979046', whatsappMessageId: 'wamid.C1',
         content: 'Ótimo dia para você também!', messageType: 'text',
       });
 
@@ -214,7 +214,7 @@ describe('ingestInboundMessage', () => {
       getConversationWithContact.mockResolvedValue({ id: 'conv-10', assignedAgentId: null });
 
       await ingestInboundMessage({
-        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C2',
+        channelId: 'channel-1', fromPhoneNumber: '+5520999979046', whatsappMessageId: 'wamid.C2',
         content: 'Obrigado, e minha internet?', messageType: 'text',
       });
 
@@ -228,7 +228,7 @@ describe('ingestInboundMessage', () => {
       getConversationWithContact.mockResolvedValue({ id: 'conv-11', assignedAgentId: null });
 
       await ingestInboundMessage({
-        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C3',
+        channelId: 'channel-1', fromPhoneNumber: '+5520999979046', whatsappMessageId: 'wamid.C3',
         content: 'obrigado', messageType: 'text',
       });
 
@@ -240,7 +240,7 @@ describe('ingestInboundMessage', () => {
       createMessage.mockRejectedValue(Object.assign(new Error('dup'), { code: '23505' }));
 
       const result = await ingestInboundMessage({
-        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C1',
+        channelId: 'channel-1', fromPhoneNumber: '+5520999979046', whatsappMessageId: 'wamid.C1',
         content: 'obrigado', messageType: 'text',
       });
 
@@ -255,7 +255,7 @@ describe('ingestInboundMessage', () => {
       findRecentAiClosedConversation.mockResolvedValue(ENCERRADA);
 
       const result = await ingestInboundMessage({
-        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C4',
+        channelId: 'channel-1', fromPhoneNumber: '+5520999979046', whatsappMessageId: 'wamid.C4',
         content: 'Obrigado, Provedor Teste!', messageType: 'text',
       });
 
@@ -269,7 +269,7 @@ describe('ingestInboundMessage', () => {
       findRecentAiClosedConversation.mockResolvedValue(ENCERRADA);
 
       const result = await ingestInboundMessage({
-        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C5',
+        channelId: 'channel-1', fromPhoneNumber: '+5520999979046', whatsappMessageId: 'wamid.C5',
         content: 'obrigado', messageType: 'text',
       });
 

@@ -1,4 +1,4 @@
-const { contemNomeReal } = require('../../../test-support/dados-reais');
+const { nomesEmModelosDeFrase } = require('../../../test-support/detector-de-dados');
 const comercialNovo = require('./comercial-novo');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -233,8 +233,8 @@ describe('módulo comercial-novo', () => {
       expect(texto()).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
     });
 
-    test('nunca contém nome real de cliente', () => {
-      expect(contemNomeReal(texto())).toBe(false);
+    test('nunca contém nome próprio em modelo de frase', () => {
+      expect(nomesEmModelosDeFrase(texto())).toEqual([]);
     });
 
     test('nunca reintroduz data de nascimento, identidade fraca ou gate de confiança', () => {

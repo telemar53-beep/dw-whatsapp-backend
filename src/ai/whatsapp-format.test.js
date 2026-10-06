@@ -47,8 +47,8 @@ describe('paraWhatsApp', () => {
   test('remove a mensagem inteira repetida, mesmo colada na linha anterior', () => {
     // Observado em produção: saudação + pergunta duplicadas num único balão,
     // com a repetição colada na linha anterior (sem linha em branco).
-    const duplicado = 'Boa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?\nBoa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?';
-    expect(paraWhatsApp(duplicado)).toBe('Boa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?');
+    const duplicado = 'Boa noite, Beltrano! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?\nBoa noite, Beltrano! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?';
+    expect(paraWhatsApp(duplicado)).toBe('Boa noite, Beltrano! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?');
     expect(paraWhatsApp('A\n\nB\n\nA\n\nB')).toBe('A\n\nB');
     // Só o padrão "A + A" é tratado; uma repetição tripla não tem metade igual
     // e passa intacta — é raro e o custo de generalizar é falso positivo.

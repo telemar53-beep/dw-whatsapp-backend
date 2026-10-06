@@ -1,4 +1,4 @@
-const { contemNomeReal } = require('../../../test-support/dados-reais');
+const { nomesEmModelosDeFrase } = require('../../../test-support/detector-de-dados');
 const reativacao = require('./reativacao');
 const { estadoBase } = require('../estado-de-teste');
 
@@ -95,8 +95,8 @@ describe('módulo reativacao', () => {
       expect(t).not.toMatch(/gate de confiança/i);
     });
 
-    test('nunca contém nome real de cliente', () => {
-      expect(contemNomeReal(texto())).toBe(false);
+    test('nunca contém nome próprio em modelo de frase', () => {
+      expect(nomesEmModelosDeFrase(texto())).toEqual([]);
     });
   });
 });

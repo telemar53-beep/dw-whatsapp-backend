@@ -630,15 +630,15 @@ describe('message repository', () => {
   describe('recordMessageWaId', () => {
     test('grava o wa_id na metadata de uma mensagem sem metadata', async () => {
       const msg = await createMessage({ conversationId, direction: 'outbound', content: null, status: 'sent', messageType: 'text' });
-      await recordMessageWaId(msg.id, '559885120338');
-      expect((await findMessageById(msg.id)).metadata).toEqual({ waId: '559885120338' });
+      await recordMessageWaId(msg.id, '552099990338');
+      expect((await findMessageById(msg.id)).metadata).toEqual({ waId: '552099990338' });
     });
 
     test('mescla com o que já existe na metadata, sem apagar', async () => {
       const msg = await createMessage({ conversationId, direction: 'outbound', content: null, status: 'sent', messageType: 'text', metadata: { faturaId: '77' } });
       await markMessageFailed(msg.id, '(131047) janela fechada');
-      await recordMessageWaId(msg.id, '559885120338');
-      expect((await findMessageById(msg.id)).metadata).toEqual({ faturaId: '77', motivoFalha: '(131047) janela fechada', waId: '559885120338' });
+      await recordMessageWaId(msg.id, '552099990338');
+      expect((await findMessageById(msg.id)).metadata).toEqual({ faturaId: '77', motivoFalha: '(131047) janela fechada', waId: '552099990338' });
     });
   });
 

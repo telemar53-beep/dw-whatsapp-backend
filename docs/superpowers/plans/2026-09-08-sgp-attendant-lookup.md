@@ -233,13 +233,13 @@ describe('sgp-client', () => {
   describe('lookupClientByCpf', () => {
     test('throws SgpNotConfiguredError when there is no config', async () => {
       getSgpQueryConfig.mockResolvedValue(null);
-      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpNotConfiguredError);
+      await expect(lookupClientByCpf('11122233396')).rejects.toBeInstanceOf(SgpNotConfiguredError);
       expect(axios.post).not.toHaveBeenCalled();
     });
 
     test('throws SgpDisabledError when the integration is disabled', async () => {
       getSgpQueryConfig.mockResolvedValue({ ...CONFIG, enabled: false });
-      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpDisabledError);
+      await expect(lookupClientByCpf('11122233396')).rejects.toBeInstanceOf(SgpDisabledError);
     });
 
     test('calls consultacliente and normalizes the response, excluding password fields', async () => {
@@ -251,7 +251,7 @@ describe('sgp-client', () => {
             {
               contratoId: 17402,
               clienteId: 16957,
-              cpfCnpj: '036.668.113-37',
+              cpfCnpj: '111.222.333-96',
               razaoSocial: 'CLIENTE EXEMPLO',
               contratoStatus: 1,
               contratoStatusDisplay: 'Ativo',
@@ -265,21 +265,21 @@ describe('sgp-client', () => {
               endereco_bairro: 'CENTRO',
               endereco_cidade: 'CANDIDO MENDES',
               endereco_uf: 'MA',
-              telefones: [{ tipoContato: 'WhatsApp Número', contato: '(98) 98512-0338' }],
+              telefones: [{ tipoContato: 'WhatsApp Número', contato: '(20) 99999-0338' }],
               emails: [{ tipoContato: 'E-Mail', contato: 'exemplo@dominio.com' }],
             },
           ],
         },
       });
 
-      const result = await lookupClientByCpf('03666811337');
+      const result = await lookupClientByCpf('11122233396');
 
       expect(axios.post).toHaveBeenCalledWith(
         'https://dwtelecom.sgp.tsmx.com.br/api/ura/consultacliente',
-        expect.stringContaining('cpfcnpj=03666811337'),
+        expect.stringContaining('cpfcnpj=11122233396'),
         expect.objectContaining({ headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 })
       );
-      expect(result.client).toEqual({ id: 16957, name: 'CLIENTE EXEMPLO', document: '036.668.113-37' });
+      expect(result.client).toEqual({ id: 16957, name: 'CLIENTE EXEMPLO', document: '111.222.333-96' });
       expect(result.contracts).toEqual([
         {
           id: 17402,
@@ -288,7 +288,7 @@ describe('sgp-client', () => {
           openInvoicesCount: 1,
           openAmount: 89.9,
           address: 'RUA EXEMPLO, 523 - CENTRO - CANDIDO MENDES/MA',
-          phones: ['(98) 98512-0338'],
+          phones: ['(20) 99999-0338'],
           emails: ['exemplo@dominio.com'],
         },
       ]);
@@ -304,7 +304,7 @@ describe('sgp-client', () => {
     test('throws SgpRequestError when the SGP call fails', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post.mockRejectedValue(new Error('timeout of 15000ms exceeded'));
-      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpRequestError);
+      await expect(lookupClientByCpf('11122233396')).rejects.toBeInstanceOf(SgpRequestError);
     });
   });
 
@@ -742,7 +742,7 @@ describe('GET /api/sgp/clientes', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('returns 401 without a token', async () => {
-    const res = await request(buildApp()).get('/api/sgp/clientes?cpf=03666811337');
+    const res = await request(buildApp()).get('/api/sgp/clientes?cpf=11122233396');
     expect(res.status).toBe(401);
   });
 
@@ -757,15 +757,15 @@ describe('GET /api/sgp/clientes', () => {
   test('strips non-digit characters from cpf before calling the client', async () => {
     lookupClientByCpf.mockResolvedValue({ client: { id: 1, name: 'X', document: 'X' }, contracts: [] });
     await request(buildApp())
-      .get('/api/sgp/clientes?cpf=036.668.113-37')
+      .get('/api/sgp/clientes?cpf=111.222.333-96')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
-    expect(lookupClientByCpf).toHaveBeenCalledWith('03666811337');
+    expect(lookupClientByCpf).toHaveBeenCalledWith('11122233396');
   });
 
   test('returns 200 with the normalized result', async () => {
     lookupClientByCpf.mockResolvedValue({ client: { id: 1, name: 'X', document: 'X' }, contracts: [] });
     const res = await request(buildApp())
-      .get('/api/sgp/clientes?cpf=03666811337')
+      .get('/api/sgp/clientes?cpf=11122233396')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ client: { id: 1, name: 'X', document: 'X' }, contracts: [] });
@@ -774,7 +774,7 @@ describe('GET /api/sgp/clientes', () => {
   test('returns 400 when SGP is not configured', async () => {
     lookupClientByCpf.mockRejectedValue(new SgpNotConfiguredError());
     const res = await request(buildApp())
-      .get('/api/sgp/clientes?cpf=03666811337')
+      .get('/api/sgp/clientes?cpf=11122233396')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'SGP integration is not configured' });
@@ -783,7 +783,7 @@ describe('GET /api/sgp/clientes', () => {
   test('returns 400 when SGP is disabled', async () => {
     lookupClientByCpf.mockRejectedValue(new SgpDisabledError());
     const res = await request(buildApp())
-      .get('/api/sgp/clientes?cpf=03666811337')
+      .get('/api/sgp/clientes?cpf=11122233396')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'SGP integration is not enabled' });
@@ -801,7 +801,7 @@ describe('GET /api/sgp/clientes', () => {
   test('returns 502 when SGP cannot be reached', async () => {
     lookupClientByCpf.mockRejectedValue(new SgpRequestError());
     const res = await request(buildApp())
-      .get('/api/sgp/clientes?cpf=03666811337')
+      .get('/api/sgp/clientes?cpf=11122233396')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(502);
     expect(res.body).toEqual({ error: 'Failed to reach SGP' });
@@ -810,7 +810,7 @@ describe('GET /api/sgp/clientes', () => {
   test('forwards an unexpected error to the error middleware', async () => {
     lookupClientByCpf.mockRejectedValue(new Error('boom'));
     const res = await request(buildApp())
-      .get('/api/sgp/clientes?cpf=03666811337')
+      .get('/api/sgp/clientes?cpf=11122233396')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(500);
   });
@@ -1369,9 +1369,9 @@ describe('useSgpLookup', () => {
     api.lookupSgpClient.mockResolvedValue({ client: { id: 1, name: 'Cliente X', document: '000' }, contracts: [{ id: 17402, status: 'Ativo' }] });
     const { result } = renderHook(() => useSgpLookup());
 
-    await act(() => result.current.search('03666811337'));
+    await act(() => result.current.search('11122233396'));
 
-    expect(api.lookupSgpClient).toHaveBeenCalledWith('03666811337', 'tok-123');
+    expect(api.lookupSgpClient).toHaveBeenCalledWith('11122233396', 'tok-123');
     expect(result.current.client.name).toBe('Cliente X');
     expect(result.current.contracts).toHaveLength(1);
     expect(result.current.loading).toBe(false);
@@ -1391,7 +1391,7 @@ describe('useSgpLookup', () => {
     api.lookupSgpClient.mockRejectedValue(new ApiError(502, { error: 'Failed to reach SGP' }));
     const { result } = renderHook(() => useSgpLookup());
 
-    await act(() => result.current.search('03666811337'));
+    await act(() => result.current.search('11122233396'));
 
     expect(result.current.error).toBe('error');
   });
@@ -1535,10 +1535,10 @@ describe('SgpLookupPanel', () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, search });
     render(<SgpLookupPanel />);
 
-    await userEvent.type(screen.getByLabelText(/cpf do cliente/i), '036.668.113-37');
+    await userEvent.type(screen.getByLabelText(/cpf do cliente/i), '111.222.333-96');
     await userEvent.click(screen.getByLabelText(/^buscar$/i));
 
-    expect(search).toHaveBeenCalledWith('03666811337');
+    expect(search).toHaveBeenCalledWith('11122233396');
   });
 
   test('shows "cliente não encontrado" on a not_found error', () => {
@@ -1550,7 +1550,7 @@ describe('SgpLookupPanel', () => {
   test('renders the client and a card per contract', () => {
     useSgpLookup.mockReturnValue({
       ...BASE_HOOK,
-      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
+      client: { id: 1, name: 'Cliente Exemplo', document: '111.222.333-96' },
       contracts: [{ id: 17402, status: 'Ativo', plan: '1GB', address: 'RUA EXEMPLO, 523' }],
     });
     render(<SgpLookupPanel />);
@@ -1562,7 +1562,7 @@ describe('SgpLookupPanel', () => {
     const fetchDuplicate = vi.fn();
     useSgpLookup.mockReturnValue({
       ...BASE_HOOK,
-      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
+      client: { id: 1, name: 'Cliente Exemplo', document: '111.222.333-96' },
       contracts: [{ id: 17402, status: 'Ativo', plan: '1GB', address: 'RUA EXEMPLO' }],
       fetchDuplicate,
     });
@@ -1576,7 +1576,7 @@ describe('SgpLookupPanel', () => {
   test('shows the generated duplicate\'s bar code and PIX code', () => {
     useSgpLookup.mockReturnValue({
       ...BASE_HOOK,
-      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
+      client: { id: 1, name: 'Cliente Exemplo', document: '111.222.333-96' },
       contracts: [{ id: 17402, status: 'Ativo', plan: '1GB', address: 'RUA EXEMPLO' }],
       duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: true, duplicates: [{ id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' }] } },
     });
@@ -1588,7 +1588,7 @@ describe('SgpLookupPanel', () => {
   test('shows "nenhuma fatura em aberto" when hasOpenInvoice is false', () => {
     useSgpLookup.mockReturnValue({
       ...BASE_HOOK,
-      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
+      client: { id: 1, name: 'Cliente Exemplo', document: '111.222.333-96' },
       contracts: [{ id: 17402, status: 'Ativo', plan: '1GB', address: 'RUA EXEMPLO' }],
       duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: false, duplicates: [] } },
     });

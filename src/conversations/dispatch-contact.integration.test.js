@@ -12,8 +12,8 @@ const { updateContact } = require('./contact.repository');
 const { createMessage } = require('./message.repository');
 const { resolverContatoDoDisparo } = require('./dispatch-contact');
 
-const COM9 = '5598985120338'; // como o SGP manda
-const SEM9 = '559885120338';  // como a Meta devolve (wa_id) e como a resposta chega
+const COM9 = '5520999990338'; // como o SGP manda
+const SEM9 = '552099990338';  // como a Meta devolve (wa_id) e como a resposta chega
 
 describe('Fase 1A — disparo e resposta do mesmo celular na mesma conversa', () => {
   let canal;

@@ -1781,7 +1781,7 @@ describe('ingestInboundMessage — Fase 1C, autorresposta provável', () => {
   const AGORA = Date.parse('2026-09-25T15:00:30.000Z'); // 30 s depois do disparo
   const RESTAURANTE = 'Restaurante sabor caseiro agradece seu contato. Como podemos ajudar?';
   const receber = (content, extra = {}) => ingestInboundMessage({
-    channelId: 'channel-1', fromPhoneNumber: '559885120338', contactDisplayName: 'Restaurante', whatsappMessageId: 'wamid.AR1', content, ...extra,
+    channelId: 'channel-1', fromPhoneNumber: '552099990338', contactDisplayName: 'Restaurante', whatsappMessageId: 'wamid.AR1', content, ...extra,
   });
 
   beforeEach(() => {

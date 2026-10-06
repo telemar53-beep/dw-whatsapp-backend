@@ -141,9 +141,9 @@ describe('processCampaignRecipient', () => {
     createConversation.mockResolvedValue({ id: 'conversation-1' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'message-1' });
 
-    await processCampaignRecipient({ ...BASE_JOB, phoneNumber: '5598985120338', templateName: 'fatura_vencendo', templateLanguage: 'pt_BR', templateVariables: ['Joao'] });
+    await processCampaignRecipient({ ...BASE_JOB, phoneNumber: '5520999990338', templateName: 'fatura_vencendo', templateLanguage: 'pt_BR', templateVariables: ['Joao'] });
 
-    expect(resolverContatoDoDisparo).toHaveBeenCalledWith('5598985120338', 'Joao', 'channel-1');
+    expect(resolverContatoDoDisparo).toHaveBeenCalledWith('5520999990338', 'Joao', 'channel-1');
     expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
     expect(findOpenConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-1');
     expect(createConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-1', null, 'silent');

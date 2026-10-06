@@ -139,7 +139,7 @@ o dado simplesmente não sai do `sgp-client.js`).
 
 ```json
 {
-  "client": { "id": 16957, "name": "...", "document": "036.668.113-37" },
+  "client": { "id": 16957, "name": "...", "document": "111.222.333-96" },
   "contracts": [
     {
       "id": 17402,
@@ -148,7 +148,7 @@ o dado simplesmente não sai do `sgp-client.js`).
       "openInvoicesCount": 1,
       "openAmount": 0,
       "address": "AGENOR COSTA, 523 - RODAGEM, CÂNDIDO MENDES/MA",
-      "phones": ["(98) 98512-0338"],
+      "phones": ["(20) 99999-0338"],
       "emails": ["exemplo@dominio.com"]
     }
   ]

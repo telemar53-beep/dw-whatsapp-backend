@@ -21,9 +21,9 @@ describe('useSgpLookup', () => {
     api.lookupSgpClient.mockResolvedValue({ client: { id: 1, name: 'Cliente X', document: '000' }, contracts: [{ id: 17402, status: 'Ativo' }] });
     const { result } = renderHook(() => useSgpLookup());
 
-    await act(() => result.current.search('03666811337'));
+    await act(() => result.current.search('11122233396'));
 
-    expect(api.lookupSgpClient).toHaveBeenCalledWith('03666811337', 'tok-123');
+    expect(api.lookupSgpClient).toHaveBeenCalledWith('11122233396', 'tok-123');
     expect(result.current.client.name).toBe('Cliente X');
     expect(result.current.contracts).toHaveLength(1);
     expect(result.current.loading).toBe(false);
@@ -43,7 +43,7 @@ describe('useSgpLookup', () => {
     api.lookupSgpClient.mockRejectedValue(new ApiError(502, { error: 'Failed to reach SGP' }));
     const { result } = renderHook(() => useSgpLookup());
 
-    await act(() => result.current.search('03666811337'));
+    await act(() => result.current.search('11122233396'));
 
     expect(result.current.error).toBe('error');
   });
@@ -52,7 +52,7 @@ describe('useSgpLookup', () => {
     api.lookupSgpClient.mockRejectedValue(new ApiError(400, { error: 'SGP integration is not configured' }));
     const { result } = renderHook(() => useSgpLookup());
 
-    await act(() => result.current.search('03666811337'));
+    await act(() => result.current.search('11122233396'));
 
     expect(result.current.error).toBe('error');
     expect(result.current.errorMessage).toBe('SGP integration is not configured');

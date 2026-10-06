@@ -45,7 +45,7 @@ describe('errar a senha no /login com uma sessão aberta', () => {
       </MemoryRouter>
     );
 
-    await userEvent.type(screen.getByLabelText('E-mail'), 'ana@exemplo.com');
+    await userEvent.type(screen.getByLabelText('E-mail'), 'ana@exemplo.test');
     await userEvent.type(screen.getByLabelText('Senha'), 'errada123');
     await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));
 

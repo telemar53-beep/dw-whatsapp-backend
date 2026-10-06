@@ -31,13 +31,13 @@ describe('GET /api/admin/agents', () => {
       {
         id: 'agent-1',
         name: 'Ana',
-        email: 'ana@dw.com',
+        email: 'ana@dw.test',
         role: 'agent',
         active: true,
         createdAt: new Date(),
         sectors: [{ id: 'sector-1', name: 'Financeiro' }],
       },
-      { id: 'agent-2', name: 'Beto', email: 'beto@dw.com', role: 'agent', active: false, createdAt: new Date(), sectors: [] },
+      { id: 'agent-2', name: 'Beto', email: 'beto@dw.test', role: 'agent', active: false, createdAt: new Date(), sectors: [] },
     ]);
 
     const res = await request(buildApp())
@@ -49,12 +49,12 @@ describe('GET /api/admin/agents', () => {
       {
         id: 'agent-1',
         name: 'Ana',
-        email: 'ana@dw.com',
+        email: 'ana@dw.test',
         role: 'agent',
         active: true,
         sectors: [{ id: 'sector-1', name: 'Financeiro' }],
       },
-      { id: 'agent-2', name: 'Beto', email: 'beto@dw.com', role: 'agent', active: false, sectors: [] },
+      { id: 'agent-2', name: 'Beto', email: 'beto@dw.test', role: 'agent', active: false, sectors: [] },
     ]);
   });
 
@@ -79,7 +79,7 @@ describe('POST /api/admin/agents', () => {
     createAgent.mockResolvedValue({
       id: 'agent-3',
       name: 'Carla',
-      email: 'carla@dw.com',
+      email: 'carla@dw.test',
       role: 'agent',
       active: true,
       createdAt: new Date(),
@@ -88,18 +88,18 @@ describe('POST /api/admin/agents', () => {
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'agent' });
+      .send({ name: 'Carla', email: 'carla@dw.test', password: 'temporaria123', role: 'agent' });
 
     expect(res.status).toBe(201);
-    expect(createAgent).toHaveBeenCalledWith({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: false });
-    expect(res.body).toEqual({ id: 'agent-3', name: 'Carla', email: 'carla@dw.com', role: 'agent', active: true, sectors: [] });
+    expect(createAgent).toHaveBeenCalledWith({ name: 'Carla', email: 'carla@dw.test', password: 'temporaria123', role: 'agent', canManageIntegrations: false });
+    expect(res.body).toEqual({ id: 'agent-3', name: 'Carla', email: 'carla@dw.test', role: 'agent', active: true, sectors: [] });
   });
 
   test('returns 400 when a required field is missing', async () => {
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Carla', email: 'carla@dw.com', role: 'agent' });
+      .send({ name: 'Carla', email: 'carla@dw.test', role: 'agent' });
 
     expect(res.status).toBe(400);
     expect(createAgent).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ describe('POST /api/admin/agents', () => {
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'superadmin' });
+      .send({ name: 'Carla', email: 'carla@dw.test', password: 'temporaria123', role: 'superadmin' });
 
     expect(res.status).toBe(400);
     expect(createAgent).not.toHaveBeenCalled();
@@ -117,45 +117,45 @@ describe('POST /api/admin/agents', () => {
 
   test('creates a manager with canManageIntegrations', async () => {
     createAgent.mockResolvedValue({
-      id: 'agent-5', name: 'Marcia', email: 'marcia@dw.com', role: 'manager', canManageIntegrations: true, active: true, createdAt: new Date(),
+      id: 'agent-5', name: 'Marcia', email: 'marcia@dw.test', role: 'manager', canManageIntegrations: true, active: true, createdAt: new Date(),
     });
 
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Marcia', email: 'marcia@dw.com', password: 'temporaria123', role: 'manager', canManageIntegrations: true });
+      .send({ name: 'Marcia', email: 'marcia@dw.test', password: 'temporaria123', role: 'manager', canManageIntegrations: true });
 
     expect(res.status).toBe(201);
     expect(createAgent).toHaveBeenCalledWith({
-      name: 'Marcia', email: 'marcia@dw.com', password: 'temporaria123', role: 'manager', canManageIntegrations: true,
+      name: 'Marcia', email: 'marcia@dw.test', password: 'temporaria123', role: 'manager', canManageIntegrations: true,
     });
     expect(res.body.canManageIntegrations).toBe(true);
   });
 
   test('forces canManageIntegrations to false for a role other than manager', async () => {
     createAgent.mockResolvedValue({
-      id: 'agent-6', name: 'Nilo', email: 'nilo@dw.com', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
+      id: 'agent-6', name: 'Nilo', email: 'nilo@dw.test', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
     });
 
     await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Nilo', email: 'nilo@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: true });
+      .send({ name: 'Nilo', email: 'nilo@dw.test', password: 'temporaria123', role: 'agent', canManageIntegrations: true });
 
     expect(createAgent).toHaveBeenCalledWith({
-      name: 'Nilo', email: 'nilo@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: false,
+      name: 'Nilo', email: 'nilo@dw.test', password: 'temporaria123', role: 'agent', canManageIntegrations: false,
     });
   });
 
   test('a manager can create an agent', async () => {
     createAgent.mockResolvedValue({
-      id: 'agent-7', name: 'Otavio', email: 'otavio@dw.com', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
+      id: 'agent-7', name: 'Otavio', email: 'otavio@dw.test', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
     });
 
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
-      .send({ name: 'Otavio', email: 'otavio@dw.com', password: 'temporaria123', role: 'agent' });
+      .send({ name: 'Otavio', email: 'otavio@dw.test', password: 'temporaria123', role: 'agent' });
 
     expect(res.status).toBe(201);
   });
@@ -164,7 +164,7 @@ describe('POST /api/admin/agents', () => {
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
-      .send({ name: 'Paula', email: 'paula@dw.com', password: 'temporaria123', role: 'manager' });
+      .send({ name: 'Paula', email: 'paula@dw.test', password: 'temporaria123', role: 'manager' });
 
     expect(res.status).toBe(403);
     expect(createAgent).not.toHaveBeenCalled();
@@ -174,7 +174,7 @@ describe('POST /api/admin/agents', () => {
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
-      .send({ name: 'Quenia', email: 'quenia@dw.com', password: 'temporaria123', role: 'admin' });
+      .send({ name: 'Quenia', email: 'quenia@dw.test', password: 'temporaria123', role: 'admin' });
 
     expect(res.status).toBe(403);
     expect(createAgent).not.toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe('POST /api/admin/agents', () => {
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'agent' });
+      .send({ name: 'Carla', email: 'carla@dw.test', password: 'temporaria123', role: 'agent' });
 
     expect(res.status).toBe(409);
   });
@@ -197,7 +197,7 @@ describe('POST /api/admin/agents', () => {
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'agent' });
+      .send({ name: 'Carla', email: 'carla@dw.test', password: 'temporaria123', role: 'agent' });
     expect(res.status).toBe(403);
     expect(createAgent).not.toHaveBeenCalled();
   });
@@ -210,7 +210,7 @@ describe('PATCH /api/admin/agents/:id', () => {
     setAgentActive.mockResolvedValue({
       id: 'agent-4',
       name: 'Duda',
-      email: 'duda@dw.com',
+      email: 'duda@dw.test',
       role: 'agent',
       active: false,
       createdAt: new Date(),
@@ -230,7 +230,7 @@ describe('PATCH /api/admin/agents/:id', () => {
     setAgentActive.mockResolvedValue({
       id: 'agent-4',
       name: 'Duda',
-      email: 'duda@dw.com',
+      email: 'duda@dw.test',
       role: 'agent',
       active: true,
       createdAt: new Date(),
@@ -283,7 +283,7 @@ describe('PATCH /api/admin/agents/:id', () => {
 
   test('a manager can deactivate an agent', async () => {
     findAgentById.mockResolvedValue({ id: 'agent-4', role: 'agent' });
-    setAgentActive.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.com', role: 'agent', active: false, createdAt: new Date() });
+    setAgentActive.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.test', role: 'agent', active: false, createdAt: new Date() });
 
     const res = await request(buildApp())
       .patch('/api/admin/agents/agent-4')
@@ -323,7 +323,7 @@ describe('PUT /api/admin/agents/:id/password', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('generates and returns a new password for the agent', async () => {
-    findAgentById.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.com', role: 'agent' });
+    findAgentById.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.test', role: 'agent' });
     resetAgentPassword.mockResolvedValue('Xy9kFpQr2z');
 
     const res = await request(buildApp())
@@ -388,7 +388,7 @@ describe('PUT /api/admin/agents/:id/sectors', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('assigns the given sectors to an agent', async () => {
-    findAgentById.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.com', role: 'agent', active: true });
+    findAgentById.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.test', role: 'agent', active: true });
     setAgentSectors.mockResolvedValue(undefined);
 
     const res = await request(buildApp())

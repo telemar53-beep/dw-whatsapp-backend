@@ -18,7 +18,7 @@ beforeEach(() => {
   useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
 });
 
-const ANA = { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] };
+const ANA = { id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [] };
 
 // O jsdom não tem PointerEvent: o clique no fundo é descer e soltar no mesmo ponto.
 function ponteiro(alvo, tipo, x, y) {
@@ -34,14 +34,14 @@ describe('AgentsAdminTab', () => {
   test('lists every agent with name, email, role and status', () => {
     useAgentsAdmin.mockReturnValue({
       agents: [
-        { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] },
-        { id: 'a2', name: 'Beto', email: 'beto@dw.com', role: 'admin', active: false, sectors: [] },
+        { id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [] },
+        { id: 'a2', name: 'Beto', email: 'beto@dw.test', role: 'admin', active: false, sectors: [] },
       ],
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);
     expect(screen.getByText('Ana')).toBeInTheDocument();
-    expect(screen.getByText(/ana@dw.com/)).toBeInTheDocument();
+    expect(screen.getByText(/ana@dw.test/)).toBeInTheDocument();
     expect(screen.getByText('Beto')).toBeInTheDocument();
     expect(screen.getByText('Ativo')).toBeInTheDocument();
     expect(screen.getByText('Inativo')).toBeInTheDocument();
@@ -49,7 +49,7 @@ describe('AgentsAdminTab', () => {
 
   test('shows Gerente as the role label for a manager', () => {
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'a1', name: 'Marcia', email: 'marcia@dw.com', role: 'manager', active: true, sectors: [] }],
+      agents: [{ id: 'a1', name: 'Marcia', email: 'marcia@dw.test', role: 'manager', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);
@@ -131,7 +131,7 @@ describe('AgentsAdminTab', () => {
   test('reactivates a deactivated agent', async () => {
     const refresh = vi.fn();
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: false, sectors: [] }],
+      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: false, sectors: [] }],
       refresh,
     });
     api.setAgentActive.mockResolvedValue({});
@@ -145,7 +145,7 @@ describe('AgentsAdminTab', () => {
 
   test('does not show a deactivate button for the currently logged-in admin', () => {
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'admin-1', name: 'Você', email: 'voce@dw.com', role: 'admin', active: true, sectors: [] }],
+      agents: [{ id: 'admin-1', name: 'Você', email: 'voce@dw.test', role: 'admin', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);
@@ -154,7 +154,7 @@ describe('AgentsAdminTab', () => {
 
   test('does not show a "Gerar nova senha" button for the currently logged-in admin', () => {
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'admin-1', name: 'Você', email: 'voce@dw.com', role: 'admin', active: true, sectors: [] }],
+      agents: [{ id: 'admin-1', name: 'Você', email: 'voce@dw.test', role: 'admin', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);
@@ -283,7 +283,7 @@ describe('AgentsAdminTab', () => {
         {
           id: 'a1',
           name: 'Ana',
-          email: 'ana@dw.com',
+          email: 'ana@dw.test',
           role: 'agent',
           active: true,
           sectors: [
@@ -300,7 +300,7 @@ describe('AgentsAdminTab', () => {
 
   test('shows "Nenhum setor" when an agent has no sectors', () => {
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] }],
+      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);
@@ -311,7 +311,7 @@ describe('AgentsAdminTab', () => {
     const refresh = vi.fn();
     useAgentsAdmin.mockReturnValue({
       agents: [
-        { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
+        { id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
       ],
       refresh,
     });
@@ -337,7 +337,7 @@ describe('AgentsAdminTab', () => {
     const refresh = vi.fn();
     useAgentsAdmin.mockReturnValue({
       agents: [
-        { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
+        { id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
       ],
       refresh,
     });
@@ -362,7 +362,7 @@ describe('AgentsAdminTab', () => {
   test('canceling sector edits discards unsaved changes', async () => {
     useAgentsAdmin.mockReturnValue({
       agents: [
-        { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
+        { id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
       ],
       refresh: vi.fn(),
     });

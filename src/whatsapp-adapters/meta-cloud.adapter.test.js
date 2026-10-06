@@ -903,7 +903,7 @@ describe('sendPixCardMessage (meta cloud)', () => {
 });
 
 describe('fetchNumberHealth', () => {
-  const channel = { id: 'channel-1', config: { phoneNumberId: '530351070168344', accessToken: 'tok-meta' } };
+  const channel = { id: 'channel-1', config: { phoneNumberId: '100000000000101', accessToken: 'tok-meta' } };
 
   test('devolve o estado e a qualidade que a Meta reporta para o numero', async () => {
     axios.get.mockResolvedValue({ data: { status: 'CONNECTED', quality_rating: 'GREEN', name_status: 'APPROVED' } });
@@ -911,7 +911,7 @@ describe('fetchNumberHealth', () => {
     const result = await fetchNumberHealth(channel);
 
     expect(axios.get).toHaveBeenCalledWith(
-      'https://graph.facebook.com/v20.0/530351070168344',
+      'https://graph.facebook.com/v20.0/100000000000101',
       expect.objectContaining({
         headers: { Authorization: 'Bearer tok-meta' },
         params: { fields: 'status,quality_rating,name_status' },
@@ -959,16 +959,16 @@ describe('fetchNumberHealth', () => {
 describe('listWabaPhoneNumbers', () => {
   test('lista os numeros da WABA com id e telefone', async () => {
     axios.get.mockResolvedValue({
-      data: { data: [{ id: '613336748527998', display_phone_number: '+55 800 445 4546' }] },
+      data: { data: [{ id: '100000000000102', display_phone_number: '+55 800 999 0338' }] },
     });
 
-    const result = await listWabaPhoneNumbers('3530350190603464', 'tok-meta');
+    const result = await listWabaPhoneNumbers('1000000000000104', 'tok-meta');
 
     expect(axios.get).toHaveBeenCalledWith(
-      'https://graph.facebook.com/v20.0/3530350190603464/phone_numbers',
+      'https://graph.facebook.com/v20.0/1000000000000104/phone_numbers',
       expect.objectContaining({ headers: { Authorization: 'Bearer tok-meta' } })
     );
-    expect(result).toEqual([{ id: '613336748527998', display_phone_number: '+55 800 445 4546' }]);
+    expect(result).toEqual([{ id: '100000000000102', display_phone_number: '+55 800 999 0338' }]);
   });
 
   test('devolve lista vazia quando a WABA nao tem numeros', async () => {
@@ -981,13 +981,13 @@ describe('listWabaPhoneNumbers', () => {
 describe('listWabaSubscribedApps', () => {
   test('lista os apps inscritos no webhook da WABA', async () => {
     axios.get.mockResolvedValue({
-      data: { data: [{ whatsapp_business_api_data: { id: '1090048386724471', name: 'DW Telecom' } }] },
+      data: { data: [{ whatsapp_business_api_data: { id: '1000000000000105', name: 'DW Telecom' } }] },
     });
 
-    const result = await listWabaSubscribedApps('3530350190603464', 'tok-meta');
+    const result = await listWabaSubscribedApps('1000000000000104', 'tok-meta');
 
     expect(axios.get).toHaveBeenCalledWith(
-      'https://graph.facebook.com/v20.0/3530350190603464/subscribed_apps',
+      'https://graph.facebook.com/v20.0/1000000000000104/subscribed_apps',
       expect.objectContaining({ headers: { Authorization: 'Bearer tok-meta' } })
     );
     expect(result).toHaveLength(1);

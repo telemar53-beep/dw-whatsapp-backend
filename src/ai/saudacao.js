@@ -28,7 +28,7 @@ function comecaComSaudacao(texto) {
   return COMECA_COM_SAUDACAO.test(String(texto || ''));
 }
 
-// Print 2026-09-17 (18:05): "Boa noite, Roseane! Prontinho, Roseane! Enviei
+// Print 2026-09-17 (18:05), com o nome do cliente trocado por um sintético: "Boa noite, Fulana! Prontinho, Fulana! Enviei
 // acima o PIX." — a instrução da entrega manda o modelo começar pelo nome e a
 // saudação garantida colava o nome de novo por cima. Quando a ABERTURA do
 // texto já chama a pessoa, a saudação entra sem o nome.
@@ -52,8 +52,8 @@ function aberturaJaCitaONome(texto, primeiroNome) {
  * Duas passagens, nesta ordem:
  * 1. "João, vou verificar…" (o vocativo logo no começo) perde o vocativo, que
  *    reaparece na saudação: "Bom dia, João! Vou verificar…" (print 2026-09-16).
- * 2. Com o nome em outro ponto da abertura ("Prontinho, Roseane! …"), o texto
- *    fica intacto e a saudação sai sem o nome: "Boa noite! Prontinho, Roseane!"
+ * 2. Com o nome em outro ponto da abertura ("Prontinho, Fulana! …"), o texto
+ *    fica intacto e a saudação sai sem o nome: "Boa noite! Prontinho, Fulana!"
  */
 function garantirSaudacao(texto, primeiroNome, agora = new Date()) {
   if (!texto || comecaComSaudacao(texto)) return texto;

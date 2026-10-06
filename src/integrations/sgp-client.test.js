@@ -58,7 +58,7 @@ describe('sgp-client', () => {
               endereco_cidade: 'CANDIDO MENDES',
               endereco_uf: 'MA',
               telefones: [{ tipoContato: 'WhatsApp Número', contato: '(20) 99999-0338' }],
-              emails: [{ tipoContato: 'E-Mail', contato: 'exemplo@dominio.com' }],
+              emails: [{ tipoContato: 'E-Mail', contato: 'exemplo@dominio.test' }],
             },
           ],
         },
@@ -96,7 +96,7 @@ describe('sgp-client', () => {
           // da cidade do contato (não vai para o modelo).
           city: 'CANDIDO MENDES',
           phones: ['(20) 99999-0338'],
-          emails: ['exemplo@dominio.com'],
+          emails: ['exemplo@dominio.test'],
         },
       ]);
       expect(JSON.stringify(result)).not.toContain('segredo');

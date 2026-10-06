@@ -58,15 +58,15 @@ describe('greetingForNow com o servidor fora do fuso de Sao Paulo', () => {
 
 describe('firstNameOf', () => {
   test('returns the whole name when it is a single word', () => {
-    expect(firstNameOf('Geovanna')).toBe('Geovanna');
+    expect(firstNameOf('Fulana')).toBe('Fulana');
   });
 
   test('returns only the first word of a multi-word name', () => {
-    expect(firstNameOf('Geovanna Silva Santos')).toBe('Geovanna');
+    expect(firstNameOf('Fulana Silva Santos')).toBe('Fulana');
   });
 
   test('trims and collapses extra whitespace before splitting', () => {
-    expect(firstNameOf('  Geovanna   Silva  ')).toBe('Geovanna');
+    expect(firstNameOf('  Fulana   Silva  ')).toBe('Fulana');
   });
 });
 
@@ -76,11 +76,11 @@ describe('substituteAssignmentPlaceholders', () => {
     jest.spyOn(global, 'Date').mockImplementation(() => fixedMorning);
     const template = '@chat_saudacao_maiusculo, meu nome é @chat_atendente. O protocolo do seu atendimento é @chat_protocolo';
     const result = substituteAssignmentPlaceholders(template, {
-      agentName: 'Geovanna Silva',
+      agentName: 'Fulana Silva',
       protocolNumber: '20260911-0001',
     });
     global.Date.mockRestore();
-    expect(result).toBe('Bom dia, meu nome é Geovanna. O protocolo do seu atendimento é 20260911-0001');
+    expect(result).toBe('Bom dia, meu nome é Fulana. O protocolo do seu atendimento é 20260911-0001');
   });
 
   test('leaves text without placeholders unchanged', () => {

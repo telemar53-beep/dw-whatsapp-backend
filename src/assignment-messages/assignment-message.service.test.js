@@ -39,7 +39,7 @@ describe('sendOpeningMessageIfApplicable', () => {
       channelIds: ['channel-1'],
       openingMessage: 'Olá, meu nome é @chat_atendente, protocolo @chat_protocolo',
     });
-    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Geovanna Silva' });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Fulana Silva' });
     claimProtocolNumber.mockResolvedValue(1042);
     enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1' });
 
@@ -49,7 +49,7 @@ describe('sendOpeningMessageIfApplicable', () => {
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'conv-1',
       channelId: 'channel-1',
-      content: 'Olá, meu nome é Geovanna, protocolo 1042',
+      content: 'Olá, meu nome é Fulana, protocolo 1042',
     });
   });
 
@@ -60,7 +60,7 @@ describe('sendOpeningMessageIfApplicable', () => {
       channelIds: ['channel-1'],
       openingMessage: 'Olá @chat_atendente, protocolo @chat_protocolo',
     });
-    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Geovanna Silva' });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Fulana Silva' });
     claimProtocolNumber.mockResolvedValue(1042);
     enqueueOutboundMessage.mockRejectedValue(new Error('queue down'));
 
@@ -100,7 +100,7 @@ describe('sendClosingMessageIfApplicable', () => {
       channelIds: [],
       closingMessage: 'Encerrando o atendimento @chat_protocolo, @chat_atendente',
     });
-    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Geovanna Silva' });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Fulana Silva' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'msg-2' });
 
     await sendClosingMessageIfApplicable({ ...CONVERSATION, protocolNumber: '20260911-0001' }, 'agent-1');
@@ -108,7 +108,7 @@ describe('sendClosingMessageIfApplicable', () => {
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'conv-1',
       channelId: 'channel-1',
-      content: 'Encerrando o atendimento 20260911-0001, Geovanna',
+      content: 'Encerrando o atendimento 20260911-0001, Fulana',
     });
   });
 });

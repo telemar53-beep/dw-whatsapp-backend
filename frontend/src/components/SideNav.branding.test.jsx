@@ -43,10 +43,10 @@ function renderNav(rota = '/') {
 
 describe('menu sem marca configurada', () => {
   test('usa o monograma com as iniciais da empresa, nao a marca de outro provedor', () => {
-    useCompanyName.mockReturnValue({ name: 'Net Fibra Ltda', status: 'ready' });
+    useCompanyName.mockReturnValue({ name: 'Provedor Exemplo Ltda', status: 'ready' });
     const { container } = renderNav();
 
-    expect(container.querySelector('.worknav-monogram')).toHaveTextContent('NF');
+    expect(container.querySelector('.worknav-monogram')).toHaveTextContent('PE');
     expect(container.querySelector('img.worknav-logo')).toBeNull();
     expect(container.querySelector('img.worknav-full-logo')).toBeNull();
     // Nenhum vestigio da marca de outra instalacao.
@@ -54,11 +54,11 @@ describe('menu sem marca configurada', () => {
   });
 
   test('o nome da empresa aparece no menu expandido e no tooltip', () => {
-    useCompanyName.mockReturnValue({ name: 'Net Fibra Ltda', status: 'ready' });
+    useCompanyName.mockReturnValue({ name: 'Provedor Exemplo Ltda', status: 'ready' });
     const { container } = renderNav('/relatorios');
 
-    expect(screen.getByText('Net Fibra Ltda')).toBeInTheDocument();
-    expect(container.querySelector('.worknav-brand')).toHaveAttribute('title', 'Net Fibra Ltda');
+    expect(screen.getByText('Provedor Exemplo Ltda')).toBeInTheDocument();
+    expect(container.querySelector('.worknav-brand')).toHaveAttribute('title', 'Provedor Exemplo Ltda');
   });
 
   // Se o monograma ja aparecesse com as iniciais de "" a barra pularia quando

@@ -22,9 +22,9 @@ describe('agent repository', () => {
   });
 
   test('createAgent stores a hashed password and returns the agent without it', async () => {
-    const agent = await createAgent({ name: 'Ana', email: 'a@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ name: 'Ana', email: 'a@dw.test', password: 'secret123', role: 'agent' });
     expect(agent.name).toBe('Ana');
-    expect(agent.email).toBe('a@dw.com');
+    expect(agent.email).toBe('a@dw.test');
     expect(agent.role).toBe('agent');
     expect(agent.active).toBe(true);
     expect(agent.passwordHash).toBeUndefined();
@@ -33,22 +33,22 @@ describe('agent repository', () => {
 
   test('createAgent stores canManageIntegrations for a manager', async () => {
     const agent = await createAgent({
-      name: 'Marcia', email: 'marcia@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Marcia', email: 'marcia@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
     expect(agent.role).toBe('manager');
     expect(agent.canManageIntegrations).toBe(true);
   });
 
   test('createAgent defaults canManageIntegrations to false when omitted', async () => {
-    const agent = await createAgent({ name: 'Nilo', email: 'nilo@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ name: 'Nilo', email: 'nilo@dw.test', password: 'secret123', role: 'agent' });
     expect(agent.canManageIntegrations).toBe(false);
   });
 
   test('findAgentByEmail returns the agent with its password hash and active flag', async () => {
-    await createAgent({ name: 'Beto', email: 'b@dw.com', password: 'secret123', role: 'admin' });
-    const agent = await findAgentByEmail('b@dw.com');
+    await createAgent({ name: 'Beto', email: 'b@dw.test', password: 'secret123', role: 'admin' });
+    const agent = await findAgentByEmail('b@dw.test');
     expect(agent.name).toBe('Beto');
-    expect(agent.email).toBe('b@dw.com');
+    expect(agent.email).toBe('b@dw.test');
     expect(agent.active).toBe(true);
     const matches = await bcrypt.compare('secret123', agent.passwordHash);
     expect(matches).toBe(true);
@@ -56,45 +56,45 @@ describe('agent repository', () => {
 
   test('findAgentByEmail includes canManageIntegrations', async () => {
     await createAgent({
-      name: 'Paula', email: 'paula@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Paula', email: 'paula@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
-    const agent = await findAgentByEmail('paula@dw.com');
+    const agent = await findAgentByEmail('paula@dw.test');
     expect(agent.canManageIntegrations).toBe(true);
   });
 
   test('findAgentByEmail returns null when not found', async () => {
-    const agent = await findAgentByEmail('missing@dw.com');
+    const agent = await findAgentByEmail('missing@dw.test');
     expect(agent).toBeNull();
   });
 
   test('findAgentById returns the agent without its password hash', async () => {
-    const created = await createAgent({ name: 'Carla', email: 'c@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Carla', email: 'c@dw.test', password: 'secret123', role: 'agent' });
     const agent = await findAgentById(created.id);
     expect(agent.name).toBe('Carla');
-    expect(agent.email).toBe('c@dw.com');
+    expect(agent.email).toBe('c@dw.test');
     expect(agent.passwordHash).toBeUndefined();
   });
 
   test('findAgentById includes canManageIntegrations', async () => {
     const created = await createAgent({
-      name: 'Otavio', email: 'otavio@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Otavio', email: 'otavio@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
     const agent = await findAgentById(created.id);
     expect(agent.canManageIntegrations).toBe(true);
   });
 
   test('listAgents returns every agent ordered by email', async () => {
-    await createAgent({ name: 'Zeta', email: 'zeta@dw.com', password: 'secret123', role: 'agent' });
-    await createAgent({ name: 'Alpha', email: 'alpha@dw.com', password: 'secret123', role: 'admin' });
+    await createAgent({ name: 'Zeta', email: 'zeta@dw.test', password: 'secret123', role: 'agent' });
+    await createAgent({ name: 'Alpha', email: 'alpha@dw.test', password: 'secret123', role: 'admin' });
 
     const agents = await listAgents();
 
-    expect(agents.map((a) => a.email)).toEqual(['alpha@dw.com', 'zeta@dw.com']);
+    expect(agents.map((a) => a.email)).toEqual(['alpha@dw.test', 'zeta@dw.test']);
     expect(agents[0].passwordHash).toBeUndefined();
   });
 
   test('listAgents includes each agent\'s assigned sectors', async () => {
-    const agent = await createAgent({ name: 'Fernanda', email: 'fernanda@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ name: 'Fernanda', email: 'fernanda@dw.test', password: 'secret123', role: 'agent' });
     const sector = await createSector({ name: 'Financeiro' });
     await setAgentSectors(agent.id, [sector.id]);
 
@@ -105,7 +105,7 @@ describe('agent repository', () => {
   });
 
   test('listAgents returns an empty sectors array for an agent with none', async () => {
-    await createAgent({ name: 'Gustavo', email: 'gustavo@dw.com', password: 'secret123', role: 'agent' });
+    await createAgent({ name: 'Gustavo', email: 'gustavo@dw.test', password: 'secret123', role: 'agent' });
 
     const agents = await listAgents();
 
@@ -113,7 +113,7 @@ describe('agent repository', () => {
   });
 
   test('setAgentActive deactivates and reactivates an agent', async () => {
-    const created = await createAgent({ name: 'Duda', email: 'd@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Duda', email: 'd@dw.test', password: 'secret123', role: 'agent' });
 
     const deactivated = await setAgentActive(created.id, false);
     expect(deactivated.active).toBe(false);
@@ -124,7 +124,7 @@ describe('agent repository', () => {
 
   test('setAgentActive preserves canManageIntegrations', async () => {
     const created = await createAgent({
-      name: 'Quenia', email: 'quenia@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Quenia', email: 'quenia@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
     const updated = await setAgentActive(created.id, false);
     expect(updated.canManageIntegrations).toBe(true);
@@ -136,12 +136,12 @@ describe('agent repository', () => {
   });
 
   test('updateAgentPassword changes the stored password hash', async () => {
-    const created = await createAgent({ name: 'Elias', email: 'e@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Elias', email: 'e@dw.test', password: 'secret123', role: 'agent' });
     const newHash = await bcrypt.hash('newpassword456', 10);
 
     await updateAgentPassword(created.id, newHash);
 
-    const agent = await findAgentByEmail('e@dw.com');
+    const agent = await findAgentByEmail('e@dw.test');
     const matchesNew = await bcrypt.compare('newpassword456', agent.passwordHash);
     const matchesOld = await bcrypt.compare('secret123', agent.passwordHash);
     expect(matchesNew).toBe(true);
@@ -149,14 +149,14 @@ describe('agent repository', () => {
   });
 
   test('findAgentById includes phone and avatarPath (both null by default)', async () => {
-    const created = await createAgent({ name: 'Helena', email: 'h@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Helena', email: 'h@dw.test', password: 'secret123', role: 'agent' });
     const agent = await findAgentById(created.id);
     expect(agent.phone).toBeNull();
     expect(agent.avatarPath).toBeNull();
   });
 
   test('updateAgentProfile updates name and phone', async () => {
-    const created = await createAgent({ name: 'Igor', email: 'i@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Igor', email: 'i@dw.test', password: 'secret123', role: 'agent' });
 
     const updated = await updateAgentProfile(created.id, { name: 'Igor Silva', phone: '11999998888' });
 
@@ -165,7 +165,7 @@ describe('agent repository', () => {
   });
 
   test('updateAgentProfile clears phone when given null', async () => {
-    const created = await createAgent({ name: 'Julia', email: 'j@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Julia', email: 'j@dw.test', password: 'secret123', role: 'agent' });
     await updateAgentProfile(created.id, { name: 'Julia', phone: '11999998888' });
 
     const updated = await updateAgentProfile(created.id, { name: 'Julia', phone: null });
@@ -179,7 +179,7 @@ describe('agent repository', () => {
   });
 
   test('setAgentAvatarPath sets and then clears the avatar path', async () => {
-    const created = await createAgent({ name: 'Karen', email: 'k@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Karen', email: 'k@dw.test', password: 'secret123', role: 'agent' });
 
     await setAgentAvatarPath(created.id, 'avatars/karen.jpg');
     expect((await findAgentById(created.id)).avatarPath).toBe('avatars/karen.jpg');

@@ -11,7 +11,7 @@ vi.mock('../services/api');
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', updateAgent: vi.fn() });
-  api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null, role: 'agent' });
+  api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: '11999998888', avatarPath: null, role: 'agent' });
 });
 
 describe('ProfileModal', () => {
@@ -19,11 +19,11 @@ describe('ProfileModal', () => {
     render(<ProfileModal onClose={vi.fn()} />);
     expect(await screen.findByDisplayValue('Ana')).toBeInTheDocument();
     expect(screen.getByDisplayValue('11999998888')).toBeInTheDocument();
-    expect(screen.getByText('ana@dw.com')).toBeInTheDocument();
+    expect(screen.getByText('ana@dw.test')).toBeInTheDocument();
   });
 
   test('saves name and phone', async () => {
-    api.updateMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.com', phone: '11988887777', avatarPath: null, role: 'agent' });
+    api.updateMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.test', phone: '11988887777', avatarPath: null, role: 'agent' });
     const onProfileUpdated = vi.fn();
     render(<ProfileModal onClose={vi.fn()} onProfileUpdated={onProfileUpdated} />);
     await screen.findByDisplayValue('Ana');
@@ -52,7 +52,7 @@ describe('ProfileModal', () => {
   });
 
   test('removes the avatar when Remover foto is clicked', async () => {
-    api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: null, avatarPath: 'avatars/a1.jpg', role: 'agent' });
+    api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: null, avatarPath: 'avatars/a1.jpg', role: 'agent' });
     api.deleteMyAvatar.mockResolvedValue({ ok: true });
     render(<ProfileModal onClose={vi.fn()} />);
     await screen.findByDisplayValue('Ana');
@@ -135,7 +135,7 @@ describe('Meu perfil: estados e comportamento', () => {
     await screen.findByDisplayValue('Ana');
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
     expect(screen.getByRole('button', { name: 'Salvando…' })).toBeDisabled();
-    terminar({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null, role: 'agent' });
+    terminar({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: '11999998888', avatarPath: null, role: 'agent' });
     expect(await screen.findByText('Perfil atualizado.')).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/telefone/i), '1');
     expect(screen.queryByText('Perfil atualizado.')).not.toBeInTheDocument();
@@ -240,7 +240,7 @@ describe('Meu perfil claro', () => {
   });
 
   test('salvo com sucesso: a confirmação aparece no rodapé, junto do botão', async () => {
-    api.updateMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null });
+    api.updateMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: '11999998888', avatarPath: null });
     render(<ProfileModal onClose={vi.fn()} />);
     await screen.findByDisplayValue('Ana');
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));

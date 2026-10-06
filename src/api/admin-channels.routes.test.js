@@ -1250,7 +1250,7 @@ describe('GET /api/admin/channels — estado da conexao do canal oficial', () =>
 
   test('inclui o estado da conexao de um canal meta_cloud', async () => {
     listChannels.mockResolvedValue([
-      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5520999984546', config: { phoneNumberId: '530351070168344', wabaId: '510099572194362' }, status: 'connected' },
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5520999984546', config: { phoneNumberId: '100000000000101', wabaId: '100000000000103' }, status: 'connected' },
     ]);
     getChannelConnection.mockResolvedValue({ state: 'connected', quality: 'GREEN' });
 
@@ -1264,7 +1264,7 @@ describe('GET /api/admin/channels — estado da conexao do canal oficial', () =>
 
   test('repassa o motivo quando o token do canal caiu', async () => {
     listChannels.mockResolvedValue([
-      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5520999984546', config: { phoneNumberId: '530351070168344', wabaId: 'w1' }, status: 'connected' },
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5520999984546', config: { phoneNumberId: '100000000000101', wabaId: 'w1' }, status: 'connected' },
     ]);
     getChannelConnection.mockResolvedValue({ state: 'error', motivo: '(190) Session has expired' });
 
@@ -1330,10 +1330,10 @@ describe('POST /api/admin/channels — conferencia do cadastro com a Meta', () =
   const cadastro = {
     type: 'meta_cloud',
     name: 'DW Telecom 0800',
-    phoneNumber: '+558004454546',
-    phoneNumberId: '613336748527998',
+    phoneNumber: '+558009990338',
+    phoneNumberId: '100000000000102',
     accessToken: 'tok-meta',
-    wabaId: '3530350190603464',
+    wabaId: '1000000000000104',
   };
 
   test('confere os dados com a Meta antes de gravar', async () => {
@@ -1345,10 +1345,10 @@ describe('POST /api/admin/channels — conferencia do cadastro com a Meta', () =
       .send(cadastro);
 
     expect(checkMetaCloudSetup).toHaveBeenCalledWith({
-      phoneNumberId: '613336748527998',
+      phoneNumberId: '100000000000102',
       accessToken: 'tok-meta',
-      wabaId: '3530350190603464',
-      phoneNumber: '+558004454546',
+      wabaId: '1000000000000104',
+      phoneNumber: '+558009990338',
     });
   });
 
@@ -1406,7 +1406,7 @@ describe('POST /api/admin/channels — conferencia do cadastro com a Meta', () =
 // canal no lugar. Recriar nao e opcao: o telefone e unico na tabela e excluir
 // um canal com conversas e bloqueado — de proposito, para nao perder historico.
 describe('POST /api/admin/channels/:id/meta-cloud-credentials', () => {
-  const CREDENCIAIS = { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' };
+  const CREDENCIAIS = { phoneNumberId: '100000000000102', accessToken: 'tok-meta', wabaId: '1000000000000104' };
   const CANAL_360 = {
     id: 'channel-360',
     type: '360dialog',
@@ -1517,7 +1517,7 @@ describe('POST /api/admin/channels/:id/meta-cloud-credentials', () => {
   test('400 quando falta credencial no corpo', async () => {
     findChannelById.mockResolvedValue(CANAL_360);
 
-    const res = await migrar({ phoneNumberId: '613336748527998' });
+    const res = await migrar({ phoneNumberId: '100000000000102' });
 
     expect(res.status).toBe(400);
     expect(checkMetaCloudSetup).not.toHaveBeenCalled();

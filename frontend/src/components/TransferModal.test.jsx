@@ -23,8 +23,8 @@ beforeEach(() => {
   usePresence.mockReturnValue(new Set());
   useAgents.mockReturnValue({
     agents: [
-      { id: 'agent-1', email: 'me@dw.com', role: 'agent' },
-      { id: 'agent-2', email: 'other@dw.com', role: 'agent' },
+      { id: 'agent-1', email: 'me@dw.test', role: 'agent' },
+      { id: 'agent-2', email: 'other@dw.test', role: 'agent' },
     ],
     status: 'ready',
     refresh: vi.fn(),
@@ -50,8 +50,8 @@ describe('TransferModal', () => {
 
   test('lista todos os atendentes menos eu, com o título e a explicação do diálogo', () => {
     render(<TransferModal conversationId="c1" onClose={vi.fn()} />);
-    expect(screen.queryByText('me@dw.com')).not.toBeInTheDocument();
-    expect(screen.getByText('other@dw.com')).toBeInTheDocument();
+    expect(screen.queryByText('me@dw.test')).not.toBeInTheDocument();
+    expect(screen.getByText('other@dw.test')).toBeInTheDocument();
     const dialogo = screen.getByRole('dialog', { name: 'Transferir atendimento' });
     expect(dialogo).toHaveAccessibleDescription('Escolha o atendente que continuará esta conversa.');
   });
@@ -62,7 +62,7 @@ describe('TransferModal', () => {
     render(<TransferModal conversationId="c1" onClose={onClose} />);
 
     // Dois passos: escolher a linha e confirmar no rodapé.
-    await userEvent.click(screen.getByRole('radio', { name: /other@dw.com/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /other@dw.test/ }));
     await userEvent.click(screen.getByRole('button', { name: /^Transferir para/ }));
 
     await waitFor(() => expect(api.transferConversation).toHaveBeenCalledWith('c1', 'agent-2', 'tok-123'));
@@ -78,7 +78,7 @@ describe('TransferModal', () => {
     let concluir;
     api.transferConversation.mockImplementation(() => new Promise((r) => { concluir = r; }));
     render(<TransferModal conversationId="c1" onClose={vi.fn()} />);
-    await userEvent.click(screen.getByRole('radio', { name: /other@dw.com/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /other@dw.test/ }));
     const botao = screen.getByRole('button', { name: /^Transferir para/ });
     await userEvent.dblClick(botao);
     await userEvent.click(botao);
@@ -92,12 +92,12 @@ describe('TransferModal', () => {
     const onClose = vi.fn();
     render(<TransferModal conversationId="c1" onClose={onClose} />);
 
-    await userEvent.click(screen.getByRole('radio', { name: /other@dw.com/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /other@dw.test/ }));
     await userEvent.click(screen.getByRole('button', { name: /^Transferir para/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Agent is not online');
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole('radio', { name: /other@dw.com/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /other@dw.test/ })).toHaveAttribute('aria-checked', 'true');
 
     await userEvent.click(screen.getByRole('button', { name: /^Transferir para/ }));
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
@@ -145,10 +145,10 @@ describe('TransferModal', () => {
   test('mostra nome, presença, contagem e descrição da carga de cada atendente', () => {
     useAgents.mockReturnValue({
       agents: [
-        { id: 'agent-1', name: 'Eu', email: 'me@dw.com' },
-        { id: 'agent-2', name: 'Atendente Ana', email: 'a@dw.com', activeConversations: 0 },
-        { id: 'agent-3', name: 'Atendente Pedro', email: 'p@dw.com', activeConversations: 15 },
-        { id: 'agent-4', name: 'Atendente Beto', email: 'b@dw.com', activeConversations: 0 },
+        { id: 'agent-1', name: 'Eu', email: 'me@dw.test' },
+        { id: 'agent-2', name: 'Atendente Ana', email: 'a@dw.test', activeConversations: 0 },
+        { id: 'agent-3', name: 'Atendente Pedro', email: 'p@dw.test', activeConversations: 15 },
+        { id: 'agent-4', name: 'Atendente Beto', email: 'b@dw.test', activeConversations: 0 },
       ],
       status: 'ready',
       refresh: vi.fn(),
@@ -186,10 +186,10 @@ describe('TransferModal', () => {
   test('ordena por menor carga (online primeiro) e, se pedido, por nome', async () => {
     useAgents.mockReturnValue({
       agents: [
-        { id: 'agent-1', name: 'Eu', email: 'me@dw.com' },
-        { id: 'agent-2', name: 'Zilda', email: 'z@dw.com', activeConversations: 1 },
-        { id: 'agent-3', name: 'Ana', email: 'a@dw.com', activeConversations: 7 },
-        { id: 'agent-4', name: 'Beto', email: 'b@dw.com', activeConversations: 0 },
+        { id: 'agent-1', name: 'Eu', email: 'me@dw.test' },
+        { id: 'agent-2', name: 'Zilda', email: 'z@dw.test', activeConversations: 1 },
+        { id: 'agent-3', name: 'Ana', email: 'a@dw.test', activeConversations: 7 },
+        { id: 'agent-4', name: 'Beto', email: 'b@dw.test', activeConversations: 0 },
       ],
       status: 'ready',
       refresh: vi.fn(),
@@ -205,9 +205,9 @@ describe('TransferModal', () => {
   test('a busca filtra por nome, sem acento', async () => {
     useAgents.mockReturnValue({
       agents: [
-        { id: 'agent-1', name: 'Eu', email: 'me@dw.com' },
-        { id: 'agent-2', name: 'José', email: 'j@dw.com' },
-        { id: 'agent-3', name: 'Ana', email: 'a@dw.com' },
+        { id: 'agent-1', name: 'Eu', email: 'me@dw.test' },
+        { id: 'agent-2', name: 'José', email: 'j@dw.test' },
+        { id: 'agent-3', name: 'Ana', email: 'a@dw.test' },
       ],
       status: 'ready',
       refresh: vi.fn(),
@@ -230,9 +230,9 @@ describe('TransferModal', () => {
     api.transferConversation.mockResolvedValue({});
     useAgents.mockReturnValue({
       agents: [
-        { id: 'agent-1', name: 'Eu', email: 'me@dw.com' },
-        { id: 'agent-2', name: 'José', email: 'j@dw.com' },
-        { id: 'agent-3', name: 'Ana', email: 'a@dw.com' },
+        { id: 'agent-1', name: 'Eu', email: 'me@dw.test' },
+        { id: 'agent-2', name: 'José', email: 'j@dw.test' },
+        { id: 'agent-3', name: 'Ana', email: 'a@dw.test' },
       ],
       status: 'ready',
       refresh: vi.fn(),
@@ -345,7 +345,7 @@ describe('TransferModal: desktop e celular', () => {
     telaDeCelular();
     api.transferConversation.mockResolvedValue({});
     render(<TransferModal conversationId="c1" onClose={vi.fn()} />);
-    await userEvent.click(screen.getByRole('radio', { name: /other@dw.com/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /other@dw.test/ }));
     const botao = screen.getByRole('button', { name: 'Transferir' });
     expect(botao).toBeEnabled();
     await userEvent.click(botao);

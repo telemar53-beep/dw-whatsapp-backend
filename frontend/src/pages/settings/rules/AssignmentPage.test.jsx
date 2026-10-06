@@ -21,8 +21,8 @@ beforeEach(() => {
   useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
   useAgentsAdmin.mockReturnValue({
     agents: [
-      { id: 'agent-1', name: 'Geovanna Silva', email: 'geovanna@dw.com' },
-      { id: 'agent-2', name: 'Carlos Souza', email: 'carlos@dw.com' },
+      { id: 'agent-1', name: 'Fulana Silva', email: 'fulana@dw.test' },
+      { id: 'agent-2', name: 'Carlos Souza', email: 'carlos@dw.test' },
     ],
     loading: false,
     refresh: vi.fn(),
@@ -71,7 +71,7 @@ describe('AssignmentPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Configurar mensagens' }));
     await userEvent.type(screen.getByLabelText(/mensagem de abertura/i), 'Olá @chat_atendente');
     await userEvent.type(screen.getByLabelText(/mensagem de encerramento/i), 'Tchau @chat_protocolo');
-    await userEvent.click(screen.getByLabelText('Geovanna Silva'));
+    await userEvent.click(screen.getByLabelText('Fulana Silva'));
     await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
 
     await waitFor(() =>
@@ -103,7 +103,7 @@ describe('AssignmentPage', () => {
     renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
 
     await userEvent.click(screen.getByRole('button', { name: 'Configurar mensagens' }));
-    const agentCheckbox = screen.getByLabelText('Geovanna Silva');
+    const agentCheckbox = screen.getByLabelText('Fulana Silva');
     await userEvent.click(agentCheckbox);
     expect(agentCheckbox).toBeChecked();
     await userEvent.click(agentCheckbox);
@@ -162,7 +162,7 @@ describe('AssignmentPage', () => {
 
     expect(screen.getByLabelText(/mensagem de abertura/i)).toHaveValue('Texto de abertura');
     expect(screen.getByLabelText(/mensagem de encerramento/i)).toHaveValue('Texto de encerramento');
-    expect(screen.getByLabelText('Geovanna Silva')).toBeChecked();
+    expect(screen.getByLabelText('Fulana Silva')).toBeChecked();
   });
 
   test('em carregamento não mostra "Nenhuma configuração criada ainda"', () => {

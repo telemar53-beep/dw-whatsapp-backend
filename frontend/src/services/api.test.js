@@ -121,13 +121,13 @@ describe('login', () => {
       text: () => Promise.resolve(JSON.stringify({ token: 'tok', agent: { id: 'a1', role: 'agent' } })),
     });
 
-    const result = await login('a@dw.com', 'secret123');
+    const result = await login('a@dw.test', 'secret123');
 
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/auth/login',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ email: 'a@dw.com', password: 'secret123' }),
+        body: JSON.stringify({ email: 'a@dw.test', password: 'secret123' }),
       })
     );
     expect(result).toEqual({ token: 'tok', agent: { id: 'a1', role: 'agent' } });
@@ -246,7 +246,7 @@ describe('apiFetch 401 handling', () => {
     setUnauthorizedHandler(handler);
     global.fetch.mockResolvedValue(resposta401('{"error":"Invalid credentials"}'));
 
-    await expect(login('a@dw.com', 'errada')).rejects.toMatchObject({
+    await expect(login('a@dw.test', 'errada')).rejects.toMatchObject({
       status: 401,
       body: { error: 'Invalid credentials' },
     });
@@ -292,12 +292,12 @@ describe('listAgentsAdmin', () => {
 describe('createAgent', () => {
   test('posts the new agent payload', async () => {
     global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
-    await createAgent({ name: 'Ana', email: 'ana@dw.com', password: 'temp123', role: 'agent' }, 'tok-123');
+    await createAgent({ name: 'Ana', email: 'ana@dw.test', password: 'temp123', role: 'agent' }, 'tok-123');
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/admin/agents',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ name: 'Ana', email: 'ana@dw.com', password: 'temp123', role: 'agent' }),
+        body: JSON.stringify({ name: 'Ana', email: 'ana@dw.test', password: 'temp123', role: 'agent' }),
       })
     );
   });

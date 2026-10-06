@@ -3,10 +3,10 @@ const { listWabaPhoneNumbers, listWabaSubscribedApps } = require('../whatsapp-ad
 const { checkMetaCloudSetup } = require('./meta-cloud-setup');
 
 const DADOS = {
-  phoneNumberId: '613336748527998',
+  phoneNumberId: '100000000000102',
   accessToken: 'tok-meta',
-  wabaId: '3530350190603464',
-  phoneNumber: '+558004454546',
+  wabaId: '1000000000000104',
+  phoneNumber: '+558009990338',
 };
 
 function wabaCom(numeros) {
@@ -15,7 +15,7 @@ function wabaCom(numeros) {
 
 function appsInscritos(quantos) {
   listWabaSubscribedApps.mockResolvedValue(
-    Array.from({ length: quantos }, () => ({ whatsapp_business_api_data: { id: '1090048386724471' } }))
+    Array.from({ length: quantos }, () => ({ whatsapp_business_api_data: { id: '1000000000000105' } }))
   );
 }
 
@@ -25,21 +25,21 @@ beforeEach(() => {
 
 describe('checkMetaCloudSetup', () => {
   test('aprova quando o numero pertence a WABA, o telefone bate e ha app inscrito', async () => {
-    wabaCom([{ id: '613336748527998', display_phone_number: '+55 800 445 4546' }]);
+    wabaCom([{ id: '100000000000102', display_phone_number: '+55 800 999 0338' }]);
     appsInscritos(1);
 
     expect(await checkMetaCloudSetup(DADOS)).toEqual({ ok: true });
   });
 
   test('ignora espacos e tracos ao comparar o telefone', async () => {
-    wabaCom([{ id: '613336748527998', display_phone_number: '+55 800 445-4546' }]);
+    wabaCom([{ id: '100000000000102', display_phone_number: '+55 800 999-0338' }]);
     appsInscritos(1);
 
     expect((await checkMetaCloudSetup(DADOS)).ok).toBe(true);
   });
 
   test('recusa quando nenhum app esta inscrito no webhook da WABA', async () => {
-    wabaCom([{ id: '613336748527998', display_phone_number: '+55 800 445 4546' }]);
+    wabaCom([{ id: '100000000000102', display_phone_number: '+55 800 999 0338' }]);
     appsInscritos(0);
 
     const resultado = await checkMetaCloudSetup(DADOS);
@@ -59,7 +59,7 @@ describe('checkMetaCloudSetup', () => {
   });
 
   test('recusa quando o telefone digitado e de outro numero, e diz qual e o certo', async () => {
-    wabaCom([{ id: '613336748527998', display_phone_number: '+55 20 9998-4546' }]);
+    wabaCom([{ id: '100000000000102', display_phone_number: '+55 20 9998-4546' }]);
 
     const resultado = await checkMetaCloudSetup(DADOS);
 
@@ -88,7 +88,7 @@ describe('checkMetaCloudSetup', () => {
   });
 
   test('repassa o motivo da Meta quando a consulta de apps inscritos falha', async () => {
-    wabaCom([{ id: '613336748527998', display_phone_number: '+55 800 445 4546' }]);
+    wabaCom([{ id: '100000000000102', display_phone_number: '+55 800 999 0338' }]);
     listWabaSubscribedApps.mockRejectedValue({
       response: { data: { error: { code: 200, message: 'Permissions error' } } },
     });

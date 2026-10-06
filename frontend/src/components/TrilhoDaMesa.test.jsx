@@ -234,7 +234,7 @@ describe('ícone do botão "Abrir menu"', () => {
 // A cópia das iniciais existe para o trilho não importar o SideNav (ver o
 // comentário em TrilhoDaMesa.jsx). As duas têm de dar o mesmo resultado.
 describe('iniciais da marca sem arte', () => {
-  test.each(['DW Telecom', 'Net Fibra Brasil', 'provedor', '  ', '', null, 'AB Net', 'Ab Net', 'É Rede'])('"%s" dá o mesmo que no menu', (nome) => {
+  test.each(['DW Telecom', 'Provedor Exemplo Brasil', 'provedor', '  ', '', null, 'AB Net', 'Ab Net', 'É Rede'])('"%s" dá o mesmo que no menu', (nome) => {
     expect(iniciais(nome)).toBe(iniciaisDaEmpresa(nome));
   });
 });

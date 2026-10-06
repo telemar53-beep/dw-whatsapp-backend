@@ -34,7 +34,7 @@ describe('assignment message repository', () => {
   });
 
   test('upsertAssignmentMessageConfig creates the row and the agent/channel selections on first save', async () => {
-    const agent = await createAgent({ name: 'Geovanna Silva', email: 'geovanna@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ name: 'Fulana Silva', email: 'fulana@dw.test', password: 'secret123', role: 'agent' });
     const channel = await createChannel({
       type: 'meta_cloud',
       name: 'Canal Teste',
@@ -84,8 +84,8 @@ describe('assignment message repository', () => {
   });
 
   test('upsertAssignmentMessageConfig replaces the agent/channel selection, not appends to it', async () => {
-    const agent1 = await createAgent({ email: 'a1@dw.com', password: 'secret123', role: 'agent' });
-    const agent2 = await createAgent({ email: 'a2@dw.com', password: 'secret123', role: 'agent' });
+    const agent1 = await createAgent({ email: 'a1@dw.test', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'a2@dw.test', password: 'secret123', role: 'agent' });
 
     await upsertAssignmentMessageConfig({
       enabled: true,

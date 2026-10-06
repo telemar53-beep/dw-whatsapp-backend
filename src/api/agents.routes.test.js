@@ -36,7 +36,7 @@ beforeEach(() => {
 
 describe('GET /api/agents', () => {
   test('includes avatarPath for each agent', async () => {
-    listAgents.mockResolvedValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: 'avatars/a1.jpg' }]);
+    listAgents.mockResolvedValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', avatarPath: 'avatars/a1.jpg' }]);
     isAgentOnline.mockReturnValue(false);
 
     const res = await request(buildApp())
@@ -49,8 +49,8 @@ describe('GET /api/agents', () => {
 
   test('returns id, name, email, role, online status, last activity and open-conversation count for every agent', async () => {
     listAgents.mockResolvedValue([
-      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null, lastSeenAt: '2026-09-16T11:37:00.000Z' },
-      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null, lastSeenAt: null },
+      { id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', avatarPath: null, lastSeenAt: '2026-09-16T11:37:00.000Z' },
+      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.test', role: 'admin', avatarPath: null, lastSeenAt: null },
     ]);
     isAgentOnline.mockImplementation((id) => id === 'agent-1');
     countAssignedConversationsByAgent.mockResolvedValue({ 'agent-1': 2 });
@@ -61,8 +61,8 @@ describe('GET /api/agents', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null, online: true, lastSeenAt: '2026-09-16T11:37:00.000Z', activeConversations: 2 },
-      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null, online: false, lastSeenAt: null, activeConversations: 0 },
+      { id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', avatarPath: null, online: true, lastSeenAt: '2026-09-16T11:37:00.000Z', activeConversations: 2 },
+      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.test', role: 'admin', avatarPath: null, online: false, lastSeenAt: null, activeConversations: 0 },
     ]);
   });
 
@@ -75,7 +75,7 @@ describe('GET /api/agents', () => {
 
 describe('GET /api/agents/me', () => {
   test('returns the authenticated agent\'s own profile', async () => {
-    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', phone: '11999998888', avatarPath: null });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', phone: '11999998888', avatarPath: null });
 
     const res = await request(buildApp())
       .get('/api/agents/me')
@@ -83,7 +83,7 @@ describe('GET /api/agents/me', () => {
 
     expect(res.status).toBe(200);
     expect(findAgentById).toHaveBeenCalledWith('agent-1');
-    expect(res.body).toEqual({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null, role: 'agent' });
+    expect(res.body).toEqual({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: '11999998888', avatarPath: null, role: 'agent' });
   });
 
   test('returns 401 without a token', async () => {
@@ -94,7 +94,7 @@ describe('GET /api/agents/me', () => {
 
 describe('PATCH /api/agents/me', () => {
   test('updates name and phone', async () => {
-    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.com', role: 'agent', phone: '11988887777', avatarPath: null });
+    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.test', role: 'agent', phone: '11988887777', avatarPath: null });
 
     const res = await request(buildApp())
       .patch('/api/agents/me')
@@ -107,7 +107,7 @@ describe('PATCH /api/agents/me', () => {
   });
 
   test('treats a missing phone as null', async () => {
-    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', phone: null, avatarPath: null });
+    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', phone: null, avatarPath: null });
 
     await request(buildApp())
       .patch('/api/agents/me')

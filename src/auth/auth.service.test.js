@@ -12,9 +12,9 @@ describe('auth service', () => {
 
   test('login returns a token when credentials are valid', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', passwordHash });
 
-    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+    const result = await login({ email: 'a@dw.test', password: 'secret123' });
 
     expect(result.token).toBeDefined();
     const decoded = jwt.verify(result.token, 'test-secret');
@@ -25,10 +25,10 @@ describe('auth service', () => {
   test('login embeds canManageIntegrations in the token and the returned agent', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
     findAgentByEmail.mockResolvedValue({
-      id: 'agent-1', email: 'a@dw.com', role: 'manager', canManageIntegrations: true, passwordHash,
+      id: 'agent-1', email: 'a@dw.test', role: 'manager', canManageIntegrations: true, passwordHash,
     });
 
-    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+    const result = await login({ email: 'a@dw.test', password: 'secret123' });
 
     const decoded = jwt.verify(result.token, 'test-secret');
     expect(decoded.canManageIntegrations).toBe(true);
@@ -37,9 +37,9 @@ describe('auth service', () => {
 
   test('login defaults canManageIntegrations to false when the repository omits it', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', passwordHash });
 
-    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+    const result = await login({ email: 'a@dw.test', password: 'secret123' });
 
     const decoded = jwt.verify(result.token, 'test-secret');
     expect(decoded.canManageIntegrations).toBe(false);
@@ -48,15 +48,15 @@ describe('auth service', () => {
 
   test('login throws when agent does not exist', async () => {
     findAgentByEmail.mockResolvedValue(null);
-    await expect(login({ email: 'missing@dw.com', password: 'x' })).rejects.toThrow('Invalid credentials');
-    await expect(login({ email: 'missing@dw.com', password: 'x' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    await expect(login({ email: 'missing@dw.test', password: 'x' })).rejects.toThrow('Invalid credentials');
+    await expect(login({ email: 'missing@dw.test', password: 'x' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
   });
 
   test('login throws when password is wrong', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
-    await expect(login({ email: 'a@dw.com', password: 'wrong' })).rejects.toThrow('Invalid credentials');
-    await expect(login({ email: 'a@dw.com', password: 'wrong' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', passwordHash });
+    await expect(login({ email: 'a@dw.test', password: 'wrong' })).rejects.toThrow('Invalid credentials');
+    await expect(login({ email: 'a@dw.test', password: 'wrong' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
   });
 
   test('verifyToken returns the decoded payload for a valid token', () => {
@@ -72,18 +72,18 @@ describe('auth service', () => {
 
   test('login throws ACCOUNT_DISABLED when the agent is deactivated', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', active: false, passwordHash });
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', active: false, passwordHash });
 
-    await expect(login({ email: 'a@dw.com', password: 'secret123' })).rejects.toMatchObject({
+    await expect(login({ email: 'a@dw.test', password: 'secret123' })).rejects.toMatchObject({
       code: 'ACCOUNT_DISABLED',
     });
   });
 
   test('login succeeds when active is not explicitly false (legacy rows)', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', passwordHash });
 
-    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+    const result = await login({ email: 'a@dw.test', password: 'secret123' });
 
     expect(result.token).toBeDefined();
   });
@@ -91,7 +91,7 @@ describe('auth service', () => {
   describe('changePassword', () => {
     test('updates the password when the current password matches', async () => {
       const currentHash = await bcrypt.hash('oldpassword123', 10);
-      findAgentByIdWithPasswordHash.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', passwordHash: currentHash });
+      findAgentByIdWithPasswordHash.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', passwordHash: currentHash });
 
       await changePassword({ agentId: 'agent-1', currentPassword: 'oldpassword123', newPassword: 'newpassword456' });
 
@@ -102,7 +102,7 @@ describe('auth service', () => {
 
     test('throws INVALID_CURRENT_PASSWORD when the current password is wrong', async () => {
       const currentHash = await bcrypt.hash('oldpassword123', 10);
-      findAgentByIdWithPasswordHash.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', passwordHash: currentHash });
+      findAgentByIdWithPasswordHash.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', passwordHash: currentHash });
 
       await expect(
         changePassword({ agentId: 'agent-1', currentPassword: 'wrongpassword', newPassword: 'newpassword456' })

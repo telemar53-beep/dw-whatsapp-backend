@@ -452,7 +452,7 @@ describe('POST /webhooks/meta — avisos no log de descarte silencioso', () => {
           changes: [
             {
               value: {
-                metadata: { phone_number_id: '530351070168344' },
+                metadata: { phone_number_id: '100000000000101' },
                 messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
               },
             },
@@ -468,7 +468,7 @@ describe('POST /webhooks/meta — avisos no log de descarte silencioso', () => {
       .set('Content-Type', 'application/json')
       .send(bodyString);
 
-    expect(warnings()).toMatch(/530351070168344/);
+    expect(warnings()).toMatch(/100000000000101/);
     expect(ingestInboundMessage).not.toHaveBeenCalled();
   });
 
@@ -480,7 +480,7 @@ describe('POST /webhooks/meta — avisos no log de descarte silencioso', () => {
           changes: [
             {
               value: {
-                metadata: { phone_number_id: '530351070168344' },
+                metadata: { phone_number_id: '100000000000101' },
                 messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
               },
             },
@@ -509,7 +509,7 @@ describe('POST /webhooks/meta — avisos no log de descarte silencioso', () => {
           changes: [
             {
               value: {
-                metadata: { phone_number_id: '530351070168344' },
+                metadata: { phone_number_id: '100000000000101' },
                 messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
               },
             },

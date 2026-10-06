@@ -28,8 +28,8 @@ describe('POST /api/auth/login', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('returns 200 and a token on valid credentials', async () => {
-    login.mockResolvedValue({ token: 'jwt-token', agent: { id: '1', email: 'a@dw.com', role: 'agent' } });
-    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'secret123' });
+    login.mockResolvedValue({ token: 'jwt-token', agent: { id: '1', email: 'a@dw.test', role: 'agent' } });
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.test', password: 'secret123' });
     expect(res.status).toBe(200);
     expect(res.body.token).toBe('jwt-token');
   });
@@ -48,13 +48,13 @@ describe('POST /api/auth/login', () => {
     const err = new Error('Invalid credentials');
     err.code = 'INVALID_CREDENTIALS';
     login.mockRejectedValue(err);
-    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'wrong' });
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.test', password: 'wrong' });
     expect(res.status).toBe(401);
   });
 
   test('propagates a non-credentials error instead of returning 401', async () => {
     login.mockRejectedValue(new Error('connection refused'));
-    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'x' });
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.test', password: 'x' });
     expect(res.status).toBe(500);
   });
 
@@ -62,7 +62,7 @@ describe('POST /api/auth/login', () => {
     const err = new Error('Account disabled');
     err.code = 'ACCOUNT_DISABLED';
     login.mockRejectedValue(err);
-    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'secret123' });
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.test', password: 'secret123' });
     expect(res.status).toBe(403);
   });
 });

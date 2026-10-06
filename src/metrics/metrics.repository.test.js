@@ -65,7 +65,7 @@ describe('metrics repository', () => {
   const BEFORE_SINCE = new Date('2026-01-01T09:00:00Z');
 
   test('getMetricsForAgent averages resolution and first-response time, ignoring conversations with no response for the first-response average', async () => {
-    const agent = await createAgent({ email: 'metrics-agent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-agent1@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const contactA = await seedContact();
     const contactB = await seedContact();
@@ -95,7 +95,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsForAgent ignores an automated outbound message sent before the conversation was assigned to an agent', async () => {
-    const agent = await createAgent({ email: 'metrics-agent4@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-agent4@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const contactId = await seedContact();
 
@@ -138,7 +138,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsForAgent excludes conversations closed before the since timestamp', async () => {
-    const agent = await createAgent({ email: 'metrics-agent2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-agent2@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const contactId = await seedContact();
 
@@ -159,7 +159,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsForAgent returns zero/null for an agent with no closed conversations', async () => {
-    const agent = await createAgent({ email: 'metrics-agent3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-agent3@dw.test', password: 'secret123', role: 'agent' });
 
     const metrics = await getMetricsForAgent(agent.id, SINCE);
 
@@ -167,9 +167,9 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsForAllAgents returns one entry per agent with at least one closed conversation, ordered by name', async () => {
-    const zeta = await createAgent({ name: 'Zeta', email: 'metrics-zeta@dw.com', password: 'secret123', role: 'agent' });
-    const alpha = await createAgent({ name: 'Alpha', email: 'metrics-alpha@dw.com', password: 'secret123', role: 'agent' });
-    const noConversations = await createAgent({ name: 'Semconversa', email: 'metrics-none@dw.com', password: 'secret123', role: 'agent' });
+    const zeta = await createAgent({ name: 'Zeta', email: 'metrics-zeta@dw.test', password: 'secret123', role: 'agent' });
+    const alpha = await createAgent({ name: 'Alpha', email: 'metrics-alpha@dw.test', password: 'secret123', role: 'agent' });
+    const noConversations = await createAgent({ name: 'Semconversa', email: 'metrics-none@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
 
     await seedClosedConversation({
@@ -198,7 +198,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsBySector agrupa pelo setor da conversa, uma vez por conversa', async () => {
-    const agent = await createAgent({ email: 'metrics-multisector@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-multisector@dw.test', password: 'secret123', role: 'agent' });
     const financeiro = await createSector({ name: 'Financeiro' });
     const comercial = await createSector({ name: 'Comercial' });
     await setAgentSectors(agent.id, [financeiro.id, comercial.id]);
@@ -216,7 +216,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsBySector mostra "Sem setor" para conversa encerrada sem setor, por último', async () => {
-    const agent = await createAgent({ email: 'metrics-nosector@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-nosector@dw.test', password: 'secret123', role: 'agent' });
     const suporte = await createSector({ name: 'Suporte' });
     const channelId = await seedChannel();
 
@@ -239,7 +239,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsByReason mostra "Sem motivo" para encerramento sem motivo', async () => {
-    const agent = await createAgent({ email: 'metrics-noreason@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-noreason@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const senha = await createReason({ name: 'Troca de senha' });
     await seedClosedConversation({ channelId, contactId: await seedContact(), agentId: agent.id, reasonId: senha.id,
@@ -256,7 +256,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsByReason counts closed conversations per reason, ordered by frequency', async () => {
-    const agent = await createAgent({ email: 'metrics-reason1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-reason1@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const senha = await createReason({ name: 'Troca de senha' });
     const pagamento = await createReason({ name: 'Pagamento' });
@@ -286,7 +286,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsByReason breaks ties on closed_count by reason name ascending', async () => {
-    const agent = await createAgent({ email: 'metrics-reason-tie@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-reason-tie@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const pagamento = await createReason({ name: 'Pagamento' });
     const senha = await createReason({ name: 'Troca de senha' });
@@ -311,7 +311,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsByReason excludes conversations closed before the since timestamp', async () => {
-    const agent = await createAgent({ email: 'metrics-reason3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-reason3@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const reason = await createReason({ name: 'Antigo' });
 

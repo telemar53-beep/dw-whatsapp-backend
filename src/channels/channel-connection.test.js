@@ -5,7 +5,7 @@ const { getChannelConnection, CONNECTION_TTL_MS } = require('./channel-connectio
 // Cada teste usa um id de canal proprio: o cache vive no modulo e vazaria de um
 // teste para o outro se todos usassem o mesmo.
 function channel(id) {
-  return { id, type: 'meta_cloud', config: { phoneNumberId: '530351070168344', accessToken: 'tok' } };
+  return { id, type: 'meta_cloud', config: { phoneNumberId: '100000000000101', accessToken: 'tok' } };
 }
 
 beforeEach(() => {

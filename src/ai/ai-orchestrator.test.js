@@ -2221,7 +2221,8 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
     });
 
     // Revisão da entrega 1: no turno sem ferramenta ("por que não tem PIX?"), a resposta que repete a oferta herda a marca da
-    // última resposta; o boleto entregue no turno consome a oferta (a ferramenta apaga a marca) e nada é herdado.
+    // última resposta; o boleto da fatura da oferta entregue no turno consome a oferta (a ferramenta apaga a marca) e nada é
+    // herdado.
     test('a oferta é herdada da última resposta no turno sem ferramenta, e não depois do boleto entregue', async () => {
       const oferta = { ...saida('Esta fatura não tem PIX agora. Posso te enviar o boleto?'), id: 'out-9', metadata: { ofertaDoBoleto: { faturaId: '9' } } };
       roteiro(final('O PIX desta fatura não está disponível no sistema agora. Se quiser, posso te enviar o boleto dela.'));
@@ -2229,12 +2230,27 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
       expect((await turno(['manda o pix', oferta, 'por que não tem pix?'])).ofertaDoBoleto).toEqual({ faturaId: '9' });
 
       roteiro(chamada('enviar_boleto'), final('Prontinho! Enviei acima o boleto.'));
-      executeTool.mockReset().mockImplementation(async (_n, _a, c) => { c.ofertaDoBoleto = null; return { ok: true, resultado: { enviado: true } }; });
-      expect((await turno(['manda o pix', oferta, 'pode mandar'])).ofertaDoBoleto).toBeNull();
+      // 06/10/2026: o mock marca a entrega (resolvidoPelaIa), como ferramentas(); sem isso o turno terminava sem texto e a
+      // asserção da marca passava sem provar nada.
+      executeTool.mockReset().mockImplementation(async (_n, _a, c) => { c.ofertaDoBoleto = null; c.resolvidoPelaIa = true; return { ok: true, resultado: { enviado: true } }; });
+      const entregue = await turno(['manda o pix', oferta, 'pode mandar']);
+      expect(entregue.texto).toMatch(/Enviei acima o boleto/);
+      expect(entregue.ofertaDoBoleto).toBeNull();
 
       roteiro(final('Tudo bem! Posso ajudar em algo mais?'));
       ferramentas();
       expect((await turno(['manda o pix', oferta, 'deixa pra lá'])).ofertaDoBoleto).toBeNull();
+    });
+
+    // Comportamento da IA (06/10/2026): o boleto de OUTRA fatura entregue não mexe na marca (a ferramenta a deixa como está), e a
+    // oferta da resposta anterior continua pendente: a resposta que cita o boleto herda a marca dela.
+    test('o boleto de outra fatura entregue no turno não consome a oferta herdada', async () => {
+      const oferta = { ...saida('Esta fatura não tem PIX agora. Posso te enviar o boleto?'), id: 'out-10', metadata: { ofertaDoBoleto: { faturaId: '9' } } };
+      roteiro(chamada('enviar_boleto'), final('Prontinho! Enviei acima o boleto.'));
+      executeTool.mockReset().mockImplementation(async (_n, _a, c) => { c.resolvidoPelaIa = true; return { ok: true, resultado: { enviado: true } }; });
+      const r = await turno(['manda o pix', oferta, 'manda o boleto da outra casa']);
+      expect(r.texto).toMatch(/Enviei acima o boleto/);
+      expect(r.ofertaDoBoleto).toEqual({ faturaId: '9' });
     });
 
     test('"entrou na fila" depois de uma conclusão que falhou sai, e entra a frase de transferência não confirmada', async () => {

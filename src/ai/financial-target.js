@@ -243,21 +243,31 @@ const falaNeutra = (texto) => {
 // e o RESTO é lido como sempre: só a forma estrita do pedido simples, com os contratos conhecidos dele. A interjeição não
 // identifica nem autoriza nada: com terceiro ou dúvida forte, o resto segue a leitura de sempre. "não" fica FORA da lista: "não,
 // é o da …" continua fora do pedido simples, como decidido e revisado na v4 (e "não é o da …" é negação).
-const CORRECOES = [
-  ['eu', 'me', 'enganei'], ['me', 'enganei'], ['enganei'], ['eu', 'errei'], ['errei'], ['ops'], ['oops'], ['opa'], ['opps'],
-  ['epa'], ['desculpa'], ['desculpe'], ['foi', 'mal'], ['na', 'verdade'], ['pera'], ['perai'], ['quer', 'dizer'],
-  ['quis', 'dizer'], ['corrigindo'],
+// Revisão da rodada 8 (achado 9): só os marcadores INEQUÍVOCOS (FORTES) dizem que ele desdisse o que pediu — substituem o
+// contrato escolhido e, sem outro, criam a dúvida. Os de duplo sentido ("opa, obrigado", "desculpa a demora", "pera, pode
+// mandar") só saem da frente para a rua ser lida; a escolha de antes continua como na produção.
+const CORRECOES_FORTES = [
+  ['eu', 'me', 'enganei'], ['me', 'enganei'], ['enganei'], ['eu', 'errei'], ['errei'], ['ops'], ['oops'], ['na', 'verdade'],
+  ['quer', 'dizer'], ['quis', 'dizer'], ['corrigindo'],
 ];
-function prefixoDeCorrecao(palavras) {
+const CORRECOES = [
+  ...CORRECOES_FORTES,
+  ['opa'], ['opps'], ['epa'], ['desculpa'], ['desculpe'], ['foi', 'mal'], ['pera'], ['perai'],
+];
+// O tamanho do prefixo de correção (uma ou mais, em sequência) e se ele tem um marcador forte.
+function lerPrefixoDeCorrecao(palavras) {
   let k = 0;
+  let forte = false;
   for (;;) {
     const m = CORRECOES.find((c) => c.every((w, j) => palavras[k + j] && palavras[k + j].p === w));
     if (!m) break;
+    if (CORRECOES_FORTES.includes(m)) forte = true;
     k += m.length;
   }
-  return k;
+  return { k, forte };
 }
-const ehCorrecao = (texto) => prefixoDeCorrecao(palavrasDe(texto)) > 0;
+const prefixoDeCorrecao = (palavras) => lerPrefixoDeCorrecao(palavras).k;
+const ehCorrecao = (texto) => lerPrefixoDeCorrecao(palavrasDe(texto)).forte;
 
 /** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com duas palavras ou mais, se tem o tipo do logradouro, e o número. */
 function ruasDosContratos(enderecos) {

@@ -905,7 +905,7 @@ describe('pedido por endereço do próprio cliente', () => {
       [['Ops, é o da Avenida de Teste.']],
       [['Na verdade é a da Avenida de Teste.']],
       [['manda o pix da Rua de Teste', 'Errei, manda o da Avenida de Teste.']],
-      [['manda o pix da Rua de Teste', 'Opa, desculpa, é o pix da Avenida de Teste, por favor.']],
+      [['manda o pix da Rua de Teste', 'Desculpa, me enganei, é o pix da Avenida de Teste, por favor.']],
       [['manda o pix da Rua de Teste', 'Ops, me enganei.', 'É o da Avenida de Teste.']],
     ])('%j: só o 302 (a correção substitui o desdito)', (falas) => {
       expect(mensagens(falas)).toEqual(so(['302']));
@@ -939,6 +939,16 @@ describe('pedido por endereço do próprio cliente', () => {
       expect(mensagens(['É a da Rua de Teste.', 'Ops, me enganei.'], { terceiro: DUVIDA('endereco_desconhecido') }))
         .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'pendencia' });
     });
+    // Revisão da rodada 8 (achado 9): prefixos de duplo sentido ("opa", "desculpa", "pera", "foi mal") só deixam ler a rua;
+    // não substituem o contrato nem criam a dúvida — "opa, obrigado" e "desculpa a demora" seguem como na produção.
+    test('prefixo de duplo sentido não é correção: não substitui nem cria dúvida, e ainda deixa ler a rua', () => {
+      for (const fala of ['opa, obrigado', 'desculpa a demora', 'pera, pode mandar']) {
+        expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(mensagens(['manda o pix da Rua de Teste', 'obrigado']));
+      }
+      expect(mensagens(['manda o pix da Rua de Teste', 'opa, e o da Avenida de Teste'])).toEqual(so(['301', '302']));
+      expect(mensagens(['Opa, é o da Avenida de Teste.'])).toEqual(so(['302']));
+    });
+
     test('dois pedidos sem correção continuam valendo os dois', () => {
       expect(mensagens(['manda o pix da Rua de Teste', 'e o da Avenida de Teste'])).toEqual(so(['301', '302']));
     });

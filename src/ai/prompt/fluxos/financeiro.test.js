@@ -125,7 +125,8 @@ describe('módulo financeiro', () => {
         expect(t).not.toMatch(/Enviei acima o PIX/);
         expect(t).not.toMatch(/Enviei acima o boleto/);
         // Nenhum endereço com nome próprio em modelo de frase (a checagem é genérica: o dado real de antes não fica no teste).
-        expect(t).not.toMatch(/contrato do endereço [A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú]/);
+        // Qualquer prefixo, nome capitalizado ou em maiúsculas (como o SGP manda); o marcador "[endereço]" fica de fora.
+        expect(t).not.toMatch(/endereço (?!\[)([A-ZÀ-Ý][a-zà-ÿ]+|[A-ZÀ-Ý]{2,})(?![A-Za-zÀ-ÿ])/);
       });
 
       // Task 18 — antes: ai-orchestrator.test.js:1823. Com motivo configurado

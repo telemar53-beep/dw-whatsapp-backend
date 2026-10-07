@@ -27,7 +27,22 @@ const TAMANHO_MAXIMO_COMPROVANTE = 5 * 1024 * 1024;
  * data está na janela e — o que mais importa para o atendente — se aquele
  * mesmo comprovante já foi usado antes. O que falta é só casar com uma fatura.
  */
-async function analisarComprovante({ conversationId, imagem, contratos = [], config }) {
+// Item 2 (07/10/2026): quando o valor não bate porque as faturas não puderam ser conferidas, o motivo diz isso — "não foi
+// possível conferir" não é "não existe fatura". O critério (válido ou não) não muda.
+const MOTIVO_SEM_FATURA = 'valor não corresponde a nenhuma fatura em aberto';
+const MOTIVO_SEM_CONFERENCIA = {
+  indisponivel: 'não foi possível conferir o valor: a consulta das faturas no SGP falhou',
+  incompleta: 'não foi possível conferir o valor com todas as faturas: a consulta de um dos contratos falhou',
+  sem_contratos: 'não foi possível conferir o valor: nenhum contrato encontrado para este cliente no SGP',
+  sem_documento: 'não foi possível conferir o valor: o contato não está vinculado a um cadastro do SGP',
+};
+
+/**
+ * `consultaDeContratos` (quem buscou os contratos): 'ok', 'falhou' (a consulta deu erro) ou 'sem_documento' (não havia como
+ * consultar). O resultado traz `conferenciaDasFaturas`: 'completa', 'incompleta' (a 2ª via de algum contrato falhou),
+ * 'indisponivel', 'sem_contratos' ou 'sem_documento'.
+ */
+async function analisarComprovante({ conversationId, imagem, contratos = [], config, consultaDeContratos = 'ok' }) {
   if (!imagem) return { analisado: false, motivo: 'Nenhuma imagem para analisar.' };
   // MIME e tamanho são conferidos ANTES de qualquer leitura do disco.
   if (!MIMES_COMPROVANTE.includes(imagem.mediaMimeType)) {
@@ -73,18 +88,31 @@ async function analisarComprovante({ conversationId, imagem, contratos = [], con
 
   // Faturas em aberto de TODOS os contratos: o comprovante pode ser do outro ponto.
   const faturas = [];
+  let falhas = 0;
   if (contratos.length > 0) {
     // N3 (06/10/2026, autorizado): a 2ª via continua sendo a fonte, pedida SEM gerar o PIX — a conferência só usa id, valor
     // e vencimento das faturas em aberto, e o PIX gerado aqui não servia para nada.
     const segundasVias = await Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id, { gerarPix: false })));
     segundasVias.forEach((r, i) => {
+      if (r.status === 'rejected') falhas += 1;
       if (r.status === 'fulfilled' && r.value && r.value.hasOpenInvoice) {
         for (const d of r.value.duplicates) faturas.push({ id: d.id, value: d.value, dueDate: d.dueDate, contratoId: contratos[i].id });
       }
     });
   }
 
-  const conferencia = conferirComprovante({ leitura, faturas, nomesAceitos });
+  let conferenciaDasFaturas = 'completa';
+  if (consultaDeContratos === 'falhou') conferenciaDasFaturas = 'indisponivel';
+  else if (consultaDeContratos === 'sem_documento') conferenciaDasFaturas = 'sem_documento';
+  else if (contratos.length === 0) conferenciaDasFaturas = 'sem_contratos';
+  else if (falhas === contratos.length) conferenciaDasFaturas = 'indisponivel';
+  else if (falhas > 0) conferenciaDasFaturas = 'incompleta';
+
+  const conferido = conferirComprovante({ leitura, faturas, nomesAceitos });
+  const semConferencia = !conferido.valorConfere && MOTIVO_SEM_CONFERENCIA[conferenciaDasFaturas];
+  const conferencia = semConferencia
+    ? { ...conferido, motivos: conferido.motivos.map((m) => (m === MOTIVO_SEM_FATURA ? semConferencia : m)) }
+    : conferido;
   const fatura = conferencia.faturaId ? faturas.find((f) => f.id === conferencia.faturaId) : null;
 
   // O mesmo comprovante, emprestado ou reenviado, não pode passar duas vezes —
@@ -107,6 +135,7 @@ async function analisarComprovante({ conversationId, imagem, contratos = [], con
     contratoId: fatura ? fatura.contratoId : null,
     usoAnterior,
     jaUtilizado: Boolean(usoAnterior),
+    conferenciaDasFaturas,
   };
 }
 

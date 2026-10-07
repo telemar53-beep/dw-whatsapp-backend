@@ -2328,6 +2328,20 @@ describe('POST /api/conversations/:id/messages/:messageId/analyze-receipt', () =
     expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [], consultaDeContratos: 'falhou' }));
   });
 
+  // Rodada 7 (achado 2.2 da revisão do comprovante): a integração desligada ou sem configuração é uma situação própria —
+  // nem "a consulta falhou", nem "nenhum contrato".
+  test.each(['SgpDisabledError', 'SgpNotConfiguredError'])('integração com o SGP desligada ou sem configuração (%s): a análise sabe disso', async (classe) => {
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
+    lookupClientByCpf.mockRejectedValue(new sgpClient[classe]('integração indisponível no teste'));
+
+    const res = await analisar();
+    erroSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [], consultaDeContratos: 'desligado' }));
+  });
+
   test('a rota só analisa: nenhuma outra chamada ao SGP (nada de pagamento, liberação ou 2ª via pela rota)', async () => {
     getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
     lookupClientByCpf.mockResolvedValue({ client: { id: 9 }, contracts: [{ id: 301 }] });

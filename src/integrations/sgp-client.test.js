@@ -108,6 +108,18 @@ describe('sgp-client', () => {
       await expect(lookupClientByCpf('00000000000')).rejects.toBeInstanceOf(SgpClientNotFoundError);
     });
 
+    // Rodada 7 (achado 2.1 da revisão do comprovante): uma resposta SEM a lista de contratos (resposta de erro do SGP) é falha
+    // da consulta, não "cliente não encontrado". A lista vazia continua sendo "não encontrado" (o formato documentado).
+    test('throws SgpRequestError (not SgpClientNotFoundError) when the response has no contract list', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      for (const data of [{ status: 0, msg: 'Erro de teste' }, { msg: 'x', contratos: null }, { contratos: 'texto' }]) {
+        axios.post.mockResolvedValue({ data });
+        const erro = await lookupClientByCpf('00000000000').catch((e) => e);
+        expect(erro).toBeInstanceOf(SgpRequestError);
+        expect(erro).not.toBeInstanceOf(SgpClientNotFoundError);
+      }
+    });
+
     test('throws SgpRequestError when the SGP call fails', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post.mockRejectedValue(new Error('timeout of 15000ms exceeded'));

@@ -85,7 +85,13 @@ async function lookupClientByCpf(cpf) {
     throw new SgpRequestError('Unexpected response from SGP');
   }
   const contratos = data.contratos;
-  if (!Array.isArray(contratos) || contratos.length === 0) {
+  // Rodada 7 (achado 2.1 da revisão do comprovante): sem a lista de contratos (uma resposta de erro do SGP) é falha da
+  // consulta, não "cliente não encontrado" — erro ou indisponibilidade não pode virar "nenhum contrato". "Não encontrado" é a
+  // lista vazia, o formato documentado ({ msg: 'Nada encontrado', contratos: [] }); o formato real não foi conferido.
+  if (!Array.isArray(contratos)) {
+    throw new SgpRequestError('Unexpected response from SGP (no contract list)');
+  }
+  if (contratos.length === 0) {
     throw new SgpClientNotFoundError('Client not found');
   }
   return {

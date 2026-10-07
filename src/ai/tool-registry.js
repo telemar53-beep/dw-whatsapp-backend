@@ -65,6 +65,17 @@ function noturnoDoContexto(contexto) {
   return t && t.noturno && t.noturno.ativo ? t.noturno : null;
 }
 
+// Rodada 7 (achado 2.4 da revisão do comprovante): o motivo, dito ao cliente, de o comprovante não liberar. "Não conferiu" só
+// para o divergente; quando ele só não pôde ser conferido (`naoConferido` da análise), a frase diz isso.
+function fraseDoComprovanteNaoLiberado(naoConferido) {
+  if (naoConferido === 'indisponivel' || naoConferido === 'incompleta' || naoConferido === 'desligado') {
+    return 'não consegui conferir o comprovante com as faturas agora.';
+  }
+  if (naoConferido === 'sem_contratos' || naoConferido === 'sem_faturas') return 'não encontrei fatura em aberto para conferir com o comprovante.';
+  if (naoConferido === 'sem_documento') return 'não consegui localizar o cadastro para conferir o comprovante.';
+  return 'o comprovante não conferiu com a fatura em aberto.';
+}
+
 function horaDeSaoPaulo() {
   return new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -2400,12 +2411,15 @@ const TOOLS = [
       // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
       // o que pedir ao SGP — a recusa sai daqui, sem nenhuma chamada externa.
       if (noturno && comprovante && comprovante.valido === false) {
-        const motivo = `O comprovante não conferiu: ${(comprovante.motivos || []).join('; ')}.`;
+        // Rodada 7 (achado 2.4): o comprovante que só não pôde ser conferido (SGP fora, sem fatura em aberto, sem cadastro)
+        // continua sem liberação, mas a frase ao cliente não diz que ele "não conferiu".
+        const naoConferido = comprovante.naoConferido || null;
+        const motivo = `${naoConferido ? 'O comprovante não pôde ser conferido' : 'O comprovante não conferiu'}: ${(comprovante.motivos || []).join('; ')}.`;
         registrarRecusa(motivo);
         return {
           liberado: false,
           motivo,
-          instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', 'o comprovante não conferiu com a fatura em aberto.'),
+          instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', fraseDoComprovanteNaoLiberado(naoConferido)),
         };
       }
 
@@ -2593,11 +2607,18 @@ const TOOLS = [
       // A leitura e a conferência vivem em receipt-analysis: o atendente humano
       // pede a mesma análise pelo botão do chat, e duplicar a conferência é
       // como as duas versões passam a discordar sem ninguém notar.
+      // Rodada 7 (achado 2.4): como foi a consulta dos contratos na identificação do turno — com o SGP fora, os contratos
+      // chegam vazios, e isso é "não foi possível conferir", não "nenhum contrato encontrado".
+      const identidade = contexto.identidade || {};
+      let consultaDeContratos = 'ok';
+      if (identidade.sgpIndisponivel) consultaDeContratos = 'falhou';
+      else if (!identidade.client && (contexto.contracts || []).length === 0) consultaDeContratos = 'sem_documento';
       const analise = await analisarComprovante({
         conversationId: contexto.conversationId,
         imagem,
         contratos: contexto.contracts || [],
         config,
+        consultaDeContratos,
       });
       if (!analise.analisado) return { analisado: false, motivo: analise.motivo };
 
@@ -2616,6 +2637,8 @@ const TOOLS = [
         tipo: resultado.tipo,
         idTransacao: resultado.idTransacao,
         motivos: resultado.motivos,
+        // Rodada 7 (achado 2.4): o comprovante que só não pôde ser conferido (a recusa ao cliente e o resumo dizem isso).
+        naoConferido: resultado.naoConferido || null,
         usoAnterior,
       };
       return resultado;
@@ -3067,7 +3090,9 @@ const TOOLS = [
         // null: "R$ 0,00" faria o atendente dar baixa num valor inventado.
         const valor = comp.valor == null ? 'valor não lido' : `R$ ${Number(comp.valor).toFixed(2).replace('.', ',')}`;
         const data = comp.data ? formatarData(comp.data) : 'data não lida';
-        const conferencia = comp.valido ? 'conferido' : `NÃO conferiu: ${(comp.motivos || []).join('; ')}`;
+        // Rodada 7 (achado 2.4): "não foi possível conferir" não é "não conferiu".
+        let conferencia = 'conferido';
+        if (!comp.valido) conferencia = `${comp.naoConferido ? 'NÃO FOI POSSÍVEL CONFERIR' : 'NÃO conferiu'}: ${(comp.motivos || []).join('; ')}`;
         // O aviso de uso anterior cita o contrato de OUTRO cliente: ele existe
         // só aqui, no resumo interno, e nunca em nada que vá ao WhatsApp.
         const jaUsado = comp.usoAnterior && comp.usoAnterior.descricao ? ` — ⚠ ${comp.usoAnterior.descricao}` : '';

@@ -33,14 +33,19 @@ const MOTIVO_SEM_FATURA = 'valor não corresponde a nenhuma fatura em aberto';
 const MOTIVO_SEM_CONFERENCIA = {
   indisponivel: 'não foi possível conferir o valor: a consulta das faturas no SGP falhou',
   incompleta: 'não foi possível conferir o valor com todas as faturas: a consulta de um dos contratos falhou',
+  // Rodada 7 (achados 2.1 a 2.4): a integração desligada ou sem configuração, e a consulta concluída sem fatura em aberto.
+  desligado: 'não foi possível conferir o valor: a integração com o SGP está desligada ou sem configuração',
   sem_contratos: 'não foi possível conferir o valor: nenhum contrato encontrado para este cliente no SGP',
+  sem_faturas: 'não há fatura em aberto nos contratos deste cliente para conferir o valor',
   sem_documento: 'não foi possível conferir o valor: o contato não está vinculado a um cadastro do SGP',
 };
 
 /**
- * `consultaDeContratos` (quem buscou os contratos): 'ok', 'falhou' (a consulta deu erro) ou 'sem_documento' (não havia como
- * consultar). O resultado traz `conferenciaDasFaturas`: 'completa', 'incompleta' (a 2ª via de algum contrato falhou),
- * 'indisponivel', 'sem_contratos' ou 'sem_documento'.
+ * `consultaDeContratos` (quem buscou os contratos): 'ok', 'falhou' (a consulta deu erro), 'desligado' (a integração com o
+ * SGP está desligada ou sem configuração) ou 'sem_documento' (não havia como consultar). O resultado traz
+ * `conferenciaDasFaturas`: 'completa', 'incompleta' (a 2ª via de algum contrato falhou), 'indisponivel', 'desligado',
+ * 'sem_contratos', 'sem_faturas' (consulta concluída, nenhuma fatura em aberto) ou 'sem_documento'; e `naoConferido`: a
+ * mesma situação quando a ÚNICA reprovação é não ter havido como conferir o valor (senão null). O critério não muda.
  */
 async function analisarComprovante({ conversationId, imagem, contratos = [], config, consultaDeContratos = 'ok' }) {
   if (!imagem) return { analisado: false, motivo: 'Nenhuma imagem para analisar.' };
@@ -103,16 +108,21 @@ async function analisarComprovante({ conversationId, imagem, contratos = [], con
 
   let conferenciaDasFaturas = 'completa';
   if (consultaDeContratos === 'falhou') conferenciaDasFaturas = 'indisponivel';
+  else if (consultaDeContratos === 'desligado') conferenciaDasFaturas = 'desligado';
   else if (consultaDeContratos === 'sem_documento') conferenciaDasFaturas = 'sem_documento';
   else if (contratos.length === 0) conferenciaDasFaturas = 'sem_contratos';
   else if (falhas === contratos.length) conferenciaDasFaturas = 'indisponivel';
   else if (falhas > 0) conferenciaDasFaturas = 'incompleta';
+  else if (faturas.length === 0) conferenciaDasFaturas = 'sem_faturas';
 
   const conferido = conferirComprovante({ leitura, faturas, nomesAceitos });
   const semConferencia = !conferido.valorConfere && MOTIVO_SEM_CONFERENCIA[conferenciaDasFaturas];
   const conferencia = semConferencia
     ? { ...conferido, motivos: conferido.motivos.map((m) => (m === MOTIVO_SEM_FATURA ? semConferencia : m)) }
     : conferido;
+  // Só o valor ficou sem conferir (todo motivo é o da conferência): "não foi possível conferir", não "não confere".
+  const naoConferido = !conferencia.valido && semConferencia && conferencia.motivos.length > 0
+    && conferencia.motivos.every((m) => m === semConferencia) ? conferenciaDasFaturas : null;
   const fatura = conferencia.faturaId ? faturas.find((f) => f.id === conferencia.faturaId) : null;
 
   // O mesmo comprovante, emprestado ou reenviado, não pode passar duas vezes —
@@ -136,6 +146,7 @@ async function analisarComprovante({ conversationId, imagem, contratos = [], con
     usoAnterior,
     jaUtilizado: Boolean(usoAnterior),
     conferenciaDasFaturas,
+    naoConferido,
   };
 }
 

@@ -3,7 +3,9 @@ const multer = require('multer');
 const { findAgentById } = require('../agents/agent.repository');
 const { analisarComprovante } = require('../ai/receipt-analysis');
 const { getAiConfig } = require('../ai/ai-config.repository');
-const { lookupClientByCpf, SgpClientNotFoundError } = require('../integrations/sgp-client');
+const {
+  lookupClientByCpf, SgpClientNotFoundError, SgpDisabledError, SgpNotConfiguredError,
+} = require('../integrations/sgp-client');
 const { mensagemSegura } = require('../ai/safe-error-log');
 const { apresentarConversas } = require('../conversations/conversation.presenter');
 const { requireAuth, hasAdminLevelAccess } = require('../auth/auth.middleware');
@@ -486,6 +488,9 @@ router.post('/:id/messages/:messageId/analyze-receipt', async (req, res) => {
     } catch (err) {
       if (err instanceof SgpClientNotFoundError) {
         consultaDeContratos = 'ok';
+      } else if (err instanceof SgpDisabledError || err instanceof SgpNotConfiguredError) {
+        // Rodada 7 (achado 2.2): a integração desligada ou sem configuração não é "a consulta falhou".
+        consultaDeContratos = 'desligado';
       } else {
         consultaDeContratos = 'falhou';
         console.error(`analyze-receipt: SGP indisponível na conversa ${conversation.id}: ${mensagemSegura(err)}`);

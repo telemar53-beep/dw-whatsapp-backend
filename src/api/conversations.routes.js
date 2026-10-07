@@ -3,7 +3,7 @@ const multer = require('multer');
 const { findAgentById } = require('../agents/agent.repository');
 const { analisarComprovante } = require('../ai/receipt-analysis');
 const { getAiConfig } = require('../ai/ai-config.repository');
-const { lookupClientByCpf } = require('../integrations/sgp-client');
+const { lookupClientByCpf, SgpClientNotFoundError } = require('../integrations/sgp-client');
 const { mensagemSegura } = require('../ai/safe-error-log');
 const { apresentarConversas } = require('../conversations/conversation.presenter');
 const { requireAuth, hasAdminLevelAccess } = require('../auth/auth.middleware');
@@ -473,18 +473,27 @@ router.post('/:id/messages/:messageId/analyze-receipt', async (req, res) => {
   }
 
   // O SGP fora do ar não pode impedir a análise: sem fatura ela ainda diz se é
-  // comprovante, se o favorecido confere e se já foi usado antes.
+  // comprovante, se o favorecido confere e se já foi usado antes. Item 2 (07/10/2026): lookupClientByCpf devolve os contratos
+  // em `contracts` (a rota lia `contratos` e mandava sempre a lista vazia); e a análise fica sabendo como foi a consulta, para
+  // dizer "não foi possível conferir" em vez de "não existe fatura". Nada aqui registra pagamento nem libera nada.
   let contratos = [];
+  let consultaDeContratos = 'sem_documento';
   if (conversation.contactSgpDocument) {
     try {
       const cliente = await lookupClientByCpf(conversation.contactSgpDocument);
-      contratos = (cliente && cliente.contratos) || [];
+      contratos = (cliente && cliente.contracts) || [];
+      consultaDeContratos = 'ok';
     } catch (err) {
-      console.error(`analyze-receipt: SGP indisponível na conversa ${conversation.id}: ${mensagemSegura(err)}`);
+      if (err instanceof SgpClientNotFoundError) {
+        consultaDeContratos = 'ok';
+      } else {
+        consultaDeContratos = 'falhou';
+        console.error(`analyze-receipt: SGP indisponível na conversa ${conversation.id}: ${mensagemSegura(err)}`);
+      }
     }
   }
 
-  const analise = await analisarComprovante({ conversationId: conversation.id, imagem: message, contratos, config });
+  const analise = await analisarComprovante({ conversationId: conversation.id, imagem: message, contratos, config, consultaDeContratos });
   res.json(analise);
 });
 

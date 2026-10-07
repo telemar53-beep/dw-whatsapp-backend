@@ -18,7 +18,7 @@ const axios = require('axios');
 const { getSgpQueryConfig } = require('../integrations/sgp-query-config.repository');
 const { analyzeImage } = require('./openai-client');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { findReceiptUsage } = require('./receipt-usage.repository');
+const { findReceiptUsage, claimReceipt } = require('./receipt-usage.repository');
 const { analisarComprovante } = require('./receipt-analysis');
 
 const CONFIG_SGP = { baseUrl: 'https://sgp.exemplo.invalido', app: 'teste', token: 'tok-teste', enabled: true };
@@ -110,4 +110,60 @@ test('SGP fora para todos: sem exceção, sem fatura para casar, sem PIX pedido'
   const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
   expect(r).toMatchObject({ analisado: true, valido: false, faturaId: null });
   expect(pediuPix()).toEqual([]);
+});
+
+// Item 2 (07/10/2026): "não foi possível conferir" não é "não existe fatura". O critério (válido ou não) não muda; só o motivo
+// e o campo conferenciaDasFaturas dizem o que aconteceu. Nada é registrado como pagamento.
+const MOTIVO_SEM_FATURA = 'valor não corresponde a nenhuma fatura em aberto';
+test('consulta completa e o valor bate: confere, com a conferência das faturas completa', async () => {
+  sgp();
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG, consultaDeContratos: 'ok' });
+  expect(r).toMatchObject({ analisado: true, valido: true, faturaId: '3011', contratoId: 301, conferenciaDasFaturas: 'completa' });
+  expect(claimReceipt).not.toHaveBeenCalled();
+});
+
+test('consulta completa e o valor não bate: o motivo de sempre ("não corresponde a nenhuma fatura")', async () => {
+  sgp();
+  analyzeImage.mockResolvedValue({ ehComprovante: true, tipo: 'pix', valor: 77, data: HOJE, favorecido: 'EMPRESA DE TESTE', confianca: 0.95, idTransacao: 'E-TESTE-2' });
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'completa' });
+  expect(r.motivos).toContain(MOTIVO_SEM_FATURA);
+});
+
+test('um contrato falha e o valor não bate com o outro: "não foi possível conferir com todas", não "não existe fatura"', async () => {
+  sgp({ falha302: true });
+  analyzeImage.mockResolvedValue({ ehComprovante: true, tipo: 'pix', valor: 50, data: HOJE, favorecido: 'EMPRESA DE TESTE', confianca: 0.95, idTransacao: 'E-TESTE-3' });
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'incompleta' });
+  expect(r.motivos).not.toContain(MOTIVO_SEM_FATURA);
+  expect(r.motivos.join(' ')).toMatch(/não foi possível conferir o valor com todas as faturas/);
+  expect(pediuPix()).toEqual([]);
+});
+
+test('SGP fora para todos os contratos: "não foi possível conferir", não "não existe fatura"', async () => {
+  axios.post.mockRejectedValue(new Error('SGP fora'));
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+  expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'indisponivel' });
+  expect(r.motivos).not.toContain(MOTIVO_SEM_FATURA);
+  expect(r.motivos.join(' ')).toMatch(/não foi possível conferir o valor: a consulta das faturas no SGP falhou/);
+  expect(claimReceipt).not.toHaveBeenCalled();
+});
+
+test('a consulta dos contratos falhou (na rota): "não foi possível conferir", sem tocar no SGP', async () => {
+  sgp();
+  const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: [], config: CONFIG, consultaDeContratos: 'falhou' });
+  expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'indisponivel' });
+  expect(r.motivos.join(' ')).toMatch(/não foi possível conferir o valor: a consulta das faturas no SGP falhou/);
+  expect(axios.post).not.toHaveBeenCalled();
+});
+
+test('nenhum contrato no SGP: diz que não há contrato para conferir; sem documento vinculado: diz que não deu para conferir', async () => {
+  sgp();
+  const semContrato = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: [], config: CONFIG, consultaDeContratos: 'ok' });
+  expect(semContrato).toMatchObject({ valido: false, conferenciaDasFaturas: 'sem_contratos' });
+  expect(semContrato.motivos.join(' ')).toMatch(/nenhum contrato encontrado para este cliente no SGP/);
+  const semDocumento = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: [], config: CONFIG, consultaDeContratos: 'sem_documento' });
+  expect(semDocumento).toMatchObject({ valido: false, conferenciaDasFaturas: 'sem_documento' });
+  expect(semDocumento.motivos.join(' ')).toMatch(/não foi possível conferir o valor: o contato não está vinculado a um cadastro do SGP/);
+  expect(axios.post).not.toHaveBeenCalled();
 });

@@ -45,7 +45,8 @@ const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/so
 const { findAgentById } = require('../agents/agent.repository');
 const { analisarComprovante } = require('../ai/receipt-analysis');
 const { getAiConfig } = require('../ai/ai-config.repository');
-const { lookupClientByCpf } = require('../integrations/sgp-client');
+const sgpClient = require('../integrations/sgp-client');
+const { lookupClientByCpf, SgpClientNotFoundError } = sgpClient;
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateById } = require('../templates/template.repository');
@@ -2275,32 +2276,68 @@ describe('POST /api/conversations/:id/messages/:messageId/analyze-receipt', () =
     expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ imagem: IMAGEM }));
   });
 
-  test('sem cliente identificado no SGP, analisa sem faturas', async () => {
+  test('sem cliente identificado no SGP, analisa sem faturas — e diz que não deu para conferir (sem documento)', async () => {
     await analisar();
 
-    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [] }));
+    expect(lookupClientByCpf).not.toHaveBeenCalled();
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [], consultaDeContratos: 'sem_documento' }));
   });
 
-  test('com CPF vinculado, busca os contratos para casar a fatura', async () => {
+  // Item 2 (07/10/2026): lookupClientByCpf devolve { client, contracts } — a rota lia `cliente.contratos` e mandava sempre a
+  // lista vazia (o teste antigo simulava o formato errado, igual ao do código). Agora lê `contracts`.
+  test('com CPF vinculado, busca os contratos (no formato real do cliente SGP) para casar a fatura', async () => {
     getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
-    lookupClientByCpf.mockResolvedValue({ contratos: [{ id: 'ctr-1' }] });
+    lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'Cliente de Teste' }, contracts: [{ id: 301 }] });
 
     await analisar();
 
     expect(lookupClientByCpf).toHaveBeenCalledWith('12345678900');
-    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [{ id: 'ctr-1' }] }));
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [{ id: 301 }], consultaDeContratos: 'ok' }));
   });
 
-  // O SGP fora do ar nao pode impedir a analise: sem fatura ela ainda diz se e
-  // comprovante, se o favorecido confere e se ja foi usado.
-  test('SGP fora do ar nao derruba a analise', async () => {
+  test('com vários contratos, manda todos para a conferência', async () => {
     getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
-    lookupClientByCpf.mockRejectedValue(new Error('sgp fora'));
+    lookupClientByCpf.mockResolvedValue({ client: { id: 9 }, contracts: [{ id: 301 }, { id: 302 }] });
+
+    await analisar();
+
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [{ id: 301 }, { id: 302 }], consultaDeContratos: 'ok' }));
+  });
+
+  test('cliente sem contrato no SGP (não encontrado): consulta feita, nenhum contrato', async () => {
+    getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
+    lookupClientByCpf.mockRejectedValue(new SgpClientNotFoundError('Client not found'));
 
     const res = await analisar();
 
     expect(res.status).toBe(200);
-    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [] }));
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [], consultaDeContratos: 'ok' }));
+  });
+
+  // O SGP fora do ar nao pode impedir a analise: sem fatura ela ainda diz se e
+  // comprovante, se o favorecido confere e se ja foi usado — e diz que a conferência das faturas não foi possível.
+  test('SGP fora do ar nao derruba a analise (consulta dos contratos falhou)', async () => {
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
+    lookupClientByCpf.mockRejectedValue(new Error('sgp fora'));
+
+    const res = await analisar();
+    erroSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [], consultaDeContratos: 'falhou' }));
+  });
+
+  test('a rota só analisa: nenhuma outra chamada ao SGP (nada de pagamento, liberação ou 2ª via pela rota)', async () => {
+    getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
+    lookupClientByCpf.mockResolvedValue({ client: { id: 9 }, contracts: [{ id: 301 }] });
+
+    await analisar();
+
+    const chamadas = Object.entries(sgpClient)
+      .filter(([nome, f]) => nome !== 'lookupClientByCpf' && typeof f === 'function' && f.mock && f.mock.calls.length > 0)
+      .map(([nome]) => nome);
+    expect(chamadas).toEqual([]);
   });
 
   test('recusa uma mensagem que nao e imagem', async () => {

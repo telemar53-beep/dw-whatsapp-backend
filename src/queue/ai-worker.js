@@ -288,13 +288,16 @@ function enderecosParaCitar(identidade) {
   const distintas = [...new Set(ruas)];
   return distintas.length > 1 ? distintas : null;
 }
-function esclarecimentoDaDuvida(duvida, identidade) {
+function esclarecimentoDaDuvida(duvida, identidade, podePedirDocumento = true) {
   if (DUVIDAS_DE_ENDERECO.includes(duvida)) {
     const ruas = enderecosParaCitar(identidade);
     const opcoes = ruas ? `: ${ruas.slice(0, -1).join(', ')} ou ${ruas[ruas.length - 1]}` : '';
     return { redacoes: [`Para eu seguir, preciso saber de qual endereço é a conta${opcoes}.`, `Ainda preciso que você me diga de qual endereço é a conta${opcoes}.`] };
   }
   if (DUVIDAS_DE_TERCEIRO.has(duvida)) {
+    // Revisão da rodada 8 (achado 6): a guarda do documento barraria o pedido (já pedido sem mudança, cliente irritado…): só a
+    // pergunta, sem o pedido e sem a marca.
+    if (!podePedirDocumento) return { redacoes: ['Para eu seguir, preciso saber de quem é essa conta.', 'Ainda preciso saber de quem é a conta.'] };
     return {
       redacoes: [
         'Para eu seguir, preciso saber de quem é essa conta. Se for de outra pessoa, me mande o CPF ou CNPJ do titular.',
@@ -307,6 +310,25 @@ function esclarecimentoDaDuvida(duvida, identidade) {
     return { redacoes: ['Para eu seguir, me diga de quem é a conta: é sua ou de outra pessoa?', 'Ainda preciso saber se a conta é sua ou de outra pessoa.'] };
   }
   return null;
+}
+
+// Revisão da rodada 8 (achado 5): a resposta curta só com a dúvida ainda em aberto no FIM do turno — nenhuma ferramenta que
+// muda o alvo rodou, e a dúvida do fim é a do começo.
+const FERRAMENTAS_QUE_MUDAM_O_ALVO = new Set(['buscar_cliente', 'esquecer_identificacao']);
+function respostaCurtaDaDuvida(duvida, turno, identidade) {
+  if (typeof duvida !== 'string') return null;
+  if ((turno.toolsExecutadas || []).some((t) => t && FERRAMENTAS_QUE_MUDAM_O_ALVO.has(t.nome))) return null;
+  if (turno.alvoAmbiguoNoFim !== undefined && turno.alvoAmbiguoNoFim !== duvida) return null;
+  return esclarecimentoDaDuvida(duvida, turno.identidade || identidade, turno.pedidoDeDocumentoDeTerceiroPermitido === true);
+}
+// Revisão da rodada 8 (achado 7): a redação que não repete — a que ainda não saiu; se as duas já saíram, a que não foi a última.
+async function redacaoQueNaoRepete(conversationId, [primeira, segunda]) {
+  const recentes = (await listRecentMessagesByConversation(conversationId, 10)) || [];
+  const daIa = recentes.filter((m) => m && m.direction === 'outbound' && m.sentBy === 'ai' && m.content)
+    .slice(-RESPOSTAS_COMPARADAS).map((m) => normalizarResposta(m.content));
+  if (!daIa.includes(normalizarResposta(primeira))) return primeira;
+  if (!daIa.includes(normalizarResposta(segunda))) return segunda;
+  return daIa[daIa.length - 1] === normalizarResposta(primeira) ? segunda : primeira;
 }
 
 // Um aviso por turno (25/09/2026): o aviso saiu para o cliente NESTE turno se o worker acabou de
@@ -760,18 +782,21 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // o silêncio de um "Ah"/"Pai!" do que a IA parecendo travada.
   if (texto && !turnoTeveEfeito(turno) && await repeteRespostaRecenteDaIa(conversation.id, texto)) {
     // Rodada 8 (N3): ver esclarecimentoDaDuvida. A releitura acima já descartou a conversa assumida, encerrada ou silenciada.
-    const esclarecimento = typeof alvoAmbiguo === 'string' ? esclarecimentoDaDuvida(alvoAmbiguo, turno.identidade || identidade) : null;
+    const esclarecimento = respostaCurtaDaDuvida(alvoAmbiguo, turno, identidade);
     if (!esclarecimento) {
       console.warn(`AI reply repeated a recent AI message in conversation ${conversation.id}; not sent`);
       return;
     }
-    const [primeira, segunda] = esclarecimento.redacoes;
-    const resposta = (await repeteRespostaRecenteDaIa(conversation.id, primeira)) ? segunda : primeira;
+    const resposta = await redacaoQueNaoRepete(conversation.id, esclarecimento.redacoes);
     console.warn(`AI reply repeated a recent AI message in conversation ${conversation.id}; sent the pending financial clarification instead`);
     await enqueueOutboundMessage({
       conversationId: conversation.id, channelId: conversation.channelId, content: resposta, sentBy: 'ai',
       ...(esclarecimento.metadata ? { metadata: esclarecimento.metadata } : {}),
     });
+    // Revisão da rodada 8 (achado 7): a resposta curta é uma pergunta como as outras — conta, e no limite de perguntas o
+    // atendimento vai para a fila, como no envio normal (nenhuma outra ação).
+    await incrementTriageAttempts(conversation.id);
+    if (forcarConclusao) await concluirEmCodigo(conversation.id, `Triagem inconclusiva após ${attempts} perguntas.`);
     return;
   }
   if (texto) {

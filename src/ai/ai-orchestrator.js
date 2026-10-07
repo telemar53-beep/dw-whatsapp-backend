@@ -387,6 +387,9 @@ function ferramentasDaTriagem(triagem, config) {
   return lista;
 }
 
+// Rodada 8 (N3): a frase do pedido de documento da resposta curta do worker, conferida pela mesma guarda do documento.
+const PEDIDO_DO_DOCUMENTO_DO_TITULAR = 'Se for de outra pessoa, me mande o CPF ou CNPJ do titular.';
+
 async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
@@ -1062,6 +1065,10 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     consultaPropriaPendente: Boolean(contexto.consultaPropriaPendente),
     // A reserva de uma entrega encontrou o alvo mudado por outro processamento: o worker não marca as entradas.
     alvoMudouNaEntrega: Boolean(contexto.alvoMudouNaEntrega),
+    // Rodada 8 (N3, revisão, achados 5 e 6): para a resposta curta do worker — a dúvida do alvo no FIM do turno (uma ferramenta
+    // pode tê-la resolvido no meio), e se a guarda do documento permitiria, agora, pedir o CPF/CNPJ do titular.
+    alvoAmbiguoNoFim: contexto.alvoAmbiguo || false,
+    pedidoDeDocumentoDeTerceiroPermitido: perfil === 'triagem' && violacoesDoDocumento(PEDIDO_DO_DOCUMENTO_DO_TITULAR, contexto).length === 0,
     esperadosDoAlvo: Array.isArray(contexto.esperadosDoAlvo) ? contexto.esperadosDoAlvo : null,
     identidade: contexto.identidade || null,
     // O harness de simulação encadeia roteiros e precisa do escopo de saída; o

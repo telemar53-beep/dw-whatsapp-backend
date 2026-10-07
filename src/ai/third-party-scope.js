@@ -90,6 +90,14 @@ function comPendenciaDeAlvo(escopo, motivo) {
   return comNovaMarca(motivo ? { ...resto, alvoPendente: motivo } : resto);
 }
 
+// A dúvida de endereço só existe no escopo pendente sem contrato de terceiro (revisão da v4.1, achado B5): num escopo com
+// contrato, o valor é corrompido e vale como a trava mais forte — nunca como uma dúvida que "o dela" resolve.
+const DUVIDAS_DE_ENDERECO = ['endereco_ambiguo', 'endereco_desconhecido'];
+function pendenciaValida(escopo) {
+  if (!PENDENCIAS_DE_ALVO.includes(escopo.alvoPendente)) return false;
+  return !(DUVIDAS_DE_ENDERECO.includes(escopo.alvoPendente) && escopo.contratos.length > 0);
+}
+
 /** O formato que a checagem de propriedade espera: uma lista de { id }. */
 function paraContexto(escopo) {
   if (!escopo) return null;
@@ -98,7 +106,7 @@ function paraContexto(escopo) {
     contratos: escopo.contratos.map((id) => ({ id })),
     ...(escopo.pendente === true ? { pendente: true } : {}),
     ...(escopo.alvoPendente !== undefined
-      ? { alvoPendente: PENDENCIAS_DE_ALVO.includes(escopo.alvoPendente) ? escopo.alvoPendente : PENDENCIA_MAIS_FORTE }
+      ? { alvoPendente: pendenciaValida(escopo) ? escopo.alvoPendente : PENDENCIA_MAIS_FORTE }
       : {}),
   };
 }

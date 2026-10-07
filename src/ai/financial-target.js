@@ -222,6 +222,15 @@ const ANTES_DA_RUA = new Set([...SAUDACAO_E_PEDIDO, ...CORTESIA, ...ARTIGOS, ...
 // Com a dúvida de endereço gravada, a resposta à pergunta do endereço também vale sem "da/do": "é a Rua de Teste", "Rua de
 // Teste, 300", "na Avenida de Teste".
 const ANTES_DA_RESPOSTA = new Set([...ANTES_DA_RUA, ...PREPOSICOES_DE_POSSE, 'e', 'eh', 'na', 'no', 'nas', 'nos', 'sim', 'isso', 'essa', 'esse', 'ser', 'seria']);
+// Revisão da v4.1 (achado B1): depois da resposta à dúvida de endereço, só uma fala NEUTRA (pedido, cortesia, confirmação)
+// mantém a limitação ao contrato identificado; qualquer outra palavra devolve a dúvida. A lista só decide quando MANTER: o que
+// estiver fora dela vai para o lado seguro.
+const CONFIRMACAO = new Set([
+  'e', 'eh', 'ok', 'okay', 'blz', 'beleza', 'sim', 'isso', 'certo', 'certinho', 'valeu', 'vlw', 'perfeito', 'show', 'ta', 'combinado',
+  'entendi', 'aguardo', 'aguardando', 'fico', 'no', 'tudo', 'bem', 'essa', 'esse', 'esta', 'este', 'mesmo', 'mesma', 'pronto', 'otimo',
+]);
+const FALA_NEUTRA = new Set([...ANTES_DA_RUA, ...CONFIRMACAO]);
+const falaNeutra = (texto) => palavrasDe(texto).every((x) => FALA_NEUTRA.has(x.p));
 
 /** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com duas palavras ou mais, se tem o tipo do logradouro, e o número. */
 function ruasDosContratos(enderecos) {
@@ -547,6 +556,9 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   // outro pedido simples, ou volta a uma dúvida).
   let duvidaDoLote = false;
   let respondida = false;
+  // Revisão da v4.1 (achado B1): a dúvida que a resposta encerrou neste lote, para devolvê-la se vier uma correção.
+  let duvidaRespondida = null;
+  let criadoAntesDaResposta = false;
   // Sem fala nenhuma a reaplicar (a entrada do job já processada, ou um áudio sem transcrição), vale a dúvida
   // já gravada — nunca "sem dúvida" (terceira revisão da F2).
   let alvoAmbiguo = (atual && atual.alvoPendente) || false;
@@ -573,7 +585,23 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
     const leitura = {};
     const r = resolverAlvoDoTurno({ terceiro: atual, texto, empresa, enderecos, duvidaDoLote, leitura });
     if (leitura.citouEndereco && DUVIDAS_DE_ENDERECO.has(r.alvoPendente)) duvidaDoLote = true;
-    if (eraDuvidaDeEndereco && r.voltarAoTitular && r.contratoEscolhido) respondida = true;
+    if (eraDuvidaDeEndereco && r.voltarAoTitular && r.contratoEscolhido) {
+      respondida = true;
+      duvidaRespondida = atual;
+      criadoAntesDaResposta = criado;
+    }
+    // Revisão da v4.1 (achado B1): depois da resposta, uma fala que não é neutra, não escolhe outro contrato e não leva a uma
+    // dúvida que se grava (uma correção, outra rua sem "da/do", uma negação) devolve a dúvida, que não termina mais neste lote.
+    // A cobrança não fica presa a um contrato que ele pode ter acabado de desdizer, e a dúvida não sai do banco.
+    if (respondida && !r.contratoEscolhido && !r.alvoPendente && !falaNeutra(texto)) {
+      atual = duvidaRespondida;
+      criado = criadoAntesDaResposta;
+      alvoAmbiguo = atual.alvoPendente;
+      escolha = null;
+      respondida = false;
+      duvidaDoLote = true;
+      continue;
+    }
     alvoAmbiguo = r.alvoAmbiguo;
     escolha = r.contratoEscolhido ? [...new Set([...(escolha || []), r.contratoEscolhido])] : (respondida && !r.alvoAmbiguo ? escolha : null);
     if (r.voltarAoTitular) {

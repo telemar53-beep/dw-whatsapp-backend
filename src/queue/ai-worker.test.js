@@ -1104,6 +1104,25 @@ describe('ai-worker — triagem', () => {
             expect(setThirdPartyScope).not.toHaveBeenCalled();
             expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
           });
+        // Revisão da v4.1 (achado B3): a limpeza adiada junto com os sinalizadores do turno — quem grava é a recuperação deles.
+        test('a resposta à dúvida e buscar_cliente não gravou o pendente no turno: grava o pendente (não limpa), uma gravação só', async () => {
+          getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'é a da Avenida de Teste' });
+          runAiTurn.mockResolvedValue({ texto: 'Não consegui agora.', toolsExecutadas: [], erro: null, triagemConcluida: null, alvoTerceiroNaoGravado: true });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ nome: null, contratos: [], pendente: true }), { esperados: [{ marca: 'marca-duvida' }] });
+        });
+        test('a resposta à dúvida e a volta ao titular pelo documento não foi gravada no turno: a volta é gravada uma vez só', async () => {
+          getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'é a da Avenida de Teste' });
+          runAiTurn.mockResolvedValue({ texto: 'Pronto.', toolsExecutadas: [], erro: null, triagemConcluida: null, voltaAoTitularNaoGravada: true });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, { esperados: [{ marca: 'marca-duvida' }], aceitaNulo: true });
+        });
         test('uma ferramenta do turno gravou outro escopo (o documento de alguém): a dúvida não é limpa por cima dele, e as entradas são marcadas', async () => {
           getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
           resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);

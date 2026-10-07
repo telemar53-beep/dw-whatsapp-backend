@@ -707,15 +707,17 @@ describe('pedido por endereço do próprio cliente', () => {
       .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: null });
   });
 
-  // Revisão do v4 (achado A2): a resposta que identifica o contrato limita a cobrança do turno a ele; o que vem depois no
-  // mesmo lote ("obrigado", imagem, a outra rua sem "da/do") não desfaz essa limitação. Outro pedido simples soma.
+  // Revisão do v4 (achado A2): a resposta que identifica o contrato limita a cobrança do turno a ele; uma fala NEUTRA depois no
+  // mesmo lote ("obrigado", "ok, pode mandar", imagem) não desfaz essa limitação. Outro pedido simples soma.
   test.each([
     [['Rua de Teste', 'obrigado'], ['301']],
     [['Rua de Teste', 'pode mandar'], ['301']],
+    [['Rua de Teste', 'ok, pode mandar'], ['301']],
+    [['Rua de Teste', 'isso mesmo, obrigado'], ['301']],
+    [['Rua de Teste', 'manda o pix'], ['301']],
+    [['Rua de Teste', '👍'], ['301']],
     [['Rua de Teste', ''], ['301']],
     [['Rua de Teste', null], ['301']],
-    [['Rua de Teste', 'Avenida de Teste'], ['301']],
-    [['é a da Rua de Teste', 'ops, é a outra'], ['301']],
     [['a da Rua de Teste', 'e o da Avenida de Teste'], ['301', '302']],
   ])('com a dúvida gravada, a resposta e depois %j: a cobrança fica limitada a %j', (falas, contratos) => {
     const TRES = [...ENDERECOS, { id: 304, address: 'Travessa de Teste, 40' }];
@@ -723,6 +725,27 @@ describe('pedido por endereço do próprio cliente', () => {
       terceiro: null, alvoAmbiguo: false, gravar: 'limpar', contratosEscolhidos: contratos,
       ...(contratos.length === 1 ? { contratoEscolhido: contratos[0] } : {}),
     });
+  });
+  // Revisão da v4.1 (07/10/2026, achado B1): a resposta seguida de uma fala que NÃO é neutra — uma correção, outra rua sem
+  // "da/do", uma negação — não deixa a cobrança presa ao contrato que ele pode ter acabado de desdizer, nem tira a dúvida do
+  // banco: a dúvida volta, e não termina mais neste lote (nem por uma terceira fala).
+  test.each([
+    'ops, é a outra casa', 'não, Avenida de Teste', 'não é essa', 'Avenida de Teste', 'é a outra', 'pera, é a Travessa de Teste, 40',
+    'não, não é a da Rua de Teste', 'na verdade é a outra', 'errei',
+  ])('com a dúvida gravada, a resposta e depois "%s": a dúvida volta, sem contrato escolhido e sem limpar', (correcao) => {
+    const TRES = [...ENDERECOS, { id: 304, address: 'Travessa de Teste, 40' }];
+    const r = mensagens(['Rua de Teste', correcao], { terceiro: DUVIDA('endereco_desconhecido'), enderecos: TRES });
+    expect(r).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+    expect(mensagens(['Rua de Teste', correcao, 'Avenida de Teste'], { terceiro: DUVIDA('endereco_desconhecido'), enderecos: TRES }))
+      .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+    // E no turno seguinte, sobre o estado gravado, "pode mandar" continua sem liberar nada.
+    expect(mensagens(['pode mandar'], { terceiro: r.terceiro, enderecos: TRES }))
+      .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+  });
+  test('com a dúvida gravada, a resposta e depois "é da minha mãe" ou "a de cima": vale o mais restritivo (outra pessoa), não a resposta', () => {
+    expect(mensagens(['Rua de Teste', 'é da minha mãe'], { terceiro: DUVIDA('endereco_desconhecido') }).alvoAmbiguo).toBe('outra_pessoa_sem_documento');
+    // "a de cima" é lido como sempre (referência a outra pessoa): também o mais restritivo, nunca a resposta.
+    expect(mensagens(['Rua de Teste', 'a de cima'], { terceiro: DUVIDA('endereco_desconhecido') }).alvoAmbiguo).toBe('outra_pessoa_sem_documento');
   });
   test('com a dúvida gravada, a resposta e depois um endereço desconhecido: volta a dúvida', () => {
     expect(mensagens(['Rua de Teste', 'e o da Rua Nova'], { terceiro: DUVIDA('endereco_desconhecido') }).alvoAmbiguo).toBe('endereco_desconhecido');

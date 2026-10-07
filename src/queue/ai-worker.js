@@ -271,6 +271,21 @@ async function repeteRespostaRecenteDaIa(conversationId, texto) {
   return daIa.slice(-RESPOSTAS_COMPARADAS).some((m) => normalizarResposta(m.content) === alvo);
 }
 
+// Revisão da rodada 8 (achado 2): a entrada que deixou o alvo financeiro como ficou no fim do lote — a última cuja aplicação mudou o
+// estado (a dúvida, ou a volta ao titular). Reaplica a regra pura sobre os prefixos do lote (poucas entradas; sem banco). É a
+// origem efetiva usada para o documento: o que veio antes dela, mesmo no lote, não esclarece a dúvida (tool-executor.js).
+function indiceDaOrigemDoAlvo({ terceiro, textos, documentos, empresa, enderecos }) {
+  const estado = (r) => JSON.stringify([r.alvoAmbiguo || false, (r.terceiro && r.terceiro.alvoPendente) || null, Boolean(r.terceiro)]);
+  let anterior = estado(resolverAlvoDasMensagens({ terceiro, textos: [], empresa, documentos: [], enderecos }));
+  let origem = null;
+  for (let k = 1; k <= textos.length; k += 1) {
+    const agora = estado(resolverAlvoDasMensagens({ terceiro, textos: textos.slice(0, k), empresa, documentos: documentos.slice(0, k), enderecos }));
+    if (agora !== anterior) origem = k - 1;
+    anterior = agora;
+  }
+  return origem;
+}
+
 // Um aviso por turno (25/09/2026): o aviso saiu para o cliente NESTE turno se o worker acabou de
 // mandá-lo, ou se a entrada desta mesma mensagem mandou — a entrega é registrada logo depois da
 // mensagem. A margem cobre a diferença entre o horário do provedor (created_at da mensagem) e o do
@@ -440,6 +455,10 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   }
   let falas = null;
   let documentos = [];
+  // Revisão da rodada 8 (achado 2): o id de cada fala lida (na mesma ordem de `falas`) e a entrada que deixou o alvo como
+  // ficou no fim do lote.
+  let idsDasFalas = [];
+  let origemDoAlvoNoTurno = null;
   // As entradas que o turno aplicou, para marcar depois dele; null = não marcar (a transição não foi gravada).
   let entradasDoTurno = null;
   // As entradas deste turno: as lidas e a do job. A do job já marcada (reprocessamento) não é reaplicada:
@@ -485,20 +504,24 @@ async function handleTriageTurn({ conversation, config, messageId }) {
       };
       const lidasComTexto = [];
       const documentosLidos = [];
+      const idsLidos = [];
       for (const m of validas) {
         if (m.id !== messageId && m.metadata && m.metadata.autorrespostaProvavel === true) continue;
         const texto = (m.id === messageId ? textoDoCliente : (m.messageType === 'audio' ? m.transcription : m.content)) || '';
         // Entrada sem texto (imagem, áudio sem transcrição) entra vazia: não muda o alvo, mas desfaz a escolha de contrato
         // pela rua de uma fala anterior (pedido por endereço, 06/10/2026).
         lidasComTexto.push(texto);
+        idsLidos.push(m.id);
         documentosLidos.push(m.id === messageId || !texto ? null : documentosDaEntrada(texto));
       }
       if (!jobNaLista && !entradaJaProcessada) {
         lidasComTexto.push(textoDoCliente || '');
+        idsLidos.push(messageId);
         documentosLidos.push(null);
       }
       falas = lidasComTexto;
       documentos = documentosLidos;
+      idsDasFalas = idsLidos;
     } catch (err) {
       console.error(`Failed to read the unconfirmed customer messages for conversation ${conversation.id}: ${mensagemSegura(err)}`);
     }
@@ -515,6 +538,9 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // Os sem endereço também entram: "é a minha" só escolhe sozinho quando ele tem um contrato só.
     const enderecos = ((identidade && identidade.contracts) || []).filter((c) => c && c.id != null).map((c) => ({ id: c.id, address: c.address || '' }));
     const alvo = resolverAlvoDasMensagens({ terceiro, textos: falas, empresa, documentos, enderecos });
+    // Revisão da rodada 8 (achado 2): a entrada que deixou o alvo como está (a dúvida, ou a volta ao titular).
+    const indiceDaOrigem = indiceDaOrigemDoAlvo({ terceiro, textos: falas, documentos, empresa, enderecos });
+    origemDoAlvoNoTurno = indiceDaOrigem === null ? null : (idsDasFalas[indiceDaOrigem] || null);
     ({ alvoAmbiguo } = alvo);
     contratoEscolhido = alvo.contratoEscolhido || null;
     contratosEscolhidos = alvo.contratosEscolhidos || null;
@@ -531,7 +557,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     } else if (alvo.gravar) {
       let novo = null;
       // Rodada 8 (N1): a dúvida gravada guarda a primeira entrada aplicada neste turno — a origem dela.
-      const desdeDaDuvida = aMarcar[0] || messageId || null;
+      const desdeDaDuvida = origemDoAlvoNoTurno || aMarcar[0] || messageId || null;
       if (alvo.gravar === 'criar') novo = comPendenciaDeAlvo(montarEscopo(null, [], new Date(), { pendente: true }), alvo.terceiro.alvoPendente, desdeDaDuvida);
       else if (alvo.gravar === 'pendencia') novo = comPendenciaDeAlvo(escopoDoTerceiro, alvo.terceiro.alvoPendente || null, desdeDaDuvida);
       try {
@@ -602,8 +628,12 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     duvidaDeEnderecoRespondida: limparDepoisDoTurno,
     // Rodada 8 (N1): as falas do cliente que este turno aplicou (as novas, ainda não confirmadas, e a do job) — a origem
     // efetiva de um documento que esclarece uma dúvida; e se a afirmação da própria cobrança tirou o terceiro neste turno.
-    falasNovasDoCliente: Array.isArray(falas) ? falas : null,
+    // Revisão da rodada 8 (achado 8): sem as falas lidas (a leitura falhou), a lista vai VAZIA — nunca null, que desligaria a
+    // regra do documento do histórico com a dúvida gravada (falha aberta).
+    falasNovasDoCliente: Array.isArray(falas) ? falas : [],
     alvoVoltouAoTitular,
+    origemDoAlvoNoTurno,
+    idsDasFalasNovas: Array.isArray(falas) ? idsDasFalas.slice() : [],
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

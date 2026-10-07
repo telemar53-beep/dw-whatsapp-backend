@@ -218,25 +218,53 @@ function restricaoDoHistorico(contexto) {
   if (gravada || doTurno) return 'duvida';
   return contexto.alvoVoltouAoTitular === true ? 'titular' : null;
 }
-// A origem efetiva de uma dúvida gravada: as falas da janela a partir da entrada que a originou (duvidaDesde) — o pedido de
-// terceiro que já trazia o CPF na mesma mensagem continua valendo. Sem a entrada na janela, só as falas novas do turno.
-function janelaDesdeADuvida(contexto) {
-  const desde = contexto.terceiro && contexto.terceiro.duvidaDesde;
-  const janela = Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela : [];
-  const i = desde ? janela.findIndex((m) => m && m.id === desde) : -1;
-  return i >= 0 ? janela.slice(i) : [];
+// A origem efetiva: a entrada que deixou o alvo como está — a da dúvida gravada (duvidaDesde) ou, para a dúvida só do turno e
+// para a volta ao titular, a do lote deste turno (origemDoAlvoNoTurno). Revisão da rodada 8 (achado 2): só a janela A PARTIR
+// dela vale; o documento numa fala anterior, mesmo no lote do turno, não. O pedido de terceiro que já trazia o CPF na mesma
+// mensagem continua valendo (a origem é ela). Origem desconhecida (escopo de antes desta versão, ou fora da janela): só as
+// falas novas do turno.
+function origemDaRestricao(contexto, restricao) {
+  if (restricao === 'titular') return contexto.origemDoAlvoNoTurno || null;
+  const gravada = contexto.terceiro && contexto.terceiro.alvoPendente;
+  return (gravada ? contexto.terceiro.duvidaDesde : contexto.origemDoAlvoNoTurno) || null;
 }
 function documentoSoDoHistorico(documento, contexto) {
   const restricao = restricaoDoHistorico(contexto);
   if (!restricao || !documento || documento === documentoDoTitularDaConversa(contexto)) return null;
-  if (documentosApresentados({ falasDoCliente: contexto.falasNovasDoCliente }).has(documento)) return null;
-  if (restricao === 'duvida' && documentosApresentados({ mensagensDaJanela: janelaDesdeADuvida(contexto) }).has(documento)) return null;
-  return restricao;
+  const desde = origemDaRestricao(contexto, restricao);
+  const janela = Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela : [];
+  const i = desde ? janela.findIndex((m) => m && m.id === desde) : -1;
+  const valem = i >= 0 ? documentosApresentados({ mensagensDaJanela: janela.slice(i) }) : documentosDasFalasNovas(contexto, janela);
+  return valem.has(documento) ? null : restricao;
 }
-function instrucaoDoDocumentoDoHistorico(restricao) {
-  return restricao === 'titular'
-    ? 'NADA foi consultado: ele acabou de dizer que a cobrança é dele. O CPF ou CNPJ de outra pessoa que já estava na conversa não vale agora: siga com a cobrança dele, pelo cadastro que você já tem.'
-    : 'NADA foi consultado: este CPF ou CNPJ já estava na conversa antes da dúvida de agora, e consultá-lo de novo não esclarece de quem é a cobrança. Não envie nada de ninguém. Pergunte, curto, de quem é a cobrança; se for de outra pessoa, peça que ele mande o CPF ou CNPJ dela de novo nesta conversa, mesmo que seja o mesmo de antes.';
+// Revisão da rodada 8 (achado 3): sem a origem na janela, as falas novas do turno lidas pela janela EM ORDEM — a partir da primeira
+// delas, com a mensagem da IA logo antes (o pedido de documento marcado, que vale para o documento partido em duas falas). Sem
+// os ids, os textos soltos (o chamador antigo).
+function documentosDasFalasNovas(contexto, janela) {
+  const ids = new Set(Array.isArray(contexto.idsDasFalasNovas) ? contexto.idsDasFalasNovas : []);
+  const i = janela.findIndex((m) => m && ids.has(m.id));
+  if (i < 0) return documentosApresentados({ falasDoCliente: contexto.falasNovasDoCliente });
+  return documentosApresentados({ mensagensDaJanela: janela.slice(i > 0 && janela[i - 1] && janela[i - 1].de === 'ia' ? i - 1 : i) });
+}
+// Revisão da rodada 8 (achado 1): a instrução segue a mesma divisão da guarda do documento (documento-pendente.js) — só a
+// dúvida que pede documento manda pedi-lo de novo; com a dúvida fraca ou de endereço, pedir documento seria barrado.
+const DUVIDAS_QUE_PEDEM_DOCUMENTO = new Set(['terceiro_nao_vinculado', 'outra_pessoa_sem_documento', 'terceiro_expirado']);
+const DUVIDAS_DE_ENDERECO = new Set(['endereco_ambiguo', 'endereco_desconhecido']);
+function instrucaoDoDocumentoDoHistorico(restricao, contexto) {
+  if (restricao === 'titular') {
+    return 'NADA foi consultado: ele acabou de dizer que a cobrança é dele. O CPF ou CNPJ de outra pessoa que já estava na conversa não vale agora: siga com a cobrança dele, pelo cadastro que você já tem.';
+  }
+  const motivo = (contexto.terceiro && contexto.terceiro.alvoPendente) || contexto.alvoAmbiguo;
+  // Revisão da rodada 8 (achados 3 e 4): o número pode só não ter vindo numa mensagem dele depois da dúvida (não "já estava na
+  // conversa"), e pode ser dele mesmo, se ele ainda não está identificado — a instrução não diz de quem é.
+  const inicio = 'NADA foi consultado: este CPF ou CNPJ não veio numa mensagem dele depois da dúvida de agora, e consultá-lo assim não esclarece a cobrança. Não envie nada de ninguém.';
+  if (DUVIDAS_QUE_PEDEM_DOCUMENTO.has(motivo)) {
+    return `${inicio} Pergunte, curto, de quem é a cobrança e peça que ele mande de novo, nesta conversa, o CPF ou CNPJ do titular da conta, mesmo que seja o mesmo de antes.`;
+  }
+  if (DUVIDAS_DE_ENDERECO.has(motivo)) {
+    return `${inicio} A dúvida de agora é de qual endereço dele é a conta: pergunte, curto, citando os endereços dele; não peça documento.`;
+  }
+  return `${inicio} Pergunte, curto, se a cobrança é dele ou da pessoa já citada; não peça documento.`;
 }
 
 function instrucaoDoDocumentoSemOrigem(contexto) {
@@ -378,7 +406,7 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
           return recusa('document_without_origin', null, instrucaoDoDocumentoSemOrigem(contexto));
         }
         const doHistorico = documentoSoDoHistorico(argsValidados.cpf, contexto);
-        if (doHistorico) return recusa('document_before_doubt', null, instrucaoDoDocumentoDoHistorico(doHistorico));
+        if (doHistorico) return recusa('document_before_doubt', null, instrucaoDoDocumentoDoHistorico(doHistorico, contexto));
         const titular = documentoDoTitularDaConversa(contexto);
         if (titular && titular !== argsValidados.cpf && argsValidados.titularEOutraPessoa !== true) {
           argsValidados = { ...argsValidados, titularEOutraPessoa: true };

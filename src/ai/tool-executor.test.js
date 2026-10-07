@@ -1121,17 +1121,23 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
     const HISTORICO = ['manda o boleto da minha vizinha, o cpf dela é 111.444.777-35', 'agora manda o boleto da rua do João'];
     const LOCALIZADA = { nome: 'Fulana', contratos: [{ id: 401 }] };
     const base = (extra) => ({ ...TRIAGEM_IDENTIFICADA, falasDoCliente: HISTORICO, falasNovasDoCliente: ['agora manda o boleto da rua do João'], ...extra });
+    // Revisão da rodada 8 (achado 1): a instrução segue a mesma divisão da guarda do documento — só a dúvida que pede documento
+    // manda pedi-lo de novo; a fraca pergunta de quem é, a de endereço pergunta o endereço; nenhuma das duas pede documento.
     test.each([
-      ['a dúvida forte gravada no escopo', { terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado' }],
-      ['a dúvida fraca gravada no escopo', { terceiro: { ...LOCALIZADA, alvoPendente: 'proprio_nao_afirmado' }, alvoAmbiguo: 'proprio_nao_afirmado' }],
-      ['a dúvida só do turno', { terceiro: LOCALIZADA, alvoAmbiguo: 'referencia_incompleta' }],
-      ['a dúvida de endereço gravada', { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido' }, alvoAmbiguo: 'endereco_desconhecido' }],
-    ])('%s: nada é consultado, e o modelo lê que precisa do documento mandado de novo', async (_, extra) => {
+      ['a dúvida forte gravada no escopo', { terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado' }, /mande de novo, nesta conversa, o CPF ou CNPJ do titular da conta/],
+      ['a dúvida fraca gravada no escopo', { terceiro: { ...LOCALIZADA, alvoPendente: 'proprio_nao_afirmado' }, alvoAmbiguo: 'proprio_nao_afirmado' }, /se a cobrança é dele ou da pessoa já citada; não peça documento/],
+      ['a dúvida só do turno', { terceiro: LOCALIZADA, alvoAmbiguo: 'referencia_incompleta' }, /se a cobrança é dele ou da pessoa já citada; não peça documento/],
+      ['a dúvida de endereço gravada', { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido' }, alvoAmbiguo: 'endereco_desconhecido' }, /de qual endereço dele é a conta.*não peça documento/],
+    ])('%s: nada é consultado, e a instrução segue o tipo da dúvida', async (_, extra, instrucao) => {
       const executar = buscar();
       const r = await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, base(extra));
       expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
       expect(r.instrucao).toMatch(/NADA foi consultado/);
-      expect(r.instrucao).toMatch(/mande o CPF ou CNPJ dela de novo/);
+      expect(r.instrucao).toMatch(instrucao);
+      if (!/mande de novo/.test(String(instrucao))) expect(r.instrucao).not.toMatch(/mande de novo/);
+      // Revisão da rodada 8 (achado 3): a recusa não afirma que o número "já estava na conversa" (pode só não ter vindo depois da dúvida).
+      expect(r.instrucao).not.toMatch(/já estava na conversa/);
+      expect(r.instrucao).not.toMatch(/\bdela\b/);
       expect(executar).not.toHaveBeenCalled();
     });
     test('a dúvida gravada no escopo vale mesmo que o turno não a repita (alvoAmbiguo vazio)', async () => {
@@ -1160,6 +1166,59 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
       const r = await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, ctx);
       expect(r.ok !== false).toBe(vale);
       expect(executar).toHaveBeenCalledTimes(vale ? 1 : 0);
+    });
+
+    // Revisão da rodada 8 (achado 2): no MESMO lote, o CPF que veio antes da fala que criou a dúvida não a tira — a origem é a
+    // entrada que deixou a dúvida (duvidaDesde ou, para a dúvida só do turno, origemDoAlvoNoTurno), não o começo do lote.
+    const LOTE = [
+      { id: 'm-1', de: 'cliente', texto: 'manda o boleto da minha vizinha, o cpf dela é 111.444.777-35' },
+      { id: 'm-2', de: 'ia', texto: 'Prontinho!' },
+      { id: 'm-3', de: 'cliente', texto: 'manda o boleto dela, o cpf é 111.444.777-35' },
+      { id: 'm-4', de: 'cliente', texto: 'não, espera, é o da rua do João' },
+    ];
+    test.each([
+      ['dúvida gravada neste lote, originada na m-4', { terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'm-4' }, alvoAmbiguo: 'terceiro_nao_vinculado' }],
+      ['dúvida só do turno, originada na m-4', { terceiro: LOCALIZADA, alvoAmbiguo: 'referencia_incompleta', origemDoAlvoNoTurno: 'm-4' }],
+    ])('%s: o CPF da m-3 (no lote, antes da dúvida) não é consultado', async (_, extra) => {
+      const executar = buscar();
+      const ctx = base({ mensagensDaJanela: LOTE, falasNovasDoCliente: [LOTE[2].texto, LOTE[3].texto], ...extra });
+      expect(await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, ctx)).toMatchObject({ motivo: 'document_before_doubt' });
+      expect(executar).not.toHaveBeenCalled();
+    });
+    test('volta ao titular originada na m-4: o CPF da m-3 (antes dela, no lote) não é consultado', async () => {
+      const executar = buscar();
+      const ctx = base({ terceiro: null, alvoAmbiguo: false, alvoVoltouAoTitular: true, origemDoAlvoNoTurno: 'm-4', mensagensDaJanela: [...LOTE.slice(0, 3), { id: 'm-4', de: 'cliente', texto: 'agora a minha fatura da Rua de Teste' }], falasNovasDoCliente: [LOTE[2].texto, 'agora a minha fatura da Rua de Teste'] });
+      expect(await executeTool('buscar_cliente', { cpf: '11144477735' }, ctx)).toMatchObject({ motivo: 'document_before_doubt' });
+      expect(executar).not.toHaveBeenCalled();
+    });
+
+    // Revisão da rodada 8 (achado 3): sem a origem da dúvida na janela (escopo de antes desta versão, dúvida vencida, ou origem
+    // antiga), as falas novas são lidas pela janela EM ORDEM, com a mensagem da IA que pediu o documento logo antes — o CPF
+    // mandado partido ("111.444" e "777-35") em resposta ao pedido marcado vale, como em qualquer outra consulta.
+    test.each([
+      ['dúvida vencida (sem origem)', { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'terceiro_expirado' }, alvoAmbiguo: 'terceiro_expirado' }],
+      ['dúvida com a origem fora da janela', { terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'm-antiga' }, alvoAmbiguo: 'terceiro_nao_vinculado' }],
+    ])('%s: o CPF partido em duas falas novas, em resposta ao pedido marcado, é consultado', async (_, extra) => {
+      const executar = buscar();
+      const janela = [
+        { id: 'm-1', de: 'cliente', texto: 'agora manda o boleto da rua do João' },
+        { id: 'o-1', de: 'ia', texto: 'Para eu localizar, me passe o CPF dele.', pediuDocumento: true },
+        { id: 'm-2', de: 'cliente', texto: '111.444' },
+        { id: 'm-3', de: 'cliente', texto: '777-35' },
+      ];
+      const ctx = base({ ...extra, falasDoCliente: ['agora manda o boleto da rua do João', '111.444', '777-35'], mensagensDaJanela: janela, falasNovasDoCliente: ['111.444', '777-35'], idsDasFalasNovas: ['m-2', 'm-3'] });
+      expect((await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, ctx)).ok).toBe(true);
+      expect(executar).toHaveBeenCalled();
+    });
+    // Revisão da rodada 8 (achado 4): quem fala ainda não identificado — o CPF reconsultado pode ser o dele. A recusa fica (o
+    // código não tem como separar o dele do de outra pessoa), e a instrução não fala "dela".
+    test('quem fala não identificado: o CPF do histórico continua recusado, sem dizer que é "dela"', async () => {
+      const executar = buscar();
+      const ctx = base({ ...SEM_IDENTIDADE, terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento' }, alvoAmbiguo: 'outra_pessoa_sem_documento', falasDoCliente: ['meu cpf é 529.982.247-25, minha internet caiu', 'e manda o boleto da minha mãe'], falasNovasDoCliente: ['vê a minha internet primeiro'] });
+      const r = await executeTool('buscar_cliente', { cpf: '52998224725' }, ctx);
+      expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
+      expect(r.instrucao).not.toMatch(/\bdela\b/);
+      expect(executar).not.toHaveBeenCalled();
     });
 
     test('o mesmo documento mandado de novo numa fala nova deste turno: as regras de sempre (consulta)', async () => {

@@ -1046,6 +1046,51 @@ describe('ai-worker — triagem', () => {
           }));
         });
 
+        // Revisão da rodada 8 (achado 8): a leitura das entradas não confirmadas falhou, mas o escopo com a dúvida foi lido — o
+        // turno recebe a lista de falas novas VAZIA (nunca null), e a regra do documento do histórico continua valendo.
+        test('a leitura das falas falhou com a dúvida gravada: o turno recebe as falas novas vazias, não a ausência delas', async () => {
+          const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+          getThirdPartyScope.mockResolvedValue({ ...DUVIDA_GRAVADA, duvidaDesde: 'm-0' });
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockRejectedValueOnce(new Error('banco fora'));
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'é da Fulana mesmo, pode reenviar' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ falasNovasDoCliente: [], idsDasFalasNovas: [] }));
+          errorSpy.mockRestore();
+        });
+
+        // Revisão da rodada 8 (achado 2): num lote ("bom dia" + o pedido da rua que não é dele), a origem gravada da dúvida é a
+        // entrada que a criou (m-1), não a primeira do lote (m-0); o turno recebe a mesma origem.
+        test('lote: a origem da dúvida é a entrada que a criou, não a primeira do lote', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-0', direction: 'inbound', messageType: 'text', content: 'bom dia', createdAt: new Date() },
+            { id: 'm-1', direction: 'inbound', messageType: 'text', content: 'manda o pix da Avenida Central', createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o pix da Avenida Central' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ alvoPendente: 'endereco_desconhecido', duvidaDesde: 'm-1' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-1' }));
+        });
+
+        // Mutação R1-7 da revisão da rodada 8: o alvo muda DUAS vezes no lote (a dúvida de endereço na m-0, a de outra pessoa na
+        // m-2); a origem é a ÚLTIMA mudança — a m-2 —, não a primeira.
+        test('lote com duas mudanças do alvo: a origem é a última delas', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-0', direction: 'inbound', messageType: 'text', content: 'manda o pix da Avenida Central', createdAt: new Date() },
+            { id: 'm-1', direction: 'inbound', messageType: 'text', content: 'obrigado', createdAt: new Date() },
+            { id: 'm-2', direction: 'inbound', messageType: 'text', content: 'manda o boleto da minha mãe', createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-2', messageType: 'text', content: 'manda o boleto da minha mãe' });
+          findLatestInboundMessageId.mockResolvedValue('m-2');
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-2' });
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ alvoPendente: 'outra_pessoa_sem_documento', duvidaDesde: 'm-2' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-2', idsDasFalasNovas: ['m-0', 'm-1', 'm-2'] }));
+        });
+
         test('dúvida de endereço gravada + "pode mandar": continua, sem gravar nada e sem liberar', async () => {
           getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
           resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);

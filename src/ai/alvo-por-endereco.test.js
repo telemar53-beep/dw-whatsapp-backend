@@ -61,6 +61,7 @@ function turno(falas, { contratos = [RUA, AVENIDA], terceiro = null } = {}) {
       contracts: contratos.map((c) => ({ id: c.id, address: c.address })),
       identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Sicrano', client: { id: 9003, document: CPF_SICRANO }, contestado: false },
       terceiro: alvo.terceiro, alvoAmbiguo: alvo.alvoAmbiguo, contratoEscolhido: alvo.contratoEscolhido || null,
+      contratosEscolhidos: alvo.contratosEscolhidos || null,
       ferramentasPermitidas: TRIAGEM, registroFerramentas: [], sgpCache: {},
       falasDoCliente: ['manda o pix', ...falas], ultimaFalaDoCliente: falas[falas.length - 1],
     },
@@ -95,24 +96,68 @@ test('endereço de contrato do próprio cliente: só esse contrato é cobrado; o
   expect(pixEnviado()).toEqual(['PIX-301']);
 });
 
-test('dois contratos na mesma rua, sem número: nada sai, e a pergunta é de endereço (sem pedir documento)', async () => {
+test('dois contratos na mesma rua, sem número: nada sai, a dúvida de qual é gravada, e a pergunta é de endereço (sem pedir documento)', async () => {
   const { alvo, contexto } = turno(['manda o pix da Rua de Teste'], { contratos: [RUA, RUA_500] });
-  expect(alvo.gravar).toBeNull();
+  expect(alvo.gravar).toBe('criar');
   const r = await executeTool('gerar_pix', { contratoId: 301 }, contexto);
   expect(r).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
   expect(r.instrucao).toMatch(/bate com mais de um contrato dele/);
+  expect(r.instrucao).toMatch(/ou ele disse que é a dele/);
   expect(r.instrucao).toMatch(/NÃO peça CPF nem CNPJ/);
   expect(viasPedidas()).toEqual([]);
   expect(pixEnviado()).toEqual([]);
 });
 
-test('rua que não é de contrato dele: sem correspondência segura, vale a leitura de sempre (a dúvida de outra pessoa) e nada sai', async () => {
+test('rua que não é de contrato dele: dúvida de endereço gravada; a instrução pergunta o endereço sem pedir documento', async () => {
   const { alvo, contexto } = turno(['manda o pix da Rua Nova']);
-  expect(alvo).toMatchObject({ alvoAmbiguo: 'outra_pessoa_sem_documento', gravar: 'criar' });
+  expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
   expect(alvo.contratoEscolhido).toBeUndefined();
   const r = await executeTool('gerar_pix', {}, contexto);
   expect(r).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
+  expect(r.instrucao).toMatch(/de qual endereço é a cobrança/);
+  expect(r.instrucao).toMatch(/NÃO peça CPF ou CNPJ agora/);
+  expect(r.instrucao).toMatch(/não diga que é de outra pessoa/);
   expect(viasPedidas()).toEqual([]);
+});
+
+test('a dúvida de endereço entre turnos: "pode mandar" e "obrigado" não liberam; a rua dele na resposta libera só esse contrato', async () => {
+  const primeiro = turno(['manda o pix da Rua Nova']);
+  let estado = primeiro.alvo.terceiro;
+  for (const fala of ['pode mandar', 'obrigado']) {
+    const t = turno([fala], { terceiro: estado });
+    expect(t.alvo.alvoAmbiguo).toBe('endereco_desconhecido');
+    for (const args of [{}, { contratoId: 301 }, { contratoId: 302 }]) {
+      expect(await executeTool('gerar_pix', args, t.contexto)).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
+    }
+    estado = t.alvo.terceiro;
+  }
+  expect(viasPedidas()).toEqual([]);
+  const resposta = turno(['é a da Rua de Teste'], { terceiro: estado });
+  expect(resposta.alvo).toMatchObject({ terceiro: null, alvoAmbiguo: false, gravar: 'limpar', contratoEscolhido: '301' });
+  expect((await executeTool('gerar_pix', { contratoId: 302 }, resposta.contexto)).motivo).toBe('financial_target_address_mismatch');
+  const r = await executeTool('gerar_pix', {}, resposta.contexto);
+  expect(r.ok).toBe(true);
+  expect(pixEnviado()).toEqual(['PIX-301']);
+});
+
+test('a dúvida de endereço e o esclarecimento de que é de outra pessoa: seguem as regras de terceiro (pede o documento dela)', async () => {
+  const primeiro = turno(['manda o pix da Rua Nova']);
+  const t = turno(['é da minha mãe'], { terceiro: primeiro.alvo.terceiro });
+  expect(t.alvo.alvoAmbiguo).toBe('outra_pessoa_sem_documento');
+  const r = await executeTool('gerar_pix', { contratoId: 301 }, t.contexto);
+  expect(r).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
+  expect(r.instrucao).toMatch(/CPF ou CNPJ do titular/);
+  expect(viasPedidas()).toEqual([]);
+});
+
+test('duas falas com contratos diferentes: os dois podem ser cobrados, um terceiro contrato dele não', async () => {
+  const { alvo, contexto } = turno(['manda o pix da Rua de Teste', 'e o da Avenida de Teste'], { contratos: [RUA, AVENIDA, { id: 304, address: 'Travessa de Teste, 4 - Bairro de Teste' }] });
+  expect(alvo.contratosEscolhidos).toEqual(['301', '302']);
+  expect(alvo.contratoEscolhido).toBeUndefined();
+  expect((await executeTool('gerar_pix', { contratoId: 304 }, contexto)).motivo).toBe('financial_target_address_mismatch');
+  expect((await executeTool('gerar_pix', { contratoId: 301 }, contexto)).ok).toBe(true);
+  expect((await executeTool('gerar_pix', { contratoId: 302 }, contexto)).ok).toBe(true);
+  expect(pixEnviado()).toEqual(['PIX-301', 'PIX-302']);
 });
 
 test('pedido explícito de outra pessoa: continua travando como antes (e grava a dúvida de outra pessoa)', async () => {

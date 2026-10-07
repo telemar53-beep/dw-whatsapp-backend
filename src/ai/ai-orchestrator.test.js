@@ -2397,6 +2397,14 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
         expect(visto).toBe('302');
       });
 
+      test('os contratos escolhidos em duas falas chegam ao contexto das ferramentas do turno', async () => {
+        let visto;
+        roteiro(chamada('gerar_pix'), final('Certo.'));
+        executeTool.mockReset().mockImplementation(async (_n, _a, c) => { visto = c.contratosEscolhidos; return { ok: true, resultado: { enviado: false } }; });
+        await turno(['manda o pix da Rua de Teste', 'e o da Avenida de Teste'], { contratosEscolhidos: [301, 302] });
+        expect(visto).toEqual(['301', '302']);
+      });
+
       test('a ferramenta de cobrança respondeu outra coisa (bloqueio): a frase dela fica, sem a troca da indisponibilidade não confirmada', async () => {
         roteiro(chamada('enviar_boleto'), final('O boleto não está disponível por aqui para este caso.'));
         executeTool.mockReset().mockImplementation(async (_n, _a, c) => {

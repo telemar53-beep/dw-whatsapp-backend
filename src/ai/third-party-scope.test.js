@@ -107,7 +107,24 @@ describe('dúvida sobre o alvo gravada no escopo', () => {
     expect([...PENDENCIAS_DE_ALVO].sort()).toEqual([
       AMBIGUIDADE.DOIS_LADOS, AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO, AMBIGUIDADE.PROPRIO_NAO_AFIRMADO,
       AMBIGUIDADE.REFERENCIA_INCOMPLETA, AMBIGUIDADE.TERCEIRO_NAO_VINCULADO,
+      AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO,
     ].sort());
+  });
+
+  test('a dúvida de endereço gravada volta como ela mesma (não vira a trava mais forte de terceiro)', () => {
+    for (const motivo of [AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO]) {
+      const duvida = comPendenciaDeAlvo(montarEscopo(null, [], AGORA, { pendente: true }), motivo);
+      expect(paraContexto(duvida)).toEqual({ nome: null, contratos: [], pendente: true, alvoPendente: motivo });
+    }
+  });
+
+  // Revisão da v4.1 (07/10/2026, achado B5): o código nunca grava dúvida de endereço num escopo com contrato de terceiro. Se o
+  // valor aparecer assim (dado corrompido), vale a trava mais forte — como a produção leria —, não uma dúvida que "o dela" resolve.
+  test('dúvida de endereço num escopo com contrato de terceiro (dado corrompido): vale a trava mais forte', () => {
+    for (const motivo of [AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO]) {
+      const escopo = comPendenciaDeAlvo(montarEscopo('Maria', [10], AGORA), motivo);
+      expect(paraContexto(escopo).alvoPendente).toBe('terceiro_nao_vinculado');
+    }
   });
 });
 

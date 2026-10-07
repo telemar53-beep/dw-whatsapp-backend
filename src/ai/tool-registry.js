@@ -208,7 +208,8 @@ async function faturaEmAlgumContrato(contratoPedido, contexto, opcoes = {}) {
   const escopo = escopoDoContrato(contexto, contratoPedido);
   // Pedido por endereço (06/10/2026): o cliente escolheu um contrato dele pela rua — sem fatura nele, nada de trocar para
   // outro dele (os contratos de um terceiro seguem a busca de sempre).
-  const semTroca = Boolean(contexto && contexto.contratoEscolhido) && !(escopo && escopo.terceiro);
+  const escolheuPelaRua = Boolean(contexto && (contexto.contratoEscolhido || (Array.isArray(contexto.contratosEscolhidos) && contexto.contratosEscolhidos.length)));
+  const semTroca = escolheuPelaRua && !(escopo && escopo.terceiro);
   const outros = semTroca ? [] : ((escopo && escopo.contratos) || []).filter((c) => c.id !== contratoPedido);
   if (outros.length === 0) {
     // soContratoPedido: só o contrato da rua foi consultado, e ele tem outros — a mensagem não pode dizer "em nenhum contrato".
@@ -3034,7 +3035,12 @@ const TOOLS = [
       if (pendencias.length > 0) linhas.push(`Pediu atendente com informação pendente: ${pendencias.join('; ')}`);
       // O titular aparece pelo primeiro nome e pelo contrato; o documento dele nunca
       // entra no resumo — não está nem guardado.
-      if (contexto.terceiro) {
+      // A dúvida de endereço (escopo pendente sem contrato) é do próprio cliente: não é pedido de terceiro (revisão do v4).
+      const duvidaDeEndereco = contexto.terceiro && ['endereco_ambiguo', 'endereco_desconhecido'].includes(contexto.terceiro.alvoPendente)
+        && (contexto.terceiro.contratos || []).length === 0;
+      if (duvidaDeEndereco) {
+        linhas.push('Dúvida de endereço: não ficou claro de qual endereço (contrato dele) é a cobrança pedida; nada foi enviado por isso.');
+      } else if (contexto.terceiro) {
         linhas.push(`Pedido de terceiro: titular ${contexto.terceiro.nome || 'não informado'}, contrato ${contexto.terceiro.contratos.map((c) => c.id).join(', ')}`);
       }
       // Contenções operacionais (25/09/2026): a troca do Wi-Fi é feita pela equipe a partir deste

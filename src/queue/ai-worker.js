@@ -14,6 +14,8 @@ const {
 } = require('../ai/third-party-scope');
 const { localizacaoDoTerceiro } = require('../ai/documento-pendente');
 const { resolverAlvoDasMensagens, AMBIGUIDADE, documentosValidos } = require('../ai/financial-target');
+
+const DUVIDAS_DE_ENDERECO = [AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO];
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { findContactById } = require('../conversations/contact.repository');
 const {
@@ -355,7 +357,14 @@ async function handleTriageTurn({ conversation, config, messageId }) {
       // vencido com dúvida — ou pendente por documento não localizado — fica na coluna, sem prazo novo, e o turno
       // parte da dúvida sem autorização (nenhum contrato). A afirmação da própria cobrança limpa a coluna (logo
       // abaixo); o documento grava outro.
-      terceiro = { ...CONTEXTO_SEM_AUTORIZACAO, contratos: [] };
+      // Dúvida de endereço (07/10/2026): sem contrato de terceiro, ela não depende de autorização — continua a mesma, e uma
+      // mudança dela se grava sobre o escopo lido.
+      if (DUVIDAS_DE_ENDERECO.includes(escopo.alvoPendente) && Array.isArray(escopo.contratos) && escopo.contratos.length === 0) {
+        terceiro = { nome: null, contratos: [], pendente: true, alvoPendente: escopo.alvoPendente };
+        escopoDoTerceiro = escopo;
+      } else {
+        terceiro = { ...CONTEXTO_SEM_AUTORIZACAO, contratos: [] };
+      }
     } else if (escopo) {
       if ((await setThirdPartyScope(conversation.id, null, { esperados, aceitaNulo: true })) === true) {
         esperados = [esperadoDoEscopo(null)];
@@ -415,6 +424,9 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // gravar (logo depois de runAiTurn).
   let alvoAmbiguo = false;
   let contratoEscolhido = null;
+  let contratosEscolhidos = null;
+  // A resposta que tirou a dúvida de endereço: a volta ao titular é gravada só depois do turno (ver abaixo).
+  let limparDepoisDoTurno = false;
   let empresa = null;
   try {
     const cartao = await getCompanyConfig();
@@ -493,13 +505,23 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // marcado sobre ele, e a cobrança do turno trava; o turno seguinte lê o estado novo e reaplica as entradas.
     alvoAmbiguo = AMBIGUIDADE.TRANSICAO_NAO_GRAVADA;
   } else {
-    // Pedido por endereço (06/10/2026): os endereços dos contratos JÁ CONFIRMADOS de quem fala (a identidade do turno).
-    const enderecos = ((identidade && identidade.contracts) || []).filter((c) => c && c.address).map((c) => ({ id: c.id, address: c.address }));
+    // Pedido por endereço (06/10/2026): os contratos JÁ CONFIRMADOS de quem fala (a identidade do turno), com os endereços.
+    // Os sem endereço também entram: "é a minha" só escolhe sozinho quando ele tem um contrato só.
+    const enderecos = ((identidade && identidade.contracts) || []).filter((c) => c && c.id != null).map((c) => ({ id: c.id, address: c.address || '' }));
     const alvo = resolverAlvoDasMensagens({ terceiro, textos: falas, empresa, documentos, enderecos });
     ({ alvoAmbiguo } = alvo);
     contratoEscolhido = alvo.contratoEscolhido || null;
+    contratosEscolhidos = alvo.contratosEscolhidos || null;
     let gravado = true;
-    if (alvo.gravar) {
+    // Revisão do v4 (07/10/2026, achado A2): a resposta que tira a dúvida de endereço só é gravada DEPOIS do turno, junto com
+    // a marca das entradas. Se o processo cair no meio, a dúvida continua gravada, as entradas voltam e a resposta é relida
+    // sobre ela, com a mesma limitação ao contrato identificado. As transições que restringem continuam antes do turno.
+    const respostaADuvidaDeEndereco = alvo.gravar === 'limpar' && Boolean(terceiro) && DUVIDAS_DE_ENDERECO.includes(terceiro.alvoPendente)
+      && (terceiro.contratos || []).length === 0;
+    if (respostaADuvidaDeEndereco) {
+      terceiro = null;
+      limparDepoisDoTurno = true;
+    } else if (alvo.gravar) {
       let novo = null;
       if (alvo.gravar === 'criar') novo = comPendenciaDeAlvo(montarEscopo(null, [], new Date(), { pendente: true }), alvo.terceiro.alvoPendente);
       else if (alvo.gravar === 'pendencia') novo = comPendenciaDeAlvo(escopoDoTerceiro, alvo.terceiro.alvoPendente || null);
@@ -565,7 +587,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // reenvio agora" de "o modelo chamou a ferramenta duas vezes na mesma
     // mensagem": um id por mensagem do cliente, o mesmo em todas as tool calls
     // dela.
-    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro, alvoAmbiguo, contratoEscolhido, messageId,
+    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro, alvoAmbiguo, contratoEscolhido, contratosEscolhidos, messageId,
     terceiroLocalizadoEm, reativacao: reativacao || null, esperadosDoAlvo: esperados,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
@@ -604,6 +626,23 @@ async function handleTriageTurn({ conversation, config, messageId }) {
       }
     } catch (err) {
       console.error(`Failed to store the return to the account holder after the turn for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+      entradasDoTurno = null;
+    }
+  }
+  // A dúvida de endereço respondida neste turno: só agora sai do banco, com a mesma condição (o estado que o turno leu). Se
+  // uma ferramenta do turno gravou outro escopo (o documento de alguém), ele vale e não há dúvida a limpar por cima dele.
+  // Sem a limpeza gravada, as entradas não são marcadas: o turno seguinte relê a resposta sobre a dúvida. O mesmo se o turno
+  // terminou com erro (tempo, resposta vazia, limite de ferramentas): a dúvida fica, e a resposta vale de novo no próximo.
+  if (limparDepoisDoTurno && entradasDoTurno && turno && turno.erro) entradasDoTurno = null;
+  if (limparDepoisDoTurno && entradasDoTurno && !(turno && (turno.alvoTerceiroNaoGravado || turno.voltaAoTitularNaoGravada))
+    && JSON.stringify(esperadosDepoisDoTurno) === JSON.stringify(esperados)) {
+    try {
+      if ((await setThirdPartyScope(conversation.id, null, { esperados, aceitaNulo: true })) !== true) {
+        console.error(`The financial target of conversation ${conversation.id} changed during the turn; the answered address doubt was not cleared`);
+        entradasDoTurno = null;
+      }
+    } catch (err) {
+      console.error(`Failed to clear the answered address doubt after the turn for conversation ${conversation.id}: ${mensagemSegura(err)}`);
       entradasDoTurno = null;
     }
   }

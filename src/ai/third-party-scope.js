@@ -78,7 +78,9 @@ function escopoValido(escopo, agora = new Date()) {
 // novo (documento consultado) nasce sem ela. Terceira revisão: o prazo encerra a AUTORIZAÇÃO, não a
 // dúvida — ver duvidaSemAutorizacao. Os valores são os códigos de AMBIGUIDADE (financial-target.js) que
 // podem durar mais de um turno.
-const PENDENCIAS_DE_ALVO = ['terceiro_nao_vinculado', 'outra_pessoa_sem_documento', 'dois_lados', 'referencia_incompleta', 'proprio_nao_afirmado'];
+// Dúvida de endereço (07/10/2026): a rua que não se liga com segurança a um contrato dele, ou a mais de um, também dura entre
+// turnos — no mesmo escopo pendente, sem contrato de terceiro.
+const PENDENCIAS_DE_ALVO = ['terceiro_nao_vinculado', 'outra_pessoa_sem_documento', 'dois_lados', 'referencia_incompleta', 'proprio_nao_afirmado', 'endereco_ambiguo', 'endereco_desconhecido'];
 // Valor desconhecido ou corrompido não pode virar "sem dúvida": vale como a trava mais forte.
 const PENDENCIA_MAIS_FORTE = 'terceiro_nao_vinculado';
 
@@ -86,6 +88,14 @@ const PENDENCIA_MAIS_FORTE = 'terceiro_nao_vinculado';
 function comPendenciaDeAlvo(escopo, motivo) {
   const { alvoPendente, ...resto } = escopo;
   return comNovaMarca(motivo ? { ...resto, alvoPendente: motivo } : resto);
+}
+
+// A dúvida de endereço só existe no escopo pendente sem contrato de terceiro (revisão da v4.1, achado B5): num escopo com
+// contrato, o valor é corrompido e vale como a trava mais forte — nunca como uma dúvida que "o dela" resolve.
+const DUVIDAS_DE_ENDERECO = ['endereco_ambiguo', 'endereco_desconhecido'];
+function pendenciaValida(escopo) {
+  if (!PENDENCIAS_DE_ALVO.includes(escopo.alvoPendente)) return false;
+  return !(DUVIDAS_DE_ENDERECO.includes(escopo.alvoPendente) && escopo.contratos.length > 0);
 }
 
 /** O formato que a checagem de propriedade espera: uma lista de { id }. */
@@ -96,7 +106,7 @@ function paraContexto(escopo) {
     contratos: escopo.contratos.map((id) => ({ id })),
     ...(escopo.pendente === true ? { pendente: true } : {}),
     ...(escopo.alvoPendente !== undefined
-      ? { alvoPendente: PENDENCIAS_DE_ALVO.includes(escopo.alvoPendente) ? escopo.alvoPendente : PENDENCIA_MAIS_FORTE }
+      ? { alvoPendente: pendenciaValida(escopo) ? escopo.alvoPendente : PENDENCIA_MAIS_FORTE }
       : {}),
   };
 }

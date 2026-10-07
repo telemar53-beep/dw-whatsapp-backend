@@ -81,10 +81,20 @@ const INSTRUCAO_ALVO_NAO_CONFIRMADO = 'Não foi possível confirmar agora de que
 // não a dúvida: nenhum contrato vale (nem o de antes, nem o de quem fala) até ele dizer que é a própria
 // cobrança ou informar o documento.
 const INSTRUCAO_TERCEIRO_EXPIRADO = 'O pedido de cobrança de outra pessoa feito antes nesta conversa não vale mais, e ainda não ficou claro de quem é a cobrança. NÃO envie nada — nem da outra pessoa, nem de quem está falando. Pergunte, curto, se ele quer a própria cobrança ou a de outra pessoa; se for de outra pessoa, peça o CPF ou CNPJ do titular, mesmo que seja o mesmo já informado. Não diga que sabe quem é essa pessoa.';
-// Pedido por endereço (06/10/2026): a rua citada bate com mais de um contrato dele. Não é dúvida sobre outra pessoa: não se
-// pede documento.
-const INSTRUCAO_ENDERECO_AMBIGUO = 'O endereço que ele citou bate com mais de um contrato dele. NÃO envie nada. Pergunte, curto, de qual endereço é a cobrança, citando o endereço completo (com o número) de cada contrato dele; se os endereços forem iguais, cite também o plano de cada um. NÃO peça CPF nem CNPJ: os contratos são dele.';
-const instrucaoDoEnderecoEscolhido = (contrato) => `O cliente pediu a cobrança do endereço do contrato ${contrato}. NÃO use outro contrato e nada foi enviado: chame a ferramenta de novo com contratoId ${contrato}.`;
+// Pedido por endereço (06/10/2026): a rua citada bate com mais de um contrato dele — ou, com a dúvida gravada, ele disse que é
+// a dele e tem mais de um (revisão do v4, achado A5). Não é dúvida sobre outra pessoa: não se pede documento.
+const INSTRUCAO_ENDERECO_AMBIGUO = 'Não ficou claro de qual contrato dele é a cobrança: o endereço citado bate com mais de um contrato dele, ou ele disse que é a dele e tem mais de um. NÃO envie nada. Pergunte, curto, de qual endereço é a cobrança, citando o endereço completo (com o número) de cada contrato dele; se os endereços forem iguais, cite também o plano de cada um. NÃO peça CPF nem CNPJ: os contratos são dele.';
+// Dúvida de endereço (07/10/2026): a rua que ele citou não se liga com segurança a um contrato dele. Pergunta o endereço, sem
+// pedir documento e sem dizer que é de outra pessoa; o documento só se ele disser que é de outra pessoa.
+const INSTRUCAO_ENDERECO_DESCONHECIDO = 'O que ele citou não dá para ligar com segurança a um contrato dele: um endereço que não é o de nenhum contrato, um número que não é o do cadastro, ou um nome que tanto pode ser o do endereço dele quanto o de uma pessoa. NÃO envie nada, não diga que é de outra pessoa e NÃO peça CPF ou CNPJ agora. Pergunte, curto, de qual endereço é a cobrança, citando os endereços (com o número) dos contratos dele. Só se ele disser que é de outra pessoa, peça o CPF ou CNPJ do titular dela.';
+const instrucaoDoEnderecoEscolhido = (contratos) => (contratos.length === 1
+  ? `O cliente pediu a cobrança do endereço do contrato ${contratos[0]}. NÃO use outro contrato e nada foi enviado: chame a ferramenta de novo com contratoId ${contratos[0]}.`
+  : `O cliente pediu a cobrança dos endereços dos contratos ${contratos.join(' e ')}. NÃO use outro contrato e nada foi enviado: chame a ferramenta de novo com um desses contratoId.`);
+// Os contratos que o cliente escolheu pela rua: um, ou mais de um em falas seguidas.
+function contratosEscolhidosDoContexto(contexto) {
+  if (contexto && Array.isArray(contexto.contratosEscolhidos) && contexto.contratosEscolhidos.length) return contexto.contratosEscolhidos.map(String);
+  return contexto && contexto.contratoEscolhido ? [String(contexto.contratoEscolhido)] : null;
+}
 const INSTRUCAO_TERCEIRO_NAO_VINCULADO = 'Ele citou uma pessoa que não dá para ligar com segurança ao titular do CPF ou CNPJ já informado nesta conversa. NÃO envie nada — nem desse titular, nem de quem está falando. Pergunte, curto, de quem é a cobrança e peça o CPF ou CNPJ desse titular, mesmo que seja o mesmo já informado: só com o documento consultado a cobrança pode sair. Não diga que sabe quem é essa pessoa nem qual a relação dela com quem fala.';
 
 const soDigitos = (valor) => String(valor || '').replace(/\D/g, '');
@@ -100,6 +110,7 @@ function recusaPorAlvoEmDuvida(contexto) {
   else if (motivo === AMBIGUIDADE.TERCEIRO_EXPIRADO) instrucao = INSTRUCAO_TERCEIRO_EXPIRADO;
   else if (motivo === AMBIGUIDADE.ESCOPO_NAO_LIDO || motivo === AMBIGUIDADE.TRANSICAO_NAO_GRAVADA) instrucao = INSTRUCAO_ALVO_NAO_CONFIRMADO;
   else if (motivo === AMBIGUIDADE.ENDERECO_AMBIGUO) instrucao = INSTRUCAO_ENDERECO_AMBIGUO;
+  else if (motivo === AMBIGUIDADE.ENDERECO_DESCONHECIDO) instrucao = INSTRUCAO_ENDERECO_DESCONHECIDO;
   else if (terceiroLocalizado && DUVIDAS_ENTRE_PROPRIO_E_TERCEIRO.has(motivo)) instrucao = INSTRUCAO_ALVO_AMBIGUO_COM_TERCEIRO;
   return recusa('financial_target_ambiguous', motivo, instrucao);
 }
@@ -398,9 +409,10 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     // checagens de posse e de identidade (que continuam dando os motivos delas) e antes da execução.
     if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto.alvoAmbiguo) return recusaPorAlvoEmDuvida(contexto);
     // Pedido por endereço (06/10/2026): com o contrato escolhido pela rua, a cobrança do próprio cliente só sai dele.
-    if (FERRAMENTAS_DE_COBRANCA.includes(nome) && alvo.tipo !== 'terceiro' && contexto.contratoEscolhido
-        && String(argsValidados.contratoId) !== String(contexto.contratoEscolhido)) {
-      return recusa('financial_target_address_mismatch', null, instrucaoDoEnderecoEscolhido(contexto.contratoEscolhido));
+    const escolhidos = contratosEscolhidosDoContexto(contexto);
+    if (FERRAMENTAS_DE_COBRANCA.includes(nome) && alvo.tipo !== 'terceiro' && escolhidos
+        && !escolhidos.includes(String(argsValidados.contratoId))) {
+      return recusa('financial_target_address_mismatch', null, instrucaoDoEnderecoEscolhido(escolhidos));
     }
     if (FERRAMENTAS_DE_COBRANCA.includes(nome) && alvo.tipo === 'terceiro'
         && !alvo.contratos.includes(argsValidados.contratoId)) {

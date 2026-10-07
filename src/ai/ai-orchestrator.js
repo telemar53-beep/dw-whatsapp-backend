@@ -387,7 +387,7 @@ function ferramentasDaTriagem(triagem, config) {
   return lista;
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -458,6 +458,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // Pedido por endereço (06/10/2026): o contrato que o cliente escolheu pela rua; as ferramentas de cobrança do turno só
       // agem nele (tool-executor.js).
       contratoEscolhido: contratoEscolhido != null ? String(contratoEscolhido) : null,
+      // Dúvida de endereço (07/10/2026): os contratos escolhidos pela rua em falas seguidas; a cobrança fica limitada a eles.
+      contratosEscolhidos: Array.isArray(contratosEscolhidos) && contratosEscolhidos.length ? contratosEscolhidos.map(String) : null,
       // Persistência do alvo (03/10/2026): os estados do escopo que este turno conhece (worker). As gravações do
       // escopo pelas ferramentas exigem um deles na própria instrução e atualizam a lista.
       esperadosDoAlvo: Array.isArray(esperadosDoAlvo) ? esperadosDoAlvo.slice() : [],

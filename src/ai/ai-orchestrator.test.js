@@ -804,11 +804,11 @@ describe('perfil de triagem', () => {
 
     // Teste real 2026-09-15 (produção): o cliente pediu o boleto e o modelo
     // respondeu "Enviei acima o boleto referente ao seu contrato do endereço
-    // Agenor Costa, em PDF e com a linha digitável..." sem chamar
+    // Beltrano Teste, em PDF e com a linha digitável..." sem chamar
     // enviar_boleto — nada chegou ao cliente. A guarda só olhava o futuro
     // ("vou enviar"); a afirmação no passado passava direto.
     test('"Enviei acima o boleto..." sem ferramenta de entrega obriga a entrega', async () => {
-      const afirmacao = 'Enviei acima o boleto referente ao seu contrato do endereço Agenor Costa, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!';
+      const afirmacao = 'Enviei acima o boleto referente ao seu contrato do endereço Beltrano Teste, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!';
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: afirmacao }, usage: {} })
         .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })

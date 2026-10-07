@@ -83,9 +83,9 @@ describe('paraWhatsApp', () => {
     });
 
     test('também com linha em branco entre as duas versões', () => {
-      const texto = 'Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa. É só copiar o código e colar no app do seu banco.\n\n'
-        + 'Pronto! Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa, é só copiar o código e colar no aplicativo do seu banco.';
-      expect(paraWhatsApp(texto)).toBe('Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa. É só copiar o código e colar no app do seu banco.');
+      const texto = 'Enviei acima o PIX referente ao seu contrato do endereço Beltrano Teste. É só copiar o código e colar no app do seu banco.\n\n'
+        + 'Pronto! Enviei acima o PIX referente ao seu contrato do endereço Beltrano Teste, é só copiar o código e colar no aplicativo do seu banco.';
+      expect(paraWhatsApp(texto)).toBe('Enviei acima o PIX referente ao seu contrato do endereço Beltrano Teste. É só copiar o código e colar no app do seu banco.');
     });
 
     test('frases diferentes com algumas palavras em comum ficam intactas', () => {
@@ -119,7 +119,7 @@ describe('semNumeroDeContrato', () => {
   });
 
   test('texto sem número de contrato fica intacto', () => {
-    const texto = 'Enviei acima o boleto referente ao seu contrato do endereço Agenor Costa.';
+    const texto = 'Enviei acima o boleto referente ao seu contrato do endereço Beltrano Teste.';
     expect(semNumeroDeContrato(texto)).toBe(texto);
   });
 

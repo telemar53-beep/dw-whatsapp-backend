@@ -563,6 +563,9 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   // Revisão da v4.1 (achado B1): a dúvida que a resposta encerrou neste lote, para devolvê-la se vier uma correção.
   let duvidaRespondida = null;
   let criadoAntesDaResposta = false;
+  // Rodada 7 (ressalva C3): a dúvida devolvida neste lote é REGRAVADA (marca nova), mesmo com o mesmo motivo — a limpeza
+  // adiada de outro processamento, condicional à marca antiga, não passa por cima dela.
+  let devolvida = false;
   // Sem fala nenhuma a reaplicar (a entrada do job já processada, ou um áudio sem transcrição), vale a dúvida
   // já gravada — nunca "sem dúvida" (terceira revisão da F2).
   let alvoAmbiguo = (atual && atual.alvoPendente) || false;
@@ -604,6 +607,7 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       escolha = null;
       respondida = false;
       duvidaDoLote = true;
+      devolvida = true;
       continue;
     }
     alvoAmbiguo = r.alvoAmbiguo;
@@ -628,6 +632,7 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   if (criado) gravar = 'criar';
   else if (terceiro && !atual) gravar = 'limpar';
   else if (terceiro && ((terceiro.alvoPendente || null) !== (atual.alvoPendente || null))) gravar = 'pendencia';
+  else if (terceiro && atual && devolvida) gravar = 'pendencia';
   return {
     terceiro: atual, alvoAmbiguo, gravar,
     ...(escolha ? { contratosEscolhidos: escolha } : {}),

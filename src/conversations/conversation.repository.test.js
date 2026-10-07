@@ -11,7 +11,7 @@ const { claimProtocolNumber } = require('../assignment-messages/assignment-messa
 const { createReason } = require('../reasons/reason.repository');
 const { createSector } = require('../sectors/sector.repository');
 const { createCity } = require('../cities/city.repository');
-const { createMessage } = require('./message.repository');
+const { createMessage, marcarFalasComAlvoProcessado } = require('./message.repository');
 const {
   findOpenConversation,
   createConversation,
@@ -1450,6 +1450,67 @@ describe('conversation repository', () => {
       const conversation = await createConversation(contactId, channelId);
       await setThirdPartyScope(conversation.id, B);
       expect(await setThirdPartyScope(conversation.id, null, { esperados: [{ marca: 'marca-a' }, { marca: 'marca-b' }] })).toBe(true);
+    });
+
+    // Rodada 7 (ressalva C3 do pedido por endereço): a limpeza da dúvida respondida só vale se nenhuma entrada NOVA do cliente
+    // (fora das aplicadas no turno) ainda espera ser aplicada. A correção que chegou durante o turno não pode ser aplicada
+    // depois sobre o estado já limpo. A condição é da própria gravação (atômica), como a da marca.
+    describe('sem entrada nova do cliente ainda não aplicada (semEntradaNova)', () => {
+      const D = { nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido', marca: 'marca-d' };
+      let n = 0;
+      const mensagem = (conversationId, content, direction = 'inbound') => {
+        n += 1;
+        return createMessage({ conversationId, direction, content, whatsappMessageId: `wamid.c3.${n}.${Date.now()}`, status: direction === 'inbound' ? 'received' : 'sent' });
+      };
+      const limpar = (id, aplicada) => setThirdPartyScope(id, null, {
+        esperados: [{ marca: 'marca-d' }], aceitaNulo: true, semEntradaNova: { ids: [aplicada.id], desde: aplicada.createdAt },
+      });
+
+      test('sem entrada nova: limpa', async () => {
+        const conversation = await createConversation(contactId, channelId);
+        await setThirdPartyScope(conversation.id, D);
+        const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
+        expect(await limpar(conversation.id, aplicada)).toBe(true);
+        expect(await getThirdPartyScope(conversation.id)).toBeNull();
+      });
+
+      test('com uma entrada nova ainda não aplicada (a correção que chegou durante o turno): não limpa', async () => {
+        const conversation = await createConversation(contactId, channelId);
+        await setThirdPartyScope(conversation.id, D);
+        const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
+        await mensagem(conversation.id, 'ops, é a outra casa');
+        expect(await limpar(conversation.id, aplicada)).toBe(false);
+        expect(await getThirdPartyScope(conversation.id)).toEqual(D);
+      });
+
+      test('mensagem de saída (da IA ou da atendente) não conta como entrada nova', async () => {
+        const conversation = await createConversation(contactId, channelId);
+        await setThirdPartyScope(conversation.id, D);
+        const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
+        await mensagem(conversation.id, 'Prontinho!', 'outbound');
+        expect(await limpar(conversation.id, aplicada)).toBe(true);
+      });
+
+      test('entrada não confirmada mais antiga que as aplicadas não segura a limpeza', async () => {
+        const conversation = await createConversation(contactId, channelId);
+        await setThirdPartyScope(conversation.id, D);
+        await mensagem(conversation.id, 'oi');
+        const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
+        expect(await limpar(conversation.id, aplicada)).toBe(true);
+      });
+
+      test('a entrada nova já aplicada (marcada) por outro processamento não segura — quem segura então é a marca regravada', async () => {
+        const conversation = await createConversation(contactId, channelId);
+        await setThirdPartyScope(conversation.id, D);
+        const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
+        const nova = await mensagem(conversation.id, 'ops, é a outra casa');
+        await marcarFalasComAlvoProcessado([nova.id]);
+        expect(await limpar(conversation.id, aplicada)).toBe(true);
+        // Com a dúvida regravada (marca nova) pelo outro processamento, a mesma limpeza é barrada pela marca.
+        await setThirdPartyScope(conversation.id, D);
+        await setThirdPartyScope(conversation.id, { ...D, marca: 'marca-d2' }, { esperados: [{ marca: 'marca-d' }] });
+        expect(await limpar(conversation.id, aplicada)).toBe(false);
+      });
     });
   });
 

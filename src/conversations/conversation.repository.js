@@ -334,14 +334,25 @@ async function setThirdPartyScope(conversationId, escopo, condicao = null) {
   // (third-party-scope.js), ou o conteúdo de um escopo de antes desta versão (`legado`). Devolve se gravou:
   // false é "outro processamento mudou o estado" — nada foi escrito.
   const { aceitaNulo, marcas, legados } = parametrosDaCondicaoDoEscopo(condicao);
+  // Pedido por endereço, rodada 7 (ressalva C3): `semEntradaNova: { ids, desde }` — só grava se nenhuma entrada do cliente
+  // desde `desde`, fora das `ids` já aplicadas pelo turno, ainda espera ser aplicada (a marca alvoProcessado de
+  // message.repository.js). É a limpeza da dúvida respondida: a correção que chegou durante o turno não pode ser aplicada
+  // depois sobre o estado já limpo.
+  const semEntradaNova = condicao.semEntradaNova || null;
   const result = await getPool().query(
-    `UPDATE conversations SET ai_triage_third_party = $2
-      WHERE id = $1
-        AND (($3::boolean AND ai_triage_third_party IS NULL)
-          OR (ai_triage_third_party ->> 'marca') = ANY($4::text[])
-          OR ai_triage_third_party = ANY($5::jsonb[]))
-      RETURNING id`,
-    [conversationId, escopo ? JSON.stringify(escopo) : null, aceitaNulo, marcas, legados]
+    `UPDATE conversations c SET ai_triage_third_party = $2
+      WHERE c.id = $1
+        AND (($3::boolean AND c.ai_triage_third_party IS NULL)
+          OR (c.ai_triage_third_party ->> 'marca') = ANY($4::text[])
+          OR c.ai_triage_third_party = ANY($5::jsonb[]))
+        AND (NOT $6::boolean OR NOT EXISTS (
+          SELECT 1 FROM messages m
+           WHERE m.conversation_id = c.id AND m.direction = 'inbound'
+             AND COALESCE(m.metadata->>'alvoProcessado', 'false') <> 'true'
+             AND m.created_at >= $7::timestamptz AND NOT (m.id = ANY($8::uuid[]))))
+      RETURNING c.id`,
+    [conversationId, escopo ? JSON.stringify(escopo) : null, aceitaNulo, marcas, legados,
+      Boolean(semEntradaNova), semEntradaNova ? semEntradaNova.desde : null, semEntradaNova ? semEntradaNova.ids : []]
   );
   return result.rowCount === 1;
 }

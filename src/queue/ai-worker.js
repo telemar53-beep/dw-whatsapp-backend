@@ -443,9 +443,12 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // o efeito dela já está gravado, e um escopo gravado depois dela (documento) não pode ser desfeito por ela.
   const entradaJaProcessada = Boolean(mensagem && mensagem.metadata && mensagem.metadata.alvoProcessado === true);
   let aMarcar = [];
+  // O limite de tempo da leitura das entradas: toda entrada não confirmada depois dele foi lida (ver a limpeza adiada abaixo).
+  let desdeDaLeitura = null;
   if (!escopoIlegivel) {
     try {
       const desde = new Date(Math.max(Date.now() - MINUTOS_DE_VIDA * 60 * 1000, (criadoEm(escopoDoTerceiro) || new Date(0)).getTime()));
+      desdeDaLeitura = desde;
       // Segurança final da F2 (03/10/2026): todas as entradas não confirmadas, em páginas, na ordem do banco. Antes,
       // mais de 50 travavam a cobrança até o fim da triagem (nada era marcado nunca); agora nenhuma é descartada e
       // todas são reaplicadas. O teto só existe contra um volume patológico, e acima dele a cobrança trava.
@@ -633,11 +636,14 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // uma ferramenta do turno gravou outro escopo (o documento de alguém), ele vale e não há dúvida a limpar por cima dele.
   // Sem a limpeza gravada, as entradas não são marcadas: o turno seguinte relê a resposta sobre a dúvida. O mesmo se o turno
   // terminou com erro (tempo, resposta vazia, limite de ferramentas): a dúvida fica, e a resposta vale de novo no próximo.
+  // Rodada 7 (ressalva C3): a limpeza também exige que nenhuma entrada NOVA do cliente (fora das aplicadas neste turno) espere
+  // ser aplicada — a correção que chegou durante o turno é aplicada depois sobre a dúvida, não sobre o estado já limpo.
   if (limparDepoisDoTurno && entradasDoTurno && turno && turno.erro) entradasDoTurno = null;
   if (limparDepoisDoTurno && entradasDoTurno && !(turno && (turno.alvoTerceiroNaoGravado || turno.voltaAoTitularNaoGravada))
     && JSON.stringify(esperadosDepoisDoTurno) === JSON.stringify(esperados)) {
     try {
-      if ((await setThirdPartyScope(conversation.id, null, { esperados, aceitaNulo: true })) !== true) {
+      const semEntradaNova = { ids: aMarcar, desde: desdeDaLeitura };
+      if ((await setThirdPartyScope(conversation.id, null, { esperados, aceitaNulo: true, semEntradaNova })) !== true) {
         console.error(`The financial target of conversation ${conversation.id} changed during the turn; the answered address doubt was not cleared`);
         entradasDoTurno = null;
       }

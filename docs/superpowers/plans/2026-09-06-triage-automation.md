@@ -539,7 +539,7 @@ Then add these tests anywhere inside the `describe('conversation repository', ..
 
   test('claimConversation completes any pending triage as part of the claim', async () => {
     const conversation = await createConversation(contactId, channelId, 'pending');
-    const agent = await createAgent({ email: 'triageagent@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'triageagent@dw.test', password: 'secret123', role: 'agent' });
 
     const claimed = await claimConversation(conversation.id, agent.id);
 

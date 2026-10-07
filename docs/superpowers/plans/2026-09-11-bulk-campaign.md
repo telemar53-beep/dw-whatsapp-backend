@@ -143,7 +143,7 @@ const { createAgent } = require('../agents/agent.repository');
 const { createChannel } = require('../channels/channel.repository');
 
 async function makeAgent() {
-  return createAgent({ name: 'Ana', email: `ana-${Date.now()}-${Math.random()}@dw.com`, password: 'secret123', role: 'agent' });
+  return createAgent({ name: 'Ana', email: `ana-${Date.now()}-${Math.random()}@dw.test`, password: 'secret123', role: 'agent' });
 }
 
 async function makeChannel() {

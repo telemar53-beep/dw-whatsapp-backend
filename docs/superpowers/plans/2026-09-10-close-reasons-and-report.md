@@ -651,7 +651,7 @@ who closed it'` (search for that exact string to find the spot):
 ```js
   test('closeConversation records the reason_id when one is passed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent9e@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent9e@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     const reasonResult = await getPool().query(
       `INSERT INTO contact_reasons (name) VALUES ('Troca de senha') RETURNING id`
@@ -669,7 +669,7 @@ who closed it'` (search for that exact string to find the spot):
 
   test('closeConversation leaves reason_id null when none is passed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent9f@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent9f@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     await closeConversation(conversation.id, agent.id);
@@ -1932,7 +1932,7 @@ Add these tests inside the existing `describe('metrics repository', ...)` block,
 the `getMetricsBySector` tests:
 ```js
   test('getMetricsByReason counts closed conversations per reason, ordered by frequency', async () => {
-    const agent = await createAgent({ email: 'metrics-reason1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-reason1@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const senha = await createReason({ name: 'Troca de senha' });
     const pagamento = await createReason({ name: 'Pagamento' });
@@ -1962,7 +1962,7 @@ the `getMetricsBySector` tests:
   });
 
   test('getMetricsByReason ignores conversations closed without a reason', async () => {
-    const agent = await createAgent({ email: 'metrics-reason2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-reason2@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
 
     await seedClosedConversation({
@@ -1976,7 +1976,7 @@ the `getMetricsBySector` tests:
   });
 
   test('getMetricsByReason excludes conversations closed before the since timestamp', async () => {
-    const agent = await createAgent({ email: 'metrics-reason3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-reason3@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const reason = await createReason({ name: 'Antigo' });
 

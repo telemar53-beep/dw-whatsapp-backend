@@ -710,7 +710,7 @@ describe('conversation repository', () => {
 
   test('claimConversation assigns an unassigned conversation atomically', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent1@dw.test', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conversation.id, agent.id);
     expect(claimed.status).toBe('assigned');
     expect(claimed.assignedAgentId).toBe(agent.id);
@@ -718,8 +718,8 @@ describe('conversation repository', () => {
 
   test('claimConversation returns null when already assigned', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent1 = await createAgent({ email: 'agent2@dw.com', password: 'secret123', role: 'agent' });
-    const agent2 = await createAgent({ email: 'agent3@dw.com', password: 'secret123', role: 'agent' });
+    const agent1 = await createAgent({ email: 'agent2@dw.test', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'agent3@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent1.id);
     const secondClaim = await claimConversation(conversation.id, agent2.id);
     expect(secondClaim).toBeNull();
@@ -727,8 +727,8 @@ describe('conversation repository', () => {
 
   test('transferConversation moves the conversation to another agent', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent1 = await createAgent({ email: 'agent4@dw.com', password: 'secret123', role: 'agent' });
-    const agent2 = await createAgent({ email: 'agent5@dw.com', password: 'secret123', role: 'agent' });
+    const agent1 = await createAgent({ email: 'agent4@dw.test', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'agent5@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent1.id);
     const transferred = await transferConversation(conversation.id, agent1.id, agent2.id);
     expect(transferred.assignedAgentId).toBe(agent2.id);

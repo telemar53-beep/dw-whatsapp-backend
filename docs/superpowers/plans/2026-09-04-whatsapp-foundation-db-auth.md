@@ -553,30 +553,30 @@ describe('agent repository', () => {
   });
 
   test('createAgent stores a hashed password and returns the agent without it', async () => {
-    const agent = await createAgent({ email: 'a@dw.com', password: 'secret123', role: 'agent' });
-    expect(agent.email).toBe('a@dw.com');
+    const agent = await createAgent({ email: 'a@dw.test', password: 'secret123', role: 'agent' });
+    expect(agent.email).toBe('a@dw.test');
     expect(agent.role).toBe('agent');
     expect(agent.passwordHash).toBeUndefined();
     expect(agent.id).toBeDefined();
   });
 
   test('findAgentByEmail returns the agent with its password hash', async () => {
-    await createAgent({ email: 'b@dw.com', password: 'secret123', role: 'admin' });
-    const agent = await findAgentByEmail('b@dw.com');
-    expect(agent.email).toBe('b@dw.com');
+    await createAgent({ email: 'b@dw.test', password: 'secret123', role: 'admin' });
+    const agent = await findAgentByEmail('b@dw.test');
+    expect(agent.email).toBe('b@dw.test');
     const matches = await bcrypt.compare('secret123', agent.passwordHash);
     expect(matches).toBe(true);
   });
 
   test('findAgentByEmail returns null when not found', async () => {
-    const agent = await findAgentByEmail('missing@dw.com');
+    const agent = await findAgentByEmail('missing@dw.test');
     expect(agent).toBeNull();
   });
 
   test('findAgentById returns the agent without its password hash', async () => {
-    const created = await createAgent({ email: 'c@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ email: 'c@dw.test', password: 'secret123', role: 'agent' });
     const agent = await findAgentById(created.id);
-    expect(agent.email).toBe('c@dw.com');
+    expect(agent.email).toBe('c@dw.test');
     expect(agent.passwordHash).toBeUndefined();
   });
 });
@@ -682,9 +682,9 @@ describe('auth service', () => {
 
   test('login returns a token when credentials are valid', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', passwordHash });
 
-    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+    const result = await login({ email: 'a@dw.test', password: 'secret123' });
 
     expect(result.token).toBeDefined();
     const decoded = jwt.verify(result.token, 'test-secret');
@@ -694,13 +694,13 @@ describe('auth service', () => {
 
   test('login throws when agent does not exist', async () => {
     findAgentByEmail.mockResolvedValue(null);
-    await expect(login({ email: 'missing@dw.com', password: 'x' })).rejects.toThrow('Invalid credentials');
+    await expect(login({ email: 'missing@dw.test', password: 'x' })).rejects.toThrow('Invalid credentials');
   });
 
   test('login throws when password is wrong', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
-    await expect(login({ email: 'a@dw.com', password: 'wrong' })).rejects.toThrow('Invalid credentials');
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', passwordHash });
+    await expect(login({ email: 'a@dw.test', password: 'wrong' })).rejects.toThrow('Invalid credentials');
   });
 
   test('verifyToken returns the decoded payload for a valid token', () => {
@@ -940,8 +940,8 @@ describe('POST /api/auth/login', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('returns 200 and a token on valid credentials', async () => {
-    login.mockResolvedValue({ token: 'jwt-token', agent: { id: '1', email: 'a@dw.com', role: 'agent' } });
-    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'secret123' });
+    login.mockResolvedValue({ token: 'jwt-token', agent: { id: '1', email: 'a@dw.test', role: 'agent' } });
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.test', password: 'secret123' });
     expect(res.status).toBe(200);
     expect(res.body.token).toBe('jwt-token');
   });
@@ -953,7 +953,7 @@ describe('POST /api/auth/login', () => {
 
   test('returns 401 when login rejects', async () => {
     login.mockRejectedValue(new Error('Invalid credentials'));
-    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'wrong' });
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.test', password: 'wrong' });
     expect(res.status).toBe(401);
   });
 });

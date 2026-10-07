@@ -12,7 +12,7 @@ function AssignmentPage() {
             <li><code>@chat_atendente</code> — primeiro nome de quem assumiu</li>
             <li><code>@chat_protocolo</code> — número do protocolo do atendimento</li>
           </ul>
-          <p className="mt-2 italic">Exemplo: “Bom dia, meu nome é Geovanna. Irei iniciar seu atendimento, como posso te ajudar? O protocolo do seu atendimento é 1042”</p>
+          <p className="mt-2 italic">Exemplo: “Bom dia, meu nome é Fulana. Irei iniciar seu atendimento, como posso te ajudar? O protocolo do seu atendimento é 1042”</p>
         </details>
       </div>
       <AssignmentMessageSection />

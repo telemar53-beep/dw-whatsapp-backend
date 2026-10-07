@@ -793,7 +793,7 @@ Add this test right after the existing `'listConversationsByAgent returns only t
   test('listConversationsByAgent includes the contact avatar path', async () => {
     await setContactAvatarPath(contactId, 'avatars/joao.jpg');
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'listagent4@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent4@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     const mine = await listConversationsByAgent(agent.id);

@@ -98,7 +98,7 @@ describe('metrics repository', () => {
   const BEFORE_SINCE = new Date('2026-01-01T09:00:00Z');
 
   test('getMetricsForAgent averages resolution and first-response time, ignoring conversations with no response for the first-response average', async () => {
-    const agent = await createAgent({ email: 'metrics-agent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-agent1@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const contactA = await seedContact();
     const contactB = await seedContact();
@@ -128,7 +128,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsForAgent excludes conversations closed before the since timestamp', async () => {
-    const agent = await createAgent({ email: 'metrics-agent2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-agent2@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const contactId = await seedContact();
 
@@ -149,7 +149,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsForAgent returns zero/null for an agent with no closed conversations', async () => {
-    const agent = await createAgent({ email: 'metrics-agent3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-agent3@dw.test', password: 'secret123', role: 'agent' });
 
     const metrics = await getMetricsForAgent(agent.id, SINCE);
 
@@ -157,9 +157,9 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsForAllAgents returns one entry per agent with at least one closed conversation, ordered by name', async () => {
-    const zeta = await createAgent({ name: 'Zeta', email: 'metrics-zeta@dw.com', password: 'secret123', role: 'agent' });
-    const alpha = await createAgent({ name: 'Alpha', email: 'metrics-alpha@dw.com', password: 'secret123', role: 'agent' });
-    const noConversations = await createAgent({ name: 'Semconversa', email: 'metrics-none@dw.com', password: 'secret123', role: 'agent' });
+    const zeta = await createAgent({ name: 'Zeta', email: 'metrics-zeta@dw.test', password: 'secret123', role: 'agent' });
+    const alpha = await createAgent({ name: 'Alpha', email: 'metrics-alpha@dw.test', password: 'secret123', role: 'agent' });
+    const noConversations = await createAgent({ name: 'Semconversa', email: 'metrics-none@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
 
     await seedClosedConversation({
@@ -188,7 +188,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsBySector counts a closed conversation toward every sector the closing agent belongs to', async () => {
-    const agent = await createAgent({ email: 'metrics-multisector@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-multisector@dw.test', password: 'secret123', role: 'agent' });
     const financeiro = await createSector({ name: 'Financeiro' });
     const comercial = await createSector({ name: 'Comercial' });
     await setAgentSectors(agent.id, [financeiro.id, comercial.id]);
@@ -210,7 +210,7 @@ describe('metrics repository', () => {
   });
 
   test('getMetricsBySector omits an agent who belongs to no sector', async () => {
-    const agent = await createAgent({ email: 'metrics-nosector@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-nosector@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
 
     await seedClosedConversation({
@@ -696,7 +696,7 @@ In `frontend/src/App.test.jsx`, append this test inside the existing `describe('
 ```jsx
   test('an authenticated non-admin can reach /metrics', async () => {
     localStorage.setItem('dw_token', 'tok-123');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.test', role: 'agent' }));
     window.history.pushState({}, '', '/metrics');
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);

@@ -19,7 +19,7 @@ protocolo para referenciar aquele atendimento depois. O usuário quer:
    **quais canais** disparam essas mensagens — não é global.
 
 Exemplo literal dado pelo usuário para a mensagem de abertura:
-> "Bom dia, meu nome é Geovanna. Irei iniciar seu atendimento, como posso te ajudar? O
+> "Bom dia, meu nome é Fulana. Irei iniciar seu atendimento, como posso te ajudar? O
 > protocolo do seu atendimento é 1042"
 
 Exemplo para a mensagem de encerramento:
@@ -136,7 +136,7 @@ placeholders são nomeados, aplicados em texto livre editável pelo admin:
 
 | Placeholder | Valor |
 |---|---|
-| `@chat_saudacao_maiusculo` | `Bom dia` / `Boa tarde` / `Boa noite`, automático pelo horário do servidor (capitalização normal de início de frase, não caixa alta total — bate com o exemplo literal do usuário: "Bom dia, meu nome é Geovanna") |
+| `@chat_saudacao_maiusculo` | `Bom dia` / `Boa tarde` / `Boa noite`, automático pelo horário do servidor (capitalização normal de início de frase, não caixa alta total — bate com o exemplo literal do usuário: "Bom dia, meu nome é Fulana") |
 | `@chat_atendente` | Primeiro nome do atendente que assumiu (extraído do campo `name` de `agents`, que é texto livre — `name.trim().split(/\s+/)[0]`) |
 | `@chat_protocolo` | O número de protocolo daquele atendimento, como texto simples (ex: `"1042"`) |
 

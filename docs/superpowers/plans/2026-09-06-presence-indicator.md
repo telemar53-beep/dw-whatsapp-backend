@@ -387,8 +387,8 @@ describe('GET /api/agents', () => {
 
   test('returns the agent list with name and live online status for any authenticated agent', async () => {
     listAgents.mockResolvedValue([
-      { id: 'agent-1', name: 'Ana', email: 'a@dw.com', role: 'agent', createdAt: new Date() },
-      { id: 'agent-2', name: 'Bruno', email: 'b@dw.com', role: 'admin', createdAt: new Date() },
+      { id: 'agent-1', name: 'Ana', email: 'a@dw.test', role: 'agent', createdAt: new Date() },
+      { id: 'agent-2', name: 'Bruno', email: 'b@dw.test', role: 'admin', createdAt: new Date() },
     ]);
     isAgentOnline.mockImplementation((id) => id === 'agent-1');
 
@@ -398,8 +398,8 @@ describe('GET /api/agents', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { id: 'agent-1', name: 'Ana', email: 'a@dw.com', role: 'agent', online: true },
-      { id: 'agent-2', name: 'Bruno', email: 'b@dw.com', role: 'admin', online: false },
+      { id: 'agent-1', name: 'Ana', email: 'a@dw.test', role: 'agent', online: true },
+      { id: 'agent-2', name: 'Bruno', email: 'b@dw.test', role: 'admin', online: false },
     ]);
   });
 

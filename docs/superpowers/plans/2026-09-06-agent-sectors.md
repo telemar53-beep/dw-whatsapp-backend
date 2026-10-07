@@ -105,7 +105,7 @@ describe('sector repository', () => {
   });
 
   test('setAgentSectors assigns the given sectors to an agent', async () => {
-    const agent = await createAgent({ email: 'sector-agent1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-agent1@dw.test', password: 'secret123', role: 'agent' });
     const sectorA = await createSector({ name: 'Financeiro' });
     const sectorB = await createSector({ name: 'Comercial' });
 
@@ -119,7 +119,7 @@ describe('sector repository', () => {
   });
 
   test('setAgentSectors replaces the previous set of sectors entirely', async () => {
-    const agent = await createAgent({ email: 'sector-agent2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-agent2@dw.test', password: 'secret123', role: 'agent' });
     const sectorA = await createSector({ name: 'Financeiro' });
     const sectorB = await createSector({ name: 'Comercial' });
     await setAgentSectors(agent.id, [sectorA.id]);
@@ -131,7 +131,7 @@ describe('sector repository', () => {
   });
 
   test('setAgentSectors with an empty array clears all sectors for the agent', async () => {
-    const agent = await createAgent({ email: 'sector-agent3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'sector-agent3@dw.test', password: 'secret123', role: 'agent' });
     const sectorA = await createSector({ name: 'Financeiro' });
     await setAgentSectors(agent.id, [sectorA.id]);
 
@@ -603,7 +603,7 @@ Add these two tests inside the existing `describe('agent repository', ...)` bloc
 
 ```js
   test('listAgents includes each agent\'s assigned sectors', async () => {
-    const agent = await createAgent({ name: 'Fernanda', email: 'fernanda@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ name: 'Fernanda', email: 'fernanda@dw.test', password: 'secret123', role: 'agent' });
     const sector = await createSector({ name: 'Financeiro' });
     await setAgentSectors(agent.id, [sector.id]);
 
@@ -614,7 +614,7 @@ Add these two tests inside the existing `describe('agent repository', ...)` bloc
   });
 
   test('listAgents returns an empty sectors array for an agent with none', async () => {
-    await createAgent({ name: 'Gustavo', email: 'gustavo@dw.com', password: 'secret123', role: 'agent' });
+    await createAgent({ name: 'Gustavo', email: 'gustavo@dw.test', password: 'secret123', role: 'agent' });
 
     const agents = await listAgents();
 
@@ -643,13 +643,13 @@ Update the existing `'lists every agent for an admin, including inactive ones'` 
       {
         id: 'agent-1',
         name: 'Ana',
-        email: 'ana@dw.com',
+        email: 'ana@dw.test',
         role: 'agent',
         active: true,
         createdAt: new Date(),
         sectors: [{ id: 'sector-1', name: 'Financeiro' }],
       },
-      { id: 'agent-2', name: 'Beto', email: 'beto@dw.com', role: 'agent', active: false, createdAt: new Date(), sectors: [] },
+      { id: 'agent-2', name: 'Beto', email: 'beto@dw.test', role: 'agent', active: false, createdAt: new Date(), sectors: [] },
     ]);
 
     const res = await request(buildApp())
@@ -661,12 +661,12 @@ Update the existing `'lists every agent for an admin, including inactive ones'` 
       {
         id: 'agent-1',
         name: 'Ana',
-        email: 'ana@dw.com',
+        email: 'ana@dw.test',
         role: 'agent',
         active: true,
         sectors: [{ id: 'sector-1', name: 'Financeiro' }],
       },
-      { id: 'agent-2', name: 'Beto', email: 'beto@dw.com', role: 'agent', active: false, sectors: [] },
+      { id: 'agent-2', name: 'Beto', email: 'beto@dw.test', role: 'agent', active: false, sectors: [] },
     ]);
   });
 ```
@@ -674,7 +674,7 @@ Update the existing `'lists every agent for an admin, including inactive ones'` 
 Update the existing `'creates a new agent'` test's final assertion — since `createAgent`'s mock resolves without a `sectors` field, the response now defaults it to an empty array:
 
 ```js
-    expect(res.body).toEqual({ id: 'agent-3', name: 'Carla', email: 'carla@dw.com', role: 'agent', active: true, sectors: [] });
+    expect(res.body).toEqual({ id: 'agent-3', name: 'Carla', email: 'carla@dw.test', role: 'agent', active: true, sectors: [] });
 ```
 
 Append this new `describe` block at the end of the file:
@@ -684,7 +684,7 @@ describe('PUT /api/admin/agents/:id/sectors', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('assigns the given sectors to an agent', async () => {
-    findAgentById.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.com', role: 'agent', active: true });
+    findAgentById.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.test', role: 'agent', active: true });
     setAgentSectors.mockResolvedValue(undefined);
 
     const res = await request(buildApp())
@@ -1489,7 +1489,7 @@ Append these tests inside the existing `describe('AgentsAdminTab', ...)` block:
         {
           id: 'a1',
           name: 'Ana',
-          email: 'ana@dw.com',
+          email: 'ana@dw.test',
           role: 'agent',
           active: true,
           sectors: [
@@ -1506,7 +1506,7 @@ Append these tests inside the existing `describe('AgentsAdminTab', ...)` block:
 
   test('shows "Nenhum setor" when an agent has no sectors', () => {
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] }],
+      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);
@@ -1517,7 +1517,7 @@ Append these tests inside the existing `describe('AgentsAdminTab', ...)` block:
     const refresh = vi.fn();
     useAgentsAdmin.mockReturnValue({
       agents: [
-        { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
+        { id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
       ],
       refresh,
     });
@@ -1542,7 +1542,7 @@ Append these tests inside the existing `describe('AgentsAdminTab', ...)` block:
   test('canceling sector edits discards unsaved changes', async () => {
     useAgentsAdmin.mockReturnValue({
       agents: [
-        { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
+        { id: 'a1', name: 'Ana', email: 'ana@dw.test', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
       ],
       refresh: vi.fn(),
     });

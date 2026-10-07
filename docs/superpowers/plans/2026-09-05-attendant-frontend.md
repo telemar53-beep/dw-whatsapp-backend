@@ -40,12 +40,12 @@ Add to `src/agents/agent.repository.test.js` (append inside the existing `descri
 
 ```js
   test('listAgents returns every agent ordered by email', async () => {
-    await createAgent({ email: 'zeta@dw.com', password: 'secret123', role: 'agent' });
-    await createAgent({ email: 'alpha@dw.com', password: 'secret123', role: 'admin' });
+    await createAgent({ email: 'zeta@dw.test', password: 'secret123', role: 'agent' });
+    await createAgent({ email: 'alpha@dw.test', password: 'secret123', role: 'admin' });
 
     const agents = await listAgents();
 
-    expect(agents.map((a) => a.email)).toEqual(['alpha@dw.com', 'zeta@dw.com']);
+    expect(agents.map((a) => a.email)).toEqual(['alpha@dw.test', 'zeta@dw.test']);
     expect(agents[0].passwordHash).toBeUndefined();
   });
 ```
@@ -147,8 +147,8 @@ describe('GET /api/agents', () => {
 
   test('returns the agent list for any authenticated agent', async () => {
     listAgents.mockResolvedValue([
-      { id: 'agent-1', email: 'a@dw.com', role: 'agent', createdAt: new Date() },
-      { id: 'agent-2', email: 'b@dw.com', role: 'admin', createdAt: new Date() },
+      { id: 'agent-1', email: 'a@dw.test', role: 'agent', createdAt: new Date() },
+      { id: 'agent-2', email: 'b@dw.test', role: 'admin', createdAt: new Date() },
     ]);
 
     const res = await request(buildApp())
@@ -157,8 +157,8 @@ describe('GET /api/agents', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { id: 'agent-1', email: 'a@dw.com', role: 'agent' },
-      { id: 'agent-2', email: 'b@dw.com', role: 'admin' },
+      { id: 'agent-1', email: 'a@dw.test', role: 'agent' },
+      { id: 'agent-2', email: 'b@dw.test', role: 'admin' },
     ]);
   });
 
@@ -601,13 +601,13 @@ describe('login', () => {
       text: () => Promise.resolve(JSON.stringify({ token: 'tok', agent: { id: 'a1', role: 'agent' } })),
     });
 
-    const result = await login('a@dw.com', 'secret123');
+    const result = await login('a@dw.test', 'secret123');
 
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/auth/login',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ email: 'a@dw.com', password: 'secret123' }),
+        body: JSON.stringify({ email: 'a@dw.test', password: 'secret123' }),
       })
     );
     expect(result).toEqual({ token: 'tok', agent: { id: 'a1', role: 'agent' } });
@@ -818,7 +818,7 @@ function TestConsumer() {
     <div>
       <span data-testid="token">{token || 'no-token'}</span>
       <span data-testid="role">{agent ? agent.role : 'no-agent'}</span>
-      <button onClick={() => login('a@dw.com', 'secret123')}>Login</button>
+      <button onClick={() => login('a@dw.test', 'secret123')}>Login</button>
       <button onClick={logout}>Logout</button>
     </div>
   );
@@ -841,7 +841,7 @@ describe('AuthProvider', () => {
   });
 
   test('login stores the token and agent, and updates context', async () => {
-    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'a1', email: 'a@dw.com', role: 'admin' } });
+    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'a1', email: 'a@dw.test', role: 'admin' } });
     render(
       <AuthProvider>
         <TestConsumer />
@@ -853,12 +853,12 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(screen.getByTestId('token')).toHaveTextContent('tok-123'));
     expect(screen.getByTestId('role')).toHaveTextContent('admin');
     expect(localStorage.getItem('dw_token')).toBe('tok-123');
-    expect(JSON.parse(localStorage.getItem('dw_agent'))).toEqual({ id: 'a1', email: 'a@dw.com', role: 'admin' });
+    expect(JSON.parse(localStorage.getItem('dw_agent'))).toEqual({ id: 'a1', email: 'a@dw.test', role: 'admin' });
   });
 
   test('logout clears the token, agent, and localStorage', async () => {
     localStorage.setItem('dw_token', 'tok-123');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a1', email: 'a@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a1', email: 'a@dw.test', role: 'agent' }));
     render(
       <AuthProvider>
         <TestConsumer />
@@ -875,7 +875,7 @@ describe('AuthProvider', () => {
 
   test('restores token and agent from localStorage on mount', () => {
     localStorage.setItem('dw_token', 'tok-existing');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a2', email: 'b@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'a2', email: 'b@dw.test', role: 'agent' }));
     render(
       <AuthProvider>
         <TestConsumer />
@@ -978,11 +978,11 @@ describe('LoginPage', () => {
       </MemoryRouter>
     );
 
-    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.com');
+    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.test');
     await userEvent.type(screen.getByLabelText(/senha/i), 'secret123');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
-    await waitFor(() => expect(login).toHaveBeenCalledWith('a@dw.com', 'secret123'));
+    await waitFor(() => expect(login).toHaveBeenCalledWith('a@dw.test', 'secret123'));
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
@@ -996,7 +996,7 @@ describe('LoginPage', () => {
       </MemoryRouter>
     );
 
-    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.com');
+    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.test');
     await userEvent.type(screen.getByLabelText(/senha/i), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
@@ -2153,16 +2153,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1' } });
   useAgents.mockReturnValue([
-    { id: 'agent-1', email: 'me@dw.com', role: 'agent' },
-    { id: 'agent-2', email: 'other@dw.com', role: 'agent' },
+    { id: 'agent-1', email: 'me@dw.test', role: 'agent' },
+    { id: 'agent-2', email: 'other@dw.test', role: 'agent' },
   ]);
 });
 
 describe('TransferModal', () => {
   test('lists every agent except myself', () => {
     render(<TransferModal conversationId="c1" onClose={vi.fn()} />);
-    expect(screen.queryByText('me@dw.com')).not.toBeInTheDocument();
-    expect(screen.getByText('other@dw.com')).toBeInTheDocument();
+    expect(screen.queryByText('me@dw.test')).not.toBeInTheDocument();
+    expect(screen.getByText('other@dw.test')).toBeInTheDocument();
   });
 
   test('selecting an agent transfers the conversation and closes the modal', async () => {
@@ -2170,7 +2170,7 @@ describe('TransferModal', () => {
     const onClose = vi.fn();
     render(<TransferModal conversationId="c1" onClose={onClose} />);
 
-    await userEvent.click(screen.getByText('other@dw.com'));
+    await userEvent.click(screen.getByText('other@dw.test'));
 
     await waitFor(() => expect(api.transferConversation).toHaveBeenCalledWith('c1', 'agent-2', 'tok-123'));
     expect(onClose).toHaveBeenCalled();
@@ -2960,14 +2960,14 @@ describe('App', () => {
   });
 
   test('logs in and reaches the dashboard', async () => {
-    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'agent-1', email: 'a@dw.com', role: 'agent' } });
+    api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'agent-1', email: 'a@dw.test', role: 'agent' } });
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);
     api.listChannels.mockResolvedValue([]);
 
     render(<App />);
 
-    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.com');
+    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.test');
     await userEvent.type(screen.getByLabelText(/senha/i), 'secret123');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
@@ -2976,7 +2976,7 @@ describe('App', () => {
 
   test('an already-authenticated non-admin visiting /admin/channels is redirected to the dashboard', async () => {
     localStorage.setItem('dw_token', 'tok-123');
-    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.com', role: 'agent' }));
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.test', role: 'agent' }));
     window.history.pushState({}, '', '/admin/channels');
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);

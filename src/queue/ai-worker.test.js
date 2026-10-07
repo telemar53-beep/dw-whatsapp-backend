@@ -1050,6 +1050,90 @@ describe('ai-worker — triagem', () => {
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ duvidaDeEnderecoRespondida: false }));
         });
 
+        // Rodada 8 (N3, avaliação real do endereço: 2 de 3 conversas sem resposta): com o esclarecimento financeiro ainda
+        // necessário, a pergunta repetida suprimida vira uma resposta curta da dúvida atual — sem chamar o modelo de novo, sem
+        // ferramenta e sem entrega; e nunca numa conversa assumida, encerrada ou silenciada (a releitura de antes do envio).
+        describe('a pergunta repetida com a dúvida financeira em aberto (rodada 8, N3)', () => {
+          const PERGUNTA = 'De qual endereço é a cobrança: *Rua de Teste, 300* ou *Avenida de Teste, 30*?';
+          const PRIMEIRA = 'Para eu seguir, preciso saber de qual endereço é a conta: Rua de Teste, 300 ou Avenida de Teste, 30.';
+          const SEGUNDA = 'Ainda preciso que você me diga de qual endereço é a conta: Rua de Teste, 300 ou Avenida de Teste, 30.';
+          const repetindo = (recentes, texto = PERGUNTA) => {
+            getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 2 });
+            findMessageById.mockResolvedValue({ id: 'm-3', messageType: 'text', content: 'pode mandar' });
+            findLatestInboundMessageId.mockResolvedValue('m-3');
+            listRecentMessagesByConversation.mockResolvedValue(recentes);
+            runAiTurn.mockResolvedValue({ texto, toolsExecutadas: [], erro: null, triagemConcluida: null });
+          };
+          let warn;
+          beforeEach(() => { warn = jest.spyOn(console, 'warn').mockImplementation(() => {}); });
+          afterEach(() => warn.mockRestore());
+
+          test('dúvida de endereço gravada: sai a resposta curta com os endereços dele; o modelo não é chamado de novo', async () => {
+            getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+            resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+            repetindo([{ id: 'o-1', direction: 'outbound', sentBy: 'ai', content: PERGUNTA }, { id: 'm-3', direction: 'inbound', content: 'pode mandar' }]);
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+            expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+            expect(enqueueOutboundMessage).toHaveBeenCalledWith({ conversationId: 'c-1', channelId: 'ch-1', content: PRIMEIRA, sentBy: 'ai' });
+            expect(runAiTurn).toHaveBeenCalledTimes(1);
+          });
+
+          test('identidade não confirmada (contestada): a resposta curta sai sem citar endereços', async () => {
+            getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+            resolverIdentidade.mockResolvedValue({ ...DOIS_CONTRATOS, contestado: true });
+            repetindo([{ id: 'o-1', direction: 'outbound', sentBy: 'ai', content: PERGUNTA }, { id: 'm-3', direction: 'inbound', content: 'pode mandar' }]);
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+            expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'Para eu seguir, preciso saber de qual endereço é a conta.' }));
+          });
+
+          test('a resposta curta também já saiu: sai a outra redação (nunca o silêncio)', async () => {
+            getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+            resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+            repetindo([
+              { id: 'o-1', direction: 'outbound', sentBy: 'ai', content: PERGUNTA },
+              { id: 'o-2', direction: 'outbound', sentBy: 'ai', content: PRIMEIRA },
+              { id: 'm-3', direction: 'inbound', content: 'pode mandar' },
+            ]);
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+            expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+            expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: SEGUNDA }));
+          });
+
+          test('dúvida forte sobre o terceiro localizado: pede o documento do titular, com a marca do pedido de documento', async () => {
+            getThirdPartyScope.mockResolvedValue({ nome: 'Fulana', contratos: [401], expiraEm: FUTURO, marca: 'marca-t', alvoPendente: 'terceiro_nao_vinculado' });
+            resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+            repetindo([{ id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'De quem é essa cobrança?' }, { id: 'm-3', direction: 'inbound', content: 'o dele' }], 'De quem é essa cobrança?');
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+            expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+              conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
+              content: 'Para eu seguir, preciso saber de quem é essa conta. Se for de outra pessoa, me mande o CPF ou CNPJ do titular.',
+              metadata: { pedidoDeDocumento: { alvo: 'terceiro' } },
+            });
+          });
+
+          test('conversa assumida por atendente (ou encerrada, ou silenciada) enquanto o turno rodava: nada sai', async () => {
+            getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+            resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+            repetindo([{ id: 'o-1', direction: 'outbound', sentBy: 'ai', content: PERGUNTA }, { id: 'm-3', direction: 'inbound', content: 'pode mandar' }]);
+            for (const depois of [{ assignedAgentId: 'a-1' }, { status: 'closed' }, { status: 'silent' }]) {
+              enqueueOutboundMessage.mockClear();
+              getConversationWithContact.mockReset()
+                .mockResolvedValueOnce({ ...PENDING, triageAttempts: 2 })
+                .mockResolvedValue({ ...PENDING, triageAttempts: 2, ...depois });
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+              expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+            }
+          });
+
+          test('sem dúvida financeira em aberto, a repetição continua só suprimida (a guarda não foi desligada)', async () => {
+            getThirdPartyScope.mockResolvedValue(null);
+            resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+            repetindo([{ id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'Me conta: está sem acesso ou lento?' }, { id: 'm-3', direction: 'inbound', content: 'oi' }], 'Me conta: está sem acesso ou lento?');
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+            expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+          });
+        });
+
         // Revisão do v4 (07/10/2026, achado A2): a resposta que tira a dúvida de endereço só é gravada DEPOIS do turno, junto com
         // a marca das entradas. Se o processo cair no meio, a dúvida continua gravada e a resposta é relida sobre ela.
         const ordemDoJob = () => {

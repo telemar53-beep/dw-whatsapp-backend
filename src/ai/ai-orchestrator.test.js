@@ -2388,6 +2388,15 @@ describe('contenções operacionais: equipamento físico, Wi-Fi e explicação f
         });
       });
 
+      // Pedido por endereço (06/10/2026): o contrato que o worker leu na rua citada chega ao contexto das ferramentas.
+      test('o contrato escolhido pela rua chega ao contexto das ferramentas do turno', async () => {
+        let visto;
+        roteiro(chamada('gerar_pix'), final('Certo.'));
+        executeTool.mockReset().mockImplementation(async (_n, _a, c) => { visto = c.contratoEscolhido; return { ok: true, resultado: { enviado: false } }; });
+        await turno(['manda o pix da Avenida de Teste'], { contratoEscolhido: 302 });
+        expect(visto).toBe('302');
+      });
+
       test('a ferramenta de cobrança respondeu outra coisa (bloqueio): a frase dela fica, sem a troca da indisponibilidade não confirmada', async () => {
         roteiro(chamada('enviar_boleto'), final('O boleto não está disponível por aqui para este caso.'));
         executeTool.mockReset().mockImplementation(async (_n, _a, c) => {

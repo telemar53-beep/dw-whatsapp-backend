@@ -1011,6 +1011,52 @@ describe('ai-worker — triagem', () => {
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'outra_pessoa_sem_documento' }));
         });
 
+        // Pedido por endereço (06/10/2026, autorizado): o worker passa os endereços dos contratos CONFIRMADOS de quem fala para
+        // a regra do alvo, e o contrato escolhido pela rua chega ao turno.
+        const DOIS_CONTRATOS = {
+          nivel: 'forte', origem: 'phone', primeiroNome: 'Sicrano',
+          contracts: [{ id: 301, address: 'Rua de Teste, 300 - Bairro de Teste' }, { id: 302, address: 'Avenida de Teste, 30 - Outro Bairro de Teste' }],
+        };
+        test('pedido pela rua de um contrato dele: segue o titular, com o contrato escolhido no turno, sem gravar escopo', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o pix da Avenida de Teste' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false, contratoEscolhido: '302' }));
+          expect(setThirdPartyScope).not.toHaveBeenCalled();
+        });
+
+        test('rua que não é de contrato dele: vale a leitura de sempre (dúvida de outra pessoa), sem contrato escolhido', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o pix da Avenida Central' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'outra_pessoa_sem_documento', contratoEscolhido: null }));
+        });
+
+        test('a entrada do job, fora da lista e sem texto (imagem), também desfaz a escolha de contrato', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-0', direction: 'inbound', messageType: 'text', content: 'manda o pix da Avenida de Teste', createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'image', content: null });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false, contratoEscolhido: null }));
+        });
+
+        test('entrada sem texto depois do pedido pela rua (imagem): desfaz a escolha de contrato', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-0', direction: 'inbound', messageType: 'text', content: 'manda o pix da Avenida de Teste', createdAt: new Date() },
+            { id: 'm-1', direction: 'inbound', messageType: 'image', content: null, createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'image', content: null });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false, contratoEscolhido: null }));
+        });
+
         test('gravar a dúvida falhou: o turno segue travado e registra', async () => {
           const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
           getThirdPartyScope.mockResolvedValue(ESCOPO);
@@ -1362,6 +1408,22 @@ describe('ai-worker — triagem', () => {
               expect(ordem(setThirdPartyScope)).toBeLessThan(ordem(runAiTurn));
               expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: null, contratos: [], pendente: true } }));
               expect(marcarFalasComAlvoProcessado).toHaveBeenCalledWith(['m-0', 'm-1']);
+            });
+
+            test('entrada sem texto antes do CPF de outra pessoa: o documento continua na entrada dele (o pendente é gravado)', async () => {
+              findContactById.mockResolvedValue({ id: 'ct-1', phoneNumber: '55989', sgpDocument: '52998224725' });
+              getThirdPartyScope.mockResolvedValue(null);
+              listarFalasSemAlvoConfirmado.mockResolvedValue([
+                { id: 'm-a', direction: 'inbound', messageType: 'image', content: null, createdAt: new Date() },
+                fala('m-x', 'a minha fatura'), fala('m-0', '390.533.447-05'), fala('m-1', 'pode mandar'),
+              ]);
+              findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'pode mandar' });
+
+              await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+              expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ nome: null, contratos: [], pendente: true, marca: expect.any(String) }),
+                { esperados: [{ nulo: true }], aceitaNulo: false });
+              expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: null, contratos: [], pendente: true } }));
             });
 
             test('o CPF de outra pessoa na PRÓPRIA entrada do job não muda o alvo antes do turno (quem consulta é o modelo)', async () => {

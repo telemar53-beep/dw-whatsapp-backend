@@ -414,6 +414,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // documento (30/09/2026): a marca vem DEPOIS do turno, porque a ferramenta também pode ter uma transição a
   // gravar (logo depois de runAiTurn).
   let alvoAmbiguo = false;
+  let contratoEscolhido = null;
   let empresa = null;
   try {
     const cartao = await getCompanyConfig();
@@ -469,12 +470,13 @@ async function handleTriageTurn({ conversation, config, messageId }) {
       for (const m of validas) {
         if (m.id !== messageId && m.metadata && m.metadata.autorrespostaProvavel === true) continue;
         const texto = (m.id === messageId ? textoDoCliente : (m.messageType === 'audio' ? m.transcription : m.content)) || '';
-        if (!texto) continue;
+        // Entrada sem texto (imagem, áudio sem transcrição) entra vazia: não muda o alvo, mas desfaz a escolha de contrato
+        // pela rua de uma fala anterior (pedido por endereço, 06/10/2026).
         lidasComTexto.push(texto);
-        documentosLidos.push(m.id === messageId ? null : documentosDaEntrada(texto));
+        documentosLidos.push(m.id === messageId || !texto ? null : documentosDaEntrada(texto));
       }
-      if (!jobNaLista && !entradaJaProcessada && textoDoCliente) {
-        lidasComTexto.push(textoDoCliente);
+      if (!jobNaLista && !entradaJaProcessada) {
+        lidasComTexto.push(textoDoCliente || '');
         documentosLidos.push(null);
       }
       falas = lidasComTexto;
@@ -491,8 +493,11 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // marcado sobre ele, e a cobrança do turno trava; o turno seguinte lê o estado novo e reaplica as entradas.
     alvoAmbiguo = AMBIGUIDADE.TRANSICAO_NAO_GRAVADA;
   } else {
-    const alvo = resolverAlvoDasMensagens({ terceiro, textos: falas, empresa, documentos });
+    // Pedido por endereço (06/10/2026): os endereços dos contratos JÁ CONFIRMADOS de quem fala (a identidade do turno).
+    const enderecos = ((identidade && identidade.contracts) || []).filter((c) => c && c.address).map((c) => ({ id: c.id, address: c.address }));
+    const alvo = resolverAlvoDasMensagens({ terceiro, textos: falas, empresa, documentos, enderecos });
     ({ alvoAmbiguo } = alvo);
+    contratoEscolhido = alvo.contratoEscolhido || null;
     let gravado = true;
     if (alvo.gravar) {
       let novo = null;
@@ -560,7 +565,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // reenvio agora" de "o modelo chamou a ferramenta duas vezes na mesma
     // mensagem": um id por mensagem do cliente, o mesmo em todas as tool calls
     // dela.
-    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro, alvoAmbiguo, messageId,
+    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro, alvoAmbiguo, contratoEscolhido, messageId,
     terceiroLocalizadoEm, reativacao: reativacao || null, esperadosDoAlvo: esperados,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });

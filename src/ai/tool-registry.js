@@ -200,9 +200,14 @@ async function faturaEmAlgumContrato(contratoPedido, contexto) {
   }
 
   const escopo = escopoDoContrato(contexto, contratoPedido);
-  const outros = ((escopo && escopo.contratos) || []).filter((c) => c.id !== contratoPedido);
+  // Pedido por endereço (06/10/2026): o cliente escolheu um contrato dele pela rua — sem fatura nele, nada de trocar para
+  // outro dele (os contratos de um terceiro seguem a busca de sempre).
+  const semTroca = Boolean(contexto && contexto.contratoEscolhido) && !(escopo && escopo.terceiro);
+  const outros = semTroca ? [] : ((escopo && escopo.contratos) || []).filter((c) => c.id !== contratoPedido);
   if (outros.length === 0) {
-    return { resultado: principal, contratoId: contratoPedido, trocouContrato: false, semFaturaEmNenhum: true };
+    // soContratoPedido: só o contrato da rua foi consultado, e ele tem outros — a mensagem não pode dizer "em nenhum contrato".
+    const temOutros = ((escopo && escopo.contratos) || []).some((c) => c.id !== contratoPedido);
+    return { resultado: principal, contratoId: contratoPedido, trocouContrato: false, semFaturaEmNenhum: true, soContratoPedido: semTroca && temOutros };
   }
 
   // allSettled: um contrato com falha no SGP não pode esconder os outros —
@@ -1977,7 +1982,7 @@ const TOOLS = [
           faturas: [],
           motivo: busca.consultaIncompleta
             ? 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.'
-            : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
+            : (busca.soContratoPedido ? 'Nenhuma fatura em aberto no contrato do endereço que ele pediu; os outros contratos dele não foram consultados.' : 'Nenhuma fatura em aberto em nenhum contrato do cliente.'),
         };
       }
       if (faturaForaDoAlvo(contexto, busca)) {
@@ -2047,7 +2052,7 @@ const TOOLS = [
           sucesso: false,
           motivo: busca.consultaIncompleta
             ? 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.'
-            : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
+            : (busca.soContratoPedido ? 'Nenhuma fatura em aberto no contrato do endereço que ele pediu; os outros contratos dele não foram consultados.' : 'Nenhuma fatura em aberto em nenhum contrato do cliente.'),
         };
       }
       if (faturaForaDoAlvo(contexto, busca)) {
@@ -2706,7 +2711,7 @@ const TOOLS = [
           enviado: false,
           motivo: busca.consultaIncompleta
             ? 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.'
-            : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
+            : (busca.soContratoPedido ? 'Nenhuma fatura em aberto no contrato do endereço que ele pediu; os outros contratos dele não foram consultados.' : 'Nenhuma fatura em aberto em nenhum contrato do cliente.'),
         };
       }
       if (faturaForaDoAlvo(contexto, busca)) {

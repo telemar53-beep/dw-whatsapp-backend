@@ -191,8 +191,14 @@ function escopoDoContrato(contexto, contratoId) {
  * - nenhuma em lugar nenhum: { semFaturaEmNenhum: true, consultaIncompleta? }
  * - mais de um outro contrato com fatura: { varios: [{ contratoId, endereco, plano }] }
  */
-async function faturaEmAlgumContrato(contratoPedido, contexto) {
-  const principal = await sgpClient.getDuplicateInvoice(contratoPedido);
+// Item 3 (07/10/2026): quem não usa o PIX (gerar_segunda_via) pede a 2ª via com { gerarPix: false }; o padrão (gerar_pix,
+// enviar_boleto) continua a chamada de sempre, que gera o PIX quando a 2ª via não traz o código.
+function segundaVia(contratoId, opcoes) {
+  return opcoes && opcoes.gerarPix === false ? sgpClient.getDuplicateInvoice(contratoId, { gerarPix: false }) : sgpClient.getDuplicateInvoice(contratoId);
+}
+
+async function faturaEmAlgumContrato(contratoPedido, contexto, opcoes = {}) {
+  const principal = await segundaVia(contratoPedido, opcoes);
   // O caminho feliz continua sendo UMA chamada só ao SGP: só quem não tem
   // fatura no contrato pedido paga a consulta dos outros.
   if (principal.hasOpenInvoice) {
@@ -213,7 +219,7 @@ async function faturaEmAlgumContrato(contratoPedido, contexto) {
   // allSettled: um contrato com falha no SGP não pode esconder os outros —
   // mesma escolha de consultar_faturas_todos_contratos. Em paralelo cabe no
   // timeoutMs de 40 s que estas ferramentas já declaram.
-  const resultados = await Promise.allSettled(outros.map((c) => sgpClient.getDuplicateInvoice(c.id)));
+  const resultados = await Promise.allSettled(outros.map((c) => segundaVia(c.id, opcoes)));
   let consultaIncompleta = false;
   const comFatura = [];
   resultados.forEach((r, i) => {
@@ -653,16 +659,16 @@ async function decisaoSemGeracao(contratoPedido, contexto) {
   return { decisao };
 }
 
-async function cobrancaAutorizada(contratoPedido, contexto, decidida) {
+async function cobrancaAutorizada(contratoPedido, contexto, decidida, opcoes = {}) {
   const fase = decidida || await decisaoSemGeracao(contratoPedido, contexto);
   if (fase.bloqueio) return { bloqueio: fase.bloqueio };
   const { decisao } = fase;
   if (decisao.acao === 'entregar') {
-    const resultado = await sgpClient.getDuplicateInvoice(contratoPedido);
+    const resultado = await segundaVia(contratoPedido, opcoes);
     return casarFaturaAutorizada({ resultado, contratoId: contratoPedido, trocouContrato: false }, decisao, contexto);
   }
   // 0 vencidas: o fluxo de sempre, inclusive a troca para outro contrato do MESMO dono.
-  const busca = await faturaEmAlgumContrato(contratoPedido, contexto);
+  const busca = await faturaEmAlgumContrato(contratoPedido, contexto, opcoes);
   const maisAntigaDaBusca = () => (busca.resultado ? daMaisAntiga(busca.resultado.duplicates)[0] : null);
   if (busca.varios || busca.semFaturaEmNenhum || !busca.trocouContrato || faturaForaDoAlvo(contexto, busca)) {
     return { busca, fatura: maisAntigaDaBusca(), decisao };
@@ -1666,7 +1672,8 @@ const TOOLS = [
       const pedeSegundaVia = naTriagem && !semEscolha;
       const [resultados, segundasVias] = await Promise.all([
         Promise.allSettled(contratos.map((c) => sgpClient.listInvoices(c.id))),
-        pedeSegundaVia ? Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id))) : Promise.resolve(null),
+        // Item 3 (07/10/2026): daqui só sai se há fatura em aberto (hasOpenInvoice) — o PIX não é usado, então não é gerado.
+        pedeSegundaVia ? Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id, { gerarPix: false }))) : Promise.resolve(null),
       ]);
       const temAberta = (i) => {
         if (!segundasVias) return null;
@@ -1963,8 +1970,9 @@ const TOOLS = [
     },
     validar: validarContratoId,
     async executar(args, contexto) {
-      // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
-      const gate = await cobrancaAutorizada(args.contratoId, contexto);
+      // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada. Item 3 (07/10/2026): a 2ª via
+      // daqui entrega linha digitável e link, nunca o PIX — pedida sem gerá-lo.
+      const gate = await cobrancaAutorizada(args.contratoId, contexto, undefined, { gerarPix: false });
       if (gate.bloqueio) return { temFaturaAberta: false, faturas: [], ...gate.bloqueio };
       const busca = gate.busca;
       if (busca.varios) {

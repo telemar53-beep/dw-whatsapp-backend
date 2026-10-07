@@ -124,7 +124,8 @@ describe('módulo financeiro', () => {
       test('nenhum modelo de frase de entrega vive no prompt, nem nome próprio em modelo de frase', () => {
         expect(t).not.toMatch(/Enviei acima o PIX/);
         expect(t).not.toMatch(/Enviei acima o boleto/);
-        expect(t).not.toMatch(/Agenor Costa/);
+        // Nenhum endereço com nome próprio em modelo de frase (a checagem é genérica: o dado real de antes não fica no teste).
+        expect(t).not.toMatch(/contrato do endereço [A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú]/);
       });
 
       // Task 18 — antes: ai-orchestrator.test.js:1823. Com motivo configurado

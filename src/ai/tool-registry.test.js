@@ -2255,7 +2255,7 @@ describe('enviar_boleto', () => {
 // contratos antes. A garantia passa a estar no código: a ferramenta procura
 // nos demais contratos DO PRÓPRIO CONTATO antes de dizer que não há nada.
 describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / gerar_segunda_via)', () => {
-  const CONTRATOS = [{ id: 17402, address: 'RUA J.K., 544' }, { id: 17405, address: 'AGENOR COSTA, 523' }];
+  const CONTRATOS = [{ id: 17402, address: 'RUA T.S., 100' }, { id: 17405, address: 'BELTRANO TESTE, 200' }];
   const ctx = (contracts = CONTRATOS) => ({
     conversationId: 'c-1', channelId: 'ch-1', contracts, identidade: { nivel: 'forte' }, messageId: 'msg-1',
   });
@@ -2279,13 +2279,13 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17405 ? comFatura(17405, 135) : semFatura));
       const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
       expect(r.enviado).toBe(true);
-      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' });
+      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'BELTRANO TESTE, 200' });
       expect(r.valor).toBe(135);
       expect(enviarPix).toHaveBeenCalledWith(expect.objectContaining({
         fatura: expect.objectContaining({ id: 'f-17405', pixCode: 'pix-17405' }), sentBy: 'ai',
       }));
       // Mais de um contrato: o modelo de frase cita o endereço do ponto entregue.
-      expect(r.instrucao).toContain('Responda EXATAMENTE no modelo: "Enviei acima o PIX referente ao seu contrato do endereço AGENOR COSTA, 523. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
+      expect(r.instrucao).toContain('Responda EXATAMENTE no modelo: "Enviei acima o PIX referente ao seu contrato do endereço BELTRANO TESTE, 200. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     });
 
     test('(b) contrato pedido já tem fatura: entrega essa sem consultar o outro', async () => {
@@ -2312,7 +2312,7 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       expect(r.sucesso).toBe(false);
       expect(r.motivo).toBe('Este contrato não tem fatura em aberto, mas outros têm.');
       expect(r.contratosComFatura).toEqual([
-        expect.objectContaining({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' }),
+        expect.objectContaining({ contratoId: 17405, endereco: 'BELTRANO TESTE, 200' }),
         expect.objectContaining({ contratoId: 17410, endereco: 'AV. BRASIL, 10' }),
       ]);
       expect(r.instrucao).toMatch(/gerar_pix/);
@@ -2336,7 +2336,7 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, { conversationId: 'c-1', channelId: 'ch-1', contracts: CONTRATOS });
       expect(r).toEqual({
         sucesso: true, valor: 135, vencimento: '2026-09-20', pixCopiaCola: 'pix-17405',
-        contratoUsado: { contratoId: 17405, endereco: 'AGENOR COSTA, 523' },
+        contratoUsado: { contratoId: 17405, endereco: 'BELTRANO TESTE, 200' },
       });
       expect(enviarPix).not.toHaveBeenCalled();
     });
@@ -2348,10 +2348,10 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
       expect(r.enviado).toBe(true);
       expect(r.valor).toBe(135);
-      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' });
+      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'BELTRANO TESTE, 200' });
       expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/17405.pdf');
       expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ messageType: 'document', sentBy: 'ai' }));
-      expect(r.instrucao).toContain('"Enviei acima o boleto referente ao seu contrato do endereço AGENOR COSTA, 523, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
+      expect(r.instrucao).toContain('"Enviei acima o boleto referente ao seu contrato do endereço BELTRANO TESTE, 200, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     });
 
     test('(b) contrato pedido já tem fatura: envia essa sem consultar o outro', async () => {
@@ -2361,7 +2361,7 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       expect(r.contratoUsado).toBeUndefined();
       // Sem troca de contrato, mas com mais de um ponto: o endereço ainda é
       // citado (regra do dono: "cite o endereço só quando ele tiver mais de um contrato").
-      expect(r.instrucao).toContain('Enviei acima o boleto referente ao seu contrato do endereço RUA J.K., 544, em PDF e com a linha digitável.');
+      expect(r.instrucao).toContain('Enviei acima o boleto referente ao seu contrato do endereço RUA T.S., 100, em PDF e com a linha digitável.');
       expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
       expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/17402.pdf');
     });
@@ -2380,7 +2380,7 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       expect(r.enviado).toBe(false);
       expect(r.motivo).toBe('Este contrato não tem fatura em aberto, mas outros têm.');
       expect(r.contratosComFatura).toEqual([
-        expect.objectContaining({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' }),
+        expect.objectContaining({ contratoId: 17405, endereco: 'BELTRANO TESTE, 200' }),
         expect.objectContaining({ contratoId: 17410, endereco: 'AV. BRASIL, 10' }),
       ]);
       expect(r.instrucao).toMatch(/enviar_boleto/);
@@ -2404,7 +2404,7 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       const r = await findTool('gerar_segunda_via').executar({ contratoId: 17402 }, ctx());
       expect(r.temFaturaAberta).toBe(true);
       expect(r.faturas).toEqual([{ faturaId: 'f-17405', vencimento: '2026-09-20', valor: 135, linhaDigitavel: 'b-17405', linkBoleto: 'https://x/17405.pdf' }]);
-      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' });
+      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'BELTRANO TESTE, 200' });
     });
 
     test('(c) nenhum contrato com fatura: diz que não há em nenhum', async () => {

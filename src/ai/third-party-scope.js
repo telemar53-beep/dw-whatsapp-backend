@@ -78,7 +78,9 @@ function escopoValido(escopo, agora = new Date()) {
 // novo (documento consultado) nasce sem ela. Terceira revisão: o prazo encerra a AUTORIZAÇÃO, não a
 // dúvida — ver duvidaSemAutorizacao. Os valores são os códigos de AMBIGUIDADE (financial-target.js) que
 // podem durar mais de um turno.
-const PENDENCIAS_DE_ALVO = ['terceiro_nao_vinculado', 'outra_pessoa_sem_documento', 'dois_lados', 'referencia_incompleta', 'proprio_nao_afirmado'];
+// Dúvida de endereço (07/10/2026): a rua que não se liga com segurança a um contrato dele, ou a mais de um, também dura entre
+// turnos — no mesmo escopo pendente, sem contrato de terceiro.
+const PENDENCIAS_DE_ALVO = ['terceiro_nao_vinculado', 'outra_pessoa_sem_documento', 'dois_lados', 'referencia_incompleta', 'proprio_nao_afirmado', 'endereco_ambiguo', 'endereco_desconhecido'];
 // Valor desconhecido ou corrompido não pode virar "sem dúvida": vale como a trava mais forte.
 const PENDENCIA_MAIS_FORTE = 'terceiro_nao_vinculado';
 

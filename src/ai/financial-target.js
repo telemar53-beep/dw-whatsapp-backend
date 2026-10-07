@@ -201,9 +201,13 @@ function quemPaga(p, i) {
 // mensagem (pessoa, "dela", "não", "menos", "outro", um complemento, um número que não é o do cadastro, uma rua que não é de
 // contrato dele), a rua não é lida e vale a leitura de sempre, inteira. As listas abaixo só RESTRINGEM quando a rua é lida:
 // nenhuma identifica alvo nem autoriza cobrança. Três versões anteriores foram reprovadas na revisão.
+// Dúvida de endereço (07/10/2026, autorizada pelo proprietário): rua que não é de contrato dele, número que não é o do
+// cadastro, logradouro sem o tipo citado sem número e mais de um contrato possível não escolhem nada nem viram outra pessoa:
+// viram a dúvida de endereço, gravada entre turnos, até o contrato ser identificado ou o alvo esclarecido.
 const MARCAS_DE_NUMERO = new Set(['n', 'no', 'numero', 'num', 'casa']);
-// Só a rua de cadastro que começa pelo tipo do logradouro pode ser lida: sem o tipo ("FULANO TAL, 523"), a rua não se
-// distingue de um nome de pessoa ("o boleto do Fulano Tal").
+// O tipo do logradouro. A rua do cadastro SEM o tipo ("FULANO DE TESTE, 523") não se distingue de um nome de pessoa: só
+// escolhe o contrato com o número junto; sem o número, é dúvida de endereço. E só o tipo ("Rua", "Avenida"; mesmo que nenhum
+// contrato dele o tenha) faz de "Rua Nova" ou "Avenida Getulio Vargas" uma rua que não é dele.
 const TIPOS_DE_LOGRADOURO = new Set([
   'rua', 'r', 'avenida', 'av', 'travessa', 'tv', 'estrada', 'rodovia', 'rod', 'alameda', 'praca', 'largo', 'beco', 'viela',
   'servidao', 'passagem', 'ladeira',
@@ -215,16 +219,20 @@ const SAUDACAO_E_PEDIDO = new Set([
 ]);
 const CORTESIA = new Set(['por', 'favor', 'pf', 'pfv', 'pfvr', 'obrigado', 'obrigada', 'obg', 'grato', 'grata']);
 const ANTES_DA_RUA = new Set([...SAUDACAO_E_PEDIDO, ...CORTESIA, ...ARTIGOS, ...COBRANCAS, ...POSSESSIVOS, ...REFORCO]);
+// Com a dúvida de endereço gravada, a resposta à pergunta do endereço também vale sem "da/do": "é a Rua de Teste", "Rua de
+// Teste, 300", "na Avenida de Teste".
+const ANTES_DA_RESPOSTA = new Set([...ANTES_DA_RUA, ...PREPOSICOES_DE_POSSE, 'e', 'eh', 'na', 'no', 'nas', 'nos', 'sim', 'isso', 'essa', 'esse', 'ser', 'seria']);
 
-/** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com o tipo do logradouro e duas palavras ou mais, e o número. */
+/** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com duas palavras ou mais, se tem o tipo do logradouro, e o número. */
 function ruasDosContratos(enderecos) {
   return (Array.isArray(enderecos) ? enderecos : []).map((c) => {
     const bruto = String((c && (c.address || c.endereco)) || '');
     const virgula = bruto.indexOf(',');
     const rua = virgula >= 0 ? bruto.slice(0, virgula) : bruto.split(' - ')[0];
     const numero = virgula >= 0 ? ((bruto.slice(virgula + 1).match(/\d+/) || [])[0] || null) : null;
-    return { id: c && c.id != null ? String(c.id) : null, palavras: palavrasDe(rua).map((x) => x.p), numero };
-  }).filter((r) => r.id && r.palavras.length >= 2 && TIPOS_DE_LOGRADOURO.has(r.palavras[0]));
+    const palavras = palavrasDe(rua).map((x) => x.p);
+    return { id: c && c.id != null ? String(c.id) : null, palavras, numero, tipada: TIPOS_DE_LOGRADOURO.has(palavras[0]) };
+  }).filter((r) => r.id && r.palavras.length >= 2);
 }
 
 /** O número escrito numa palavra: "300", ou "n 300" (de "nº300"); senão null (ilegível: "300a", "n300"). */
@@ -234,57 +242,89 @@ function numeroDaPalavra(w) {
 }
 
 /**
- * A rua da mensagem, se ela for o pedido simples: { de, ate, ids } (os contratos dele que batem com a rua e o número), ou
- * null (não é o pedido simples: a rua não é lida). `de`..`ate` (exclusivo): as palavras da rua e do número.
+ * A rua da mensagem, se ela for o pedido simples: { de, ate, ids } (os contratos dele que batem com a rua e o número),
+ * { de, ate, desconhecido } (rua que não é dele, número que não bate, logradouro sem o tipo citado sem número), ou null (não
+ * é o pedido simples: a rua não é lida). `de`..`ate` (exclusivo): as palavras da rua e do número. Com `resposta` (a dúvida de
+ * endereço gravada), a rua vale também sem "da/do" antes ("é a Rua de Teste").
  * - antes de "da/do": só saudação, pedido, cortesia, artigo, cobrança e possessivo ("e" só como primeira palavra), e logo
  *   antes de "da/do", a cobrança ou o artigo ("o pix da", "e o da");
- * - a rua: a do cadastro inteira;
- * - o número, opcional: uma palavra com dígito, com ou sem marca antes ("300", "nº 300", "casa 300"), que tem de ser o do
- *   cadastro (outro, ou ilegível como "300A": não é o pedido simples);
+ * - a rua: a do cadastro inteira; ou o tipo do logradouro, "da/do" opcional logo depois dele e de UM a TRÊS nomes ("Rua
+ *   Nova", "Rua da Paz", "Avenida Getulio Vargas": rua que não é dele — nome é palavra sem dígito que a leitura não conhece,
+ *   ou um complemento como "nova"; nunca pessoa, "dela", preposição, negação, pedido, cortesia ou o nome do terceiro), os
+ *   nomes na mesma oração ("Rua Nova, menos esse" lê só "Rua Nova" e o resto não é cortesia: não é lida; "Av. Brasil" é).
+ *   "da/do" depois de um nome é dono: "Rua Nova do Fulano" e "Rua Sete de Setembro" não são lidas;
+ * - o número, opcional: uma palavra com dígito, com ou sem marca antes ("300", "nº 300", "casa 300"); outro que não o do
+ *   cadastro, ou ilegível ("300A"), é rua que não é dele;
  * - depois, só cortesia.
  * Cada rua do cadastro que começa ali é conferida com o próprio fim e o próprio número: com "Rua das Flores, 100" e "Rua das
  * Flores 100, casa 5" no cadastro, "o pix da Rua das Flores, 100" bate com as duas e fica ambíguo (nunca a mais longa). E a
  * rua que bate leva junto as ruas do cadastro que são ela seguida de um número (o logradouro digitado com o número dentro):
  * "o pix da Rua das Flores", sem número ou com o 100, também fica ambíguo — o "Rua das Flores 100" está na mesma rua.
  */
-function ruaDoPedidoSimples(p, ruas) {
+function ruaDoPedidoSimples(p, ruas, { resposta = false, nome = '', conhecidas = CONHECIDAS, oracoes = p.map(() => 0) } = {}) {
   if (ruas.length === 0) return null;
-  for (let i = 2; i < p.length; i += 1) {
-    if (!PREPOSICOES_DE_POSSE.has(p[i - 1]) || !(COBRANCAS.has(p[i - 2]) || ARTIGOS.has(p[i - 2]))) continue;
-    if (!p.slice(0, i - 1).every((w, k) => ANTES_DA_RUA.has(w) || (k === 0 && w === 'e'))) continue;
+  const ehNome = (w) => w !== undefined && (!conhecidas.has(w) || COMPLEMENTOS_DA_COBRANCA.has(w)) && !NEGACAO.has(w)
+    && !CORTESIA.has(w) && !SAUDACAO_E_PEDIDO.has(w) && !/\d/.test(w) && !(nome && w === nome);
+  // O número (opcional) e a cortesia depois da rua: { numero, ate } — numero undefined (sem número), null (ilegível) ou o
+  // número —, ou null quando vem qualquer outra coisa.
+  const depois = (fim) => {
+    let ate = fim;
+    let numero;
+    if (MARCAS_DE_NUMERO.has(p[ate]) && /\d/.test(p[ate + 1] || '')) ate += 1;
+    if (/\d/.test(p[ate] || '')) { numero = numeroDaPalavra(p[ate]); ate += 1; }
+    return p.slice(ate).every((w) => CORTESIA.has(w)) ? { numero, ate } : null;
+  };
+  for (let i = 0; i < p.length; i += 1) {
+    const pedido = i >= 2 && PREPOSICOES_DE_POSSE.has(p[i - 1]) && (COBRANCAS.has(p[i - 2]) || ARTIGOS.has(p[i - 2]))
+      && p.slice(0, i - 1).every((w, k) => ANTES_DA_RUA.has(w) || (k === 0 && w === 'e'));
+    if (!pedido && !(resposta && p.slice(0, i).every((w) => ANTES_DA_RESPOSTA.has(w)))) continue;
     const iguais = ruas.filter((r) => r.palavras.every((w, k) => p[i + k] === w));
-    if (iguais.length === 0) continue;
+    if (iguais.length === 0) {
+      // Rua que não é de contrato dele: o tipo do logradouro, "da/do" opcional logo depois dele e de um a três nomes. "da/do"
+      // depois de um nome é dono ("Rua Nova do Fulano"): a rua não é lida.
+      if (!TIPOS_DE_LOGRADOURO.has(p[i])) continue;
+      const inicio = PREPOSICOES_DE_POSSE.has(p[i + 1]) ? i + 2 : i + 1;
+      let fim = inicio;
+      while (fim - inicio < 3 && ehNome(p[fim]) && oracoes[fim] === oracoes[inicio]) fim += 1;
+      if (fim === inicio) continue;
+      const d = depois(fim);
+      return d ? { de: i, ate: d.ate, desconhecido: true } : null;
+    }
     const batem = [];
     const extras = [];
     let ateMax = i;
+    let algumaRua = false;
+    let pessoaOuRua = false;
     for (const r of iguais) {
-      let ate = i + r.palavras.length;
-      let numero; // undefined: sem número; null: ilegível
-      if (MARCAS_DE_NUMERO.has(p[ate]) && /\d/.test(p[ate + 1] || '')) ate += 1;
-      if (/\d/.test(p[ate] || '')) { numero = numeroDaPalavra(p[ate]); ate += 1; }
-      if (!p.slice(ate).every((w) => CORTESIA.has(w))) continue;
-      if (numero !== undefined && (!numero || r.numero !== numero)) continue;
+      const d = depois(i + r.palavras.length);
+      if (!d) continue;
+      algumaRua = true;
+      ateMax = Math.max(ateMax, d.ate);
+      if (d.numero !== undefined && (!d.numero || r.numero !== d.numero)) continue;
+      // Logradouro sem o tipo, citado sem o número: tanto pode ser o endereço dele quanto o nome de uma pessoa.
+      if (!r.tipada && d.numero === undefined) { pessoaOuRua = true; continue; }
       batem.push(r);
-      ateMax = Math.max(ateMax, ate);
       for (const r2 of ruas) {
         const seguinte = r2.palavras[r.palavras.length];
         if (r2.palavras.length > r.palavras.length && r.palavras.every((w, k) => r2.palavras[k] === w)
-          && /^\d+$/.test(seguinte || '') && (numero === undefined || seguinte === numero)) extras.push(r2);
+          && /^\d+$/.test(seguinte || '') && (d.numero === undefined || seguinte === d.numero)) extras.push(r2);
       }
     }
+    if (!algumaRua) return null;
     batem.push(...extras.filter((x) => !batem.includes(x)));
-    if (batem.length === 0) return null;
+    if (batem.length === 0 || pessoaOuRua) return { de: i, ate: ateMax, desconhecido: true };
     return { de: i, ate: ateMax, ids: [...new Set(batem.map((r) => r.id))] };
   }
   return null;
 }
 
-function lerAlvo(texto, nomeDoTerceiro = null, empresa = null, enderecos = []) {
+function lerAlvo(texto, nomeDoTerceiro = null, empresa = null, enderecos = [], { resposta = false } = {}) {
   const sinais = {
     proprio: false, mencao: false, pessoaNova: false, outraPessoa: false, desconhecida: false, anafora: false, nome: false,
     incompleto: false, negaAlvo: false, negaOutra: false,
-    // Pedido por endereço: os contratos dele que batem com a rua do pedido simples (null: nenhuma rua lida).
-    contratosDaRua: null,
+    // Pedido por endereço: os contratos dele que batem com a rua do pedido simples (null: nenhuma rua lida), ou a rua que
+    // não se liga com segurança a um contrato dele.
+    contratosDaRua: null, enderecoDesconhecido: false,
   };
   const palavras = palavrasDe(texto);
   if (palavras.length === 0) return sinais;
@@ -299,8 +339,9 @@ function lerAlvo(texto, nomeDoTerceiro = null, empresa = null, enderecos = []) {
   let negaProprio = false;
   const outraReferencia = (i) => { if (negado[i]) sinais.negaOutra = true; return !negado[i]; };
   // Pedido por endereço: a rua do pedido simples (ou nenhuma); as palavras dela não são lidas como referência abaixo.
-  const rua = ruaDoPedidoSimples(p, ruasDosContratos(enderecos));
-  if (rua) sinais.contratosDaRua = rua.ids;
+  const rua = ruaDoPedidoSimples(p, ruasDosContratos(enderecos), { resposta, nome, conhecidas, oracoes: palavras.map((x) => x.oracao) });
+  if (rua && rua.ids) sinais.contratosDaRua = rua.ids;
+  else if (rua) sinais.enderecoDesconhecido = true;
   const daRua = (i) => Boolean(rua) && i >= rua.de && i < rua.ate;
   p.forEach((w, i) => {
     if (!dentro(i) || daRua(i)) return;
@@ -386,10 +427,13 @@ const AMBIGUIDADE = {
   TRANSICAO_NAO_GRAVADA: 'transicao_nao_gravada',
   // Terceira revisão: o escopo venceu com uma dúvida gravada (third-party-scope.js, CONTEXTO_SEM_AUTORIZACAO).
   TERCEIRO_EXPIRADO: 'terceiro_expirado',
-  // Pedido por endereço (06/10/2026): a rua do pedido simples bate com mais de um contrato dele (todos dele). Só trava o
-  // turno: não é dúvida sobre outra pessoa, não grava pendência e não pede documento.
+  // Dúvida de endereço (06 e 07/10/2026): a rua bate com mais de um contrato dele (todos dele), ou não se liga com
+  // segurança a nenhum. Não é dúvida sobre outra pessoa e não pede documento; fica gravada até o contrato ser identificado
+  // ou o alvo esclarecido.
   ENDERECO_AMBIGUO: 'endereco_ambiguo',
+  ENDERECO_DESCONHECIDO: 'endereco_desconhecido',
 };
+const DUVIDAS_DE_ENDERECO = new Set([AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO]);
 // Dúvidas que só um documento consultado ou a volta explícita ao próprio resolvem (o prazo não resolve:
 // terceira revisão da F2, 30/09/2026).
 const DUVIDAS_FORTES = new Set([AMBIGUIDADE.TERCEIRO_NAO_VINCULADO, AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO, AMBIGUIDADE.TERCEIRO_EXPIRADO]);
@@ -407,7 +451,10 @@ const DUVIDAS_FORTES = new Set([AMBIGUIDADE.TERCEIRO_NAO_VINCULADO, AMBIGUIDADE.
  *   continua o terceiro, ou a dúvida já gravada.
  */
 function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }) {
-  const s = lerAlvo(texto, terceiro && terceiro.nome, empresa, enderecos);
+  const pendente = (terceiro && terceiro.alvoPendente) || null;
+  // A dúvida de endereço gravada (escopo pendente sem contrato de terceiro): a resposta à pergunta do endereço também conta.
+  const duvidaDeEndereco = Boolean(terceiro) && DUVIDAS_DE_ENDERECO.has(pendente) && (terceiro.contratos || []).length === 0;
+  const s = lerAlvo(texto, terceiro && terceiro.nome, empresa, enderecos, { resposta: duvidaDeEndereco });
   const diferente = pessoaDiferente(s);
   const aponta = apontaOTerceiro(s);
   const resultado = (alvoAmbiguo, alvoPendente, t = terceiro) => ({ terceiro: t, voltarAoTitular: false, alvoAmbiguo, alvoPendente });
@@ -415,16 +462,35 @@ function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }
   const enderecoAmbiguo = Boolean(s.contratosDaRua) && s.contratosDaRua.length > 1;
   const escolhido = s.contratosDaRua && s.contratosDaRua.length === 1 ? s.contratosDaRua[0] : null;
   const comEscolha = (r) => (escolhido ? { ...r, contratoEscolhido: escolhido } : r);
-  const citouEndereco = Boolean(s.contratosDaRua);
+  const citouEndereco = Boolean(s.contratosDaRua) || s.enderecoDesconhecido;
+  const voltar = { terceiro: null, voltarAoTitular: true, alvoAmbiguo: false, alvoPendente: null };
+  const duvida = (motivo) => resultado(motivo, motivo);
   if (!terceiro) {
     if (s.proprio && (diferente || aponta || s.incompleto)) return resultado(AMBIGUIDADE.DOIS_LADOS, null);
-    if (diferente || aponta) return resultado(AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO, AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO);
+    if (diferente || aponta) return duvida(AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO);
     if (s.incompleto) return resultado(AMBIGUIDADE.REFERENCIA_INCOMPLETA, null);
     if (!s.proprio && (s.negaOutra || s.negaAlvo)) return resultado(AMBIGUIDADE.REFERENCIA_INCOMPLETA, null);
-    if (enderecoAmbiguo) return resultado(AMBIGUIDADE.ENDERECO_AMBIGUO, null);
+    if (enderecoAmbiguo) return duvida(AMBIGUIDADE.ENDERECO_AMBIGUO);
+    if (s.enderecoDesconhecido) return duvida(AMBIGUIDADE.ENDERECO_DESCONHECIDO);
     return comEscolha(resultado(false, null));
   }
-  const pendente = terceiro.alvoPendente || null;
+  if (duvidaDeEndereco) {
+    // Dúvida de endereço gravada: só termina com o contrato identificado ou com o alvo esclarecido. "Pode mandar",
+    // agradecimento ou reprocessamento não a tiram, e ela nunca volta sozinha ao titular. Esclarecido que é de outra
+    // pessoa, seguem as regras de terceiro (a dúvida forte, que pede o documento dela).
+    if (diferente || aponta) return duvida(AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO);
+    if (s.incompleto || s.negaOutra || s.negaAlvo) return duvida(pendente);
+    if (escolhido) return { ...voltar, contratoEscolhido: escolhido };
+    if (enderecoAmbiguo) return duvida(AMBIGUIDADE.ENDERECO_AMBIGUO);
+    if (s.enderecoDesconhecido) return duvida(AMBIGUIDADE.ENDERECO_DESCONHECIDO);
+    if (s.proprio) {
+      // "É a minha": com um contrato só, é ele; com mais de um, a dúvida passa a ser qual.
+      const meus = [...new Set((enderecos || []).map((c) => (c && c.id != null ? String(c.id) : null)).filter(Boolean))];
+      if (meus.length === 1) return { ...voltar, contratoEscolhido: meus[0] };
+      return duvida(AMBIGUIDADE.ENDERECO_AMBIGUO);
+    }
+    return duvida(pendente);
+  }
   // Uma dúvida forte já gravada não é trocada: nem rebaixada por uma fraca, nem substituída por outra forte
   // (reaplicar a mesma fala tem de dar o mesmo resultado; e o pendente sem contrato continua pedindo o
   // documento da outra pessoa, não "o mesmo já informado").
@@ -435,13 +501,16 @@ function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }
   if (diferente) return trava(AMBIGUIDADE.TERCEIRO_NAO_VINCULADO);
   if (s.proprio && (aponta || s.incompleto)) return trava(AMBIGUIDADE.DOIS_LADOS);
   if (s.proprio) {
-    const voltar = { terceiro: null, voltarAoTitular: true, alvoAmbiguo: false, alvoPendente: null };
-    if (enderecoAmbiguo) return { ...voltar, alvoAmbiguo: AMBIGUIDADE.ENDERECO_AMBIGUO };
+    // A volta explícita ao titular, com a rua: o contrato dela; com mais de um possível, ou com uma rua que não é dele, a
+    // dúvida de endereço, gravada sobre o titular.
+    if (enderecoAmbiguo) return { ...voltar, alvoAmbiguo: AMBIGUIDADE.ENDERECO_AMBIGUO, alvoPendente: AMBIGUIDADE.ENDERECO_AMBIGUO };
+    if (s.enderecoDesconhecido) return { ...voltar, alvoAmbiguo: AMBIGUIDADE.ENDERECO_DESCONHECIDO, alvoPendente: AMBIGUIDADE.ENDERECO_DESCONHECIDO };
     return comEscolha(voltar);
   }
   if (s.negaAlvo) return trava(AMBIGUIDADE.TERCEIRO_NAO_VINCULADO);
-  // Com terceiro, a rua dele no pedido simples, sem afirmar a própria cobrança, é dúvida fraca entre o próprio e o terceiro:
-  // nada sai de nenhum dos dois.
+  // Com terceiro, a rua no pedido simples (dele, ou que não é dele — pode ser a do terceiro, cujos endereços não estão aqui),
+  // sem afirmar a própria cobrança, é dúvida fraca entre o próprio e o terceiro: nada sai de nenhum dos dois, e não se pede
+  // documento; "o dela" esclarece pelo terceiro já autorizado, "a minha" pelo titular.
   if (citouEndereco) return trava(AMBIGUIDADE.PROPRIO_NAO_AFIRMADO);
   if (s.incompleto) return trava(AMBIGUIDADE.REFERENCIA_INCOMPLETA);
   if (s.mencao && !aponta) return trava(AMBIGUIDADE.PROPRIO_NAO_AFIRMADO);
@@ -462,9 +531,10 @@ function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }
 function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos = [], enderecos = [] }) {
   let atual = terceiro || null;
   let criado = false;
-  // Pedido por endereço: o contrato escolhido pela rua da ÚLTIMA entrada. Qualquer entrada depois da escolha ("pode
-  // mandar", "ops, é a outra casa", um áudio sem transcrição) a desfaz: quem escolhe é o modelo, sem contrato forçado.
-  let contratoEscolhido = null;
+  // Pedido por endereço: os contratos escolhidos pela rua nas últimas entradas seguidas que escolheram. Duas falas com
+  // contratos diferentes valem as duas (nenhuma substitui a outra: a cobrança fica limitada aos dois); uma entrada sem
+  // escolha depois ("pode mandar", "ops, é a outra casa", um áudio sem transcrição) desfaz a escolha.
+  let escolha = null;
   // Sem fala nenhuma a reaplicar (a entrada do job já processada, ou um áudio sem transcrição), vale a dúvida
   // já gravada — nunca "sem dúvida" (terceira revisão da F2).
   let alvoAmbiguo = (atual && atual.alvoPendente) || false;
@@ -486,12 +556,16 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       criado = true;
       alvoAmbiguo = false;
     }
-    contratoEscolhido = null;
-    if (!texto) continue;
+    if (!texto) { escolha = null; continue; }
     const r = resolverAlvoDoTurno({ terceiro: atual, texto, empresa, enderecos });
     alvoAmbiguo = r.alvoAmbiguo;
-    contratoEscolhido = r.contratoEscolhido || null;
-    if (r.voltarAoTitular) { atual = null; criado = false; continue; }
+    escolha = r.contratoEscolhido ? [...new Set([...(escolha || []), r.contratoEscolhido])] : null;
+    if (r.voltarAoTitular) {
+      // A volta ao titular com a dúvida de endereço: o titular, com a dúvida gravada (escopo pendente sem contrato).
+      atual = r.alvoPendente ? { nome: null, contratos: [], pendente: true, alvoPendente: r.alvoPendente } : null;
+      criado = Boolean(r.alvoPendente);
+      continue;
+    }
     const pendenteAtual = (atual && atual.alvoPendente) || null;
     if (r.alvoPendente === pendenteAtual) continue;
     if (atual) {
@@ -506,7 +580,11 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   if (criado) gravar = 'criar';
   else if (terceiro && !atual) gravar = 'limpar';
   else if (terceiro && ((terceiro.alvoPendente || null) !== (atual.alvoPendente || null))) gravar = 'pendencia';
-  return { terceiro: atual, alvoAmbiguo, gravar, ...(contratoEscolhido ? { contratoEscolhido } : {}) };
+  return {
+    terceiro: atual, alvoAmbiguo, gravar,
+    ...(escolha ? { contratosEscolhidos: escolha } : {}),
+    ...(escolha && escolha.length === 1 ? { contratoEscolhido: escolha[0] } : {}),
+  };
 }
 
 /** Volta ao principal (o titular da conversa foi identificado de novo pelo próprio documento). */

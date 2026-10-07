@@ -107,7 +107,15 @@ describe('dúvida sobre o alvo gravada no escopo', () => {
     expect([...PENDENCIAS_DE_ALVO].sort()).toEqual([
       AMBIGUIDADE.DOIS_LADOS, AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO, AMBIGUIDADE.PROPRIO_NAO_AFIRMADO,
       AMBIGUIDADE.REFERENCIA_INCOMPLETA, AMBIGUIDADE.TERCEIRO_NAO_VINCULADO,
+      AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO,
     ].sort());
+  });
+
+  test('a dúvida de endereço gravada volta como ela mesma (não vira a trava mais forte de terceiro)', () => {
+    for (const motivo of [AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO]) {
+      const duvida = comPendenciaDeAlvo(montarEscopo(null, [], AGORA, { pendente: true }), motivo);
+      expect(paraContexto(duvida)).toEqual({ nome: null, contratos: [], pendente: true, alvoPendente: motivo });
+    }
   });
 });
 

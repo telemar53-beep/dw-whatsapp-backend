@@ -208,7 +208,8 @@ async function faturaEmAlgumContrato(contratoPedido, contexto, opcoes = {}) {
   const escopo = escopoDoContrato(contexto, contratoPedido);
   // Pedido por endereço (06/10/2026): o cliente escolheu um contrato dele pela rua — sem fatura nele, nada de trocar para
   // outro dele (os contratos de um terceiro seguem a busca de sempre).
-  const semTroca = Boolean(contexto && contexto.contratoEscolhido) && !(escopo && escopo.terceiro);
+  const escolheuPelaRua = Boolean(contexto && (contexto.contratoEscolhido || (Array.isArray(contexto.contratosEscolhidos) && contexto.contratosEscolhidos.length)));
+  const semTroca = escolheuPelaRua && !(escopo && escopo.terceiro);
   const outros = semTroca ? [] : ((escopo && escopo.contratos) || []).filter((c) => c.id !== contratoPedido);
   if (outros.length === 0) {
     // soContratoPedido: só o contrato da rua foi consultado, e ele tem outros — a mensagem não pode dizer "em nenhum contrato".

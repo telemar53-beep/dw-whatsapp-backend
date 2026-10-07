@@ -120,6 +120,16 @@ describe('sgp-client', () => {
       }
     });
 
+    // Revisão da rodada 7 (P3-2): a mensagem documentada de "não encontrado" sem a lista (o formato real não foi conferido)
+    // continua sendo "não encontrado"; qualquer outra resposta sem a lista continua sendo falha da consulta.
+    test('"Nada encontrado" without the contract list is still SgpClientNotFoundError', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      for (const data of [{ msg: 'Nada encontrado' }, { msg: 'Nada encontrado', contratos: null }]) {
+        axios.post.mockResolvedValue({ data });
+        await expect(lookupClientByCpf('00000000000')).rejects.toBeInstanceOf(SgpClientNotFoundError);
+      }
+    });
+
     test('throws SgpRequestError when the SGP call fails', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post.mockRejectedValue(new Error('timeout of 15000ms exceeded'));
@@ -161,6 +171,19 @@ describe('sgp-client', () => {
   });
 
   describe('getDuplicateInvoice', () => {
+    // Revisão da rodada 7 (P3-1): o corpo de erro em HTTP 200 (HTML, texto, objeto sem a lista `links`) não é "sem fatura" com
+    // certeza. Para quem entrega a cobrança nada muda (sem fatura); a resposta sai marcada, e a conferência do comprovante não
+    // conclui nada dela.
+    test.each([['HTML', '<html>erro</html>'], ['an object without the links list', { status: 0, msg: 'Erro de teste' }]])(
+      'fatura2via answering %s with HTTP 200: no open invoice (as before), flagged as an unrecognized response', async (_, corpo) => {
+        getSgpQueryConfig.mockResolvedValue(CONFIG);
+        axios.post
+          .mockResolvedValueOnce({ data: { faturas: [] } }) // titulos
+          .mockResolvedValueOnce({ data: corpo }); // fatura2via
+        const result = await getDuplicateInvoice(17402);
+        expect(result).toMatchObject({ hasOpenInvoice: false, duplicates: [], respostaNaoReconhecida: true });
+      });
+
     test('returns hasOpenInvoice: false when fatura2via has no links', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post

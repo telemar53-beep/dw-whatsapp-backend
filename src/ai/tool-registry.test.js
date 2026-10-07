@@ -3778,6 +3778,15 @@ describe('analisar_comprovante', () => {
     expect(c.comprovante).toMatchObject({ valido: false, naoConferido: 'indisponivel' });
   });
 
+  // Revisão da rodada 7 (P3-3): a integração desligada/sem configuração diz isso; o documento da memória que o SGP não achou é
+  // consulta concluída sem contratos; só a falha é "não foi possível conferir: a consulta falhou".
+  test.each([['desligado', 'desligado'], ['nao_encontrado', 'sem_contratos'], ['falhou', 'indisponivel']])(
+    '(rodada 7) SGP fora na identificação pela memória, motivo %s: a conferência sai %s', async (motivo, esperado) => {
+      const c = ctx({ contracts: [], identidade: { nivel: 'forte', primeiroNome: 'Ana', client: { id: 5 }, sgpIndisponivel: true, motivoSgpIndisponivel: motivo } });
+      const r = await findTool('analisar_comprovante').executar({}, c);
+      expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: esperado, naoConferido: esperado });
+    });
+
   test('(rodada 7) sem cadastro identificado: "o contato não está vinculado", não "nenhum contrato"', async () => {
     const c = ctx({ contracts: [], identidade: { nivel: 'none', primeiroNome: null, client: null } });
     const r = await findTool('analisar_comprovante').executar({}, c);

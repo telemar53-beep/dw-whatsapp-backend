@@ -222,6 +222,36 @@ describe('as situações da conferência do valor', () => {
     expect(r.motivos.join(' ')).toMatch(/favorecido/);
   });
 
+  // Revisão da rodada 7 (P3-1, impeditivo): a 2ª via com corpo de erro em HTTP 200 é consulta que falhou, não "sem fatura" — erro
+  // não pode aparecer como "não há fatura em aberto" nem como "o comprovante não confere".
+  const sgpComErroEm200 = (corpoDoErro, { soNo301 = false } = {}) => axios.post.mockImplementation(async (url, corpo) => {
+    const contrato = /contrato=(\d+)/.exec(String(corpo))?.[1];
+    if (url.endsWith('/api/central/titulos')) return { data: { faturas: [] } };
+    if (url.endsWith('/api/ura/fatura2via')) {
+      if (!soNo301 || contrato === '301') return { data: corpoDoErro };
+      return { data: { status: 1, links: [{ id: '3021', vencimento: '2026-10-12', valor: 99, linhadigitavel: '836-302', codigopix: '000201-302', link: 'https://x/3021' }] } };
+    }
+    throw new Error(`URL inesperada no teste: ${url}`);
+  });
+
+  test.each([['HTML', '<html><body>Erro interno</body></html>'], ['texto', 'erro'], ['objeto sem a lista', { status: 0, msg: 'Erro de teste' }]])(
+    'a 2ª via responde %s em HTTP 200 nos dois contratos: "não foi possível conferir" (indisponível), não "não há fatura"', async (_, corpoDoErro) => {
+      sgpComErroEm200(corpoDoErro);
+      const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+      expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'indisponivel', naoConferido: 'indisponivel' });
+      expect(r.motivos.join(' ')).toMatch(/não foi possível conferir o valor/);
+      expect(r.motivos.join(' ')).not.toMatch(/não há fatura em aberto/);
+      expect(r.motivos).not.toContain(MOTIVO_SEM_FATURA);
+    });
+
+  test('um contrato com fatura e o outro com a 2ª via em HTML 200, e o valor não bate com a que veio: "incompleta", não "não confere"', async () => {
+    sgpComErroEm200('<html>erro</html>', { soNo301: true });
+    analyzeImage.mockResolvedValue({ ...LEITURA, valor: 120 });
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+    expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'incompleta', naoConferido: 'incompleta' });
+    expect(r.motivos).not.toContain(MOTIVO_SEM_FATURA);
+  });
+
   test('comprovante que confere: naoConferido vazio', async () => {
     sgp();
     const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });

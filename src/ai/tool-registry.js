@@ -2611,8 +2611,12 @@ const TOOLS = [
       // chegam vazios, e isso é "não foi possível conferir", não "nenhum contrato encontrado".
       const identidade = contexto.identidade || {};
       let consultaDeContratos = 'ok';
-      if (identidade.sgpIndisponivel) consultaDeContratos = 'falhou';
-      else if (!identidade.client && (contexto.contracts || []).length === 0) consultaDeContratos = 'sem_documento';
+      // Revisão da rodada 7 (P3-3): desligada ou sem configuração é 'desligado'; o documento da memória que o SGP disse não
+      // encontrar é consulta concluída sem contratos ('ok' com a lista vazia); o resto, falha.
+      if (identidade.sgpIndisponivel) {
+        if (identidade.motivoSgpIndisponivel === 'desligado') consultaDeContratos = 'desligado';
+        else if (identidade.motivoSgpIndisponivel !== 'nao_encontrado') consultaDeContratos = 'falhou';
+      } else if (!identidade.client && (contexto.contracts || []).length === 0) consultaDeContratos = 'sem_documento';
       const analise = await analisarComprovante({
         conversationId: contexto.conversationId,
         imagem,

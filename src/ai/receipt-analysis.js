@@ -99,7 +99,8 @@ async function analisarComprovante({ conversationId, imagem, contratos = [], con
     // e vencimento das faturas em aberto, e o PIX gerado aqui não servia para nada.
     const segundasVias = await Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id, { gerarPix: false })));
     segundasVias.forEach((r, i) => {
-      if (r.status === 'rejected') falhas += 1;
+      // Revisão da rodada 7 (P3-1): a 2ª via não reconhecida (corpo de erro em HTTP 200) é consulta que falhou, não "sem fatura".
+      if (r.status === 'rejected' || (r.value && r.value.respostaNaoReconhecida)) falhas += 1;
       if (r.status === 'fulfilled' && r.value && r.value.hasOpenInvoice) {
         for (const d of r.value.duplicates) faturas.push({ id: d.id, value: d.value, dueDate: d.dueDate, contratoId: contratos[i].id });
       }

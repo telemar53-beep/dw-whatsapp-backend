@@ -89,6 +89,8 @@ async function lookupClientByCpf(cpf) {
   // consulta, não "cliente não encontrado" — erro ou indisponibilidade não pode virar "nenhum contrato". "Não encontrado" é a
   // lista vazia, o formato documentado ({ msg: 'Nada encontrado', contratos: [] }); o formato real não foi conferido.
   if (!Array.isArray(contratos)) {
+    // Revisão da rodada 7 (P3-2): a mensagem documentada de "não encontrado" sem a lista continua sendo "não encontrado".
+    if (contratos == null && /nada encontrado/i.test(String(data.msg || ''))) throw new SgpClientNotFoundError('Client not found');
     throw new SgpRequestError('Unexpected response from SGP (no contract list)');
   }
   if (contratos.length === 0) {
@@ -185,7 +187,11 @@ async function getDuplicateInvoice(contratoId, { gerarPix = true } = {}) {
   const generated = await postSgp(config, '/api/ura/fatura2via', { contrato: contratoId, nao_gerar_os: 1 });
   const links = generated.data.links;
   if (!generated.data.status || !Array.isArray(links) || links.length === 0) {
-    return { hasOpenInvoice: false, duplicates: [], conferencia };
+    // Revisão da rodada 7 (P3-1): o corpo que não é objeto (HTML, texto) ou vem sem a lista `links` pode ser um erro em HTTP
+    // 200. Para quem entrega a cobrança nada muda (sem fatura, como antes); a resposta sai marcada, e a conferência do
+    // comprovante a conta como consulta que falhou — erro não pode aparecer como "sem fatura" nem como "não confere".
+    const respostaNaoReconhecida = typeof generated.data !== 'object' || !Array.isArray(links);
+    return { hasOpenInvoice: false, duplicates: [], conferencia, ...(respostaNaoReconhecida ? { respostaNaoReconhecida: true } : {}) };
   }
 
   const duplicates = await Promise.all(

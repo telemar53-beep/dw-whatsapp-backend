@@ -102,6 +102,7 @@ test('dois contratos na mesma rua, sem número: nada sai, a dúvida de qual é g
   const r = await executeTool('gerar_pix', { contratoId: 301 }, contexto);
   expect(r).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
   expect(r.instrucao).toMatch(/bate com mais de um contrato dele/);
+  expect(r.instrucao).toMatch(/ou ele disse que é a dele/);
   expect(r.instrucao).toMatch(/NÃO peça CPF nem CNPJ/);
   expect(viasPedidas()).toEqual([]);
   expect(pixEnviado()).toEqual([]);

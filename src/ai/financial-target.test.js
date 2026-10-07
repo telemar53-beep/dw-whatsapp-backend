@@ -598,13 +598,12 @@ describe('pedido por endereço do próprio cliente', () => {
     'manda o pix da Travessa das Flores', 'manda o pix da rua do Fulano', 'manda o boleto da Avenida da Beltrana',
     'manda o pix da Rua Nova trezentos', 'manda o pix da Rua Nova nr 300', 'manda o pix da Rua de Testes', 'manda o pix da Rua da Paz, 12',
     'manda o pix da Av. Brasil, 10', 'manda o pix da R. da Paz',
-  ])('rua que não é dele, com mais de uma palavra ("%s"): dúvida de endereço gravada; com terceiro, a dúvida fraca; a forte não é trocada', (texto) => {
+  ])('rua que não é dele, com mais de uma palavra ("%s"): dúvida de endereço gravada; com terceiro, a leitura de produção', (texto) => {
     expect(turno(texto)).toEqual(trava(null, 'endereco_desconhecido'));
     expect(mensagens([texto])).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
     expect(mensagens([texto], { terceiro: DUVIDA('endereco_desconhecido') }))
       .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: null });
-    expect(turno(texto, { terceiro: FULANA })).toEqual(trava(FULANA, 'proprio_nao_afirmado'));
-    expect(turno(texto, { terceiro: FORTE })).toEqual(trava(FORTE, 'outra_pessoa_sem_documento'));
+    for (const terceiro of [FULANA, FRACA, FORTE]) expect(turno(texto, { terceiro })).toEqual(semEnderecos(texto, { terceiro }));
   });
   test('rua que não é dele, com mais de uma palavra, também quando o cadastro só tem logradouro sem o tipo', () => {
     const SEM_TIPO = [{ id: 401, address: 'FULANO DE TESTE, 523' }];
@@ -685,13 +684,48 @@ describe('pedido por endereço do próprio cliente', () => {
       .toEqual({ terceiro: DUVIDA('endereco_ambiguo'), alvoAmbiguo: 'endereco_ambiguo', gravar: 'pendencia' });
   });
 
-  test('no lote não confirmado: dúvida e depois a resposta dele resolvem no mesmo turno; dúvida e depois "pode mandar" fica gravada', () => {
-    expect(mensagens(['manda o pix da Rua Nova', 'é a da Rua de Teste']))
-      .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null, contratoEscolhido: '301', contratosEscolhidos: ['301'] });
-    expect(mensagens(['manda o pix da Rua Nova', 'pode mandar']))
-      .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
-    expect(mensagens(['manda o pix da Rua de Teste', 'manda o pix da Rua Nova']))
-      .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+  // Revisão do v4 (07/10/2026, achado A1): no mesmo lote, ninguém perguntou nada ainda — a fala seguinte não é resposta. A
+  // dúvida de um endereço citado no lote não termina no mesmo lote, em qualquer ordem; só pode piorar (outra pessoa).
+  test.each([
+    [['manda o pix da Rua Nova', 'é a da Rua de Teste']],
+    [['manda o pix da Rua Nova', 'manda o pix da Rua de Teste']],
+    [['manda o pix da Rua de Teste', 'manda o pix da Rua Nova']],
+    [['manda o pix da Rua Nova', 'pode mandar']],
+    [['manda o pix da Rua Nova', 'manda o pix da Avenida Central', 'manda o pix da Rua de Teste']],
+    [['manda o pix da Rua Nova', 'é a minha fatura mesmo']],
+    [['manda o pix da Rua da Paz', 'a da Avenida de Teste, por favor']],
+  ])('no lote não confirmado (%j): a dúvida do endereço citado continua, gravada, sem contrato escolhido', (falas) => {
+    expect(mensagens(falas)).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+    expect(mensagens([...falas].reverse()).alvoAmbiguo).toBeTruthy();
+  });
+  test('no lote não confirmado: dúvida e depois "é da minha mãe" piora para outra pessoa (regras de terceiro)', () => {
+    expect(mensagens(['manda o pix da Rua Nova', 'é da minha mãe']))
+      .toEqual({ terceiro: DUVIDA('outra_pessoa_sem_documento'), alvoAmbiguo: 'outra_pessoa_sem_documento', gravar: 'criar' });
+  });
+  test('com a dúvida gravada, um endereço desconhecido citado no lote também segura o resto do lote', () => {
+    expect(mensagens(['é a Rua Nova', 'é a da Rua de Teste'], { terceiro: DUVIDA('endereco_desconhecido') }))
+      .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+  });
+
+  // Revisão do v4 (achado A2): a resposta que identifica o contrato limita a cobrança do turno a ele; o que vem depois no
+  // mesmo lote ("obrigado", imagem, a outra rua sem "da/do") não desfaz essa limitação. Outro pedido simples soma.
+  test.each([
+    [['Rua de Teste', 'obrigado'], ['301']],
+    [['Rua de Teste', 'pode mandar'], ['301']],
+    [['Rua de Teste', ''], ['301']],
+    [['Rua de Teste', null], ['301']],
+    [['Rua de Teste', 'Avenida de Teste'], ['301']],
+    [['é a da Rua de Teste', 'ops, é a outra'], ['301']],
+    [['a da Rua de Teste', 'e o da Avenida de Teste'], ['301', '302']],
+  ])('com a dúvida gravada, a resposta e depois %j: a cobrança fica limitada a %j', (falas, contratos) => {
+    const TRES = [...ENDERECOS, { id: 304, address: 'Travessa de Teste, 40' }];
+    expect(mensagens(falas, { terceiro: DUVIDA('endereco_desconhecido'), enderecos: TRES })).toEqual({
+      terceiro: null, alvoAmbiguo: false, gravar: 'limpar', contratosEscolhidos: contratos,
+      ...(contratos.length === 1 ? { contratoEscolhido: contratos[0] } : {}),
+    });
+  });
+  test('com a dúvida gravada, a resposta e depois um endereço desconhecido: volta a dúvida', () => {
+    expect(mensagens(['Rua de Teste', 'e o da Rua Nova'], { terceiro: DUVIDA('endereco_desconhecido') }).alvoAmbiguo).toBe('endereco_desconhecido');
   });
 
   test('duas falas com contratos diferentes: os dois valem, nenhum substitui o outro; fala neutra no meio desfaz a primeira', () => {
@@ -707,14 +741,36 @@ describe('pedido por endereço do próprio cliente', () => {
   });
 
   // ------------------------------------------------------------------------------------------------------------------------
-  // Com terceiro: a rua (dele ou desconhecida) sem afirmar a própria cobrança é a dúvida fraca entre o próprio e o terceiro —
-  // nada sai até ele esclarecer; "o dela" é o esclarecimento explícito do terceiro já autorizado por documento.
-  test.each(['agora o pix da Rua de Teste', 'manda o pix da Rua Nova', 'manda o pix da Rua de Teste, 900'])(
-    'com terceiro localizado, "%s": dúvida fraca gravada, sem pedir documento', (texto) => {
-      expect(turno(texto, { terceiro: FULANA })).toEqual(trava(FULANA, 'proprio_nao_afirmado'));
-    });
+  // Com terceiro: a rua DE UM CONTRATO DELE sem afirmar a própria cobrança é a dúvida fraca entre o próprio e o terceiro (como
+  // na produção) — nada sai até ele esclarecer; "o dela" é o esclarecimento explícito do terceiro já autorizado por documento.
+  test('com terceiro localizado, a rua de um contrato dele: dúvida fraca gravada, sem pedir documento', () => {
+    expect(turno('agora o pix da Rua de Teste', { terceiro: FULANA })).toEqual(trava(FULANA, 'proprio_nao_afirmado'));
+  });
+  // Revisão do v4 (achado A3): com terceiro no contexto, a rua que não é de contrato dele, o número que não é o do cadastro e o
+  // logradouro sem o tipo NÃO são lidos — vale a leitura da produção (terceiro não vinculado, que pede o documento). Ler "rua do
+  // João" como endereço trocava a dúvida forte pela fraca, e "o dele" liberava o terceiro registrado.
+  test.each([
+    'manda o pix da Rua Nova', 'manda o pix da Rua de Teste, 900', 'manda o pix da Rua de Teste, 500', 'manda o boleto da rua do Joao',
+    'manda o boleto da rua da Fulana', 'manda o boleto da rua do seu Joao', 'manda o boleto da rua da dona Maria', 'manda o boleto da tv maria',
+    'manda o boleto da travessa do Joao Silva', 'o boleto da rua do sicrano por favor', 'manda o pix da Rua da Paz', 'manda o pix da Avenida Central',
+    'agora a minha fatura da Rua Nova', 'quero o meu da Avenida Getulio Vargas',
+  ])('com terceiro no contexto, "%s": a leitura da produção, nos três estados de terceiro', (texto) => {
+    for (const terceiro of [FULANA, FRACA, FORTE]) expect(turno(texto, { terceiro })).toEqual(semEnderecos(texto, { terceiro }));
+  });
+  test('com terceiro no contexto, o logradouro sem o tipo não é lido (como na produção)', () => {
+    const SEM_TIPO = [{ id: 401, address: 'FULANO DE TESTE, 523' }, ...ENDERECOS];
+    for (const texto of ['o boleto do Fulano de Teste, 523', 'o boleto do Fulano de Teste']) {
+      for (const terceiro of [FULANA, FRACA, FORTE]) expect(turno(texto, { terceiro, enderecos: SEM_TIPO })).toEqual(semEnderecos(texto, { terceiro }));
+    }
+  });
+  test('com terceiro: "rua do João" e depois "o dele" ou "o dela", no mesmo lote ou em turnos: nada é liberado', () => {
+    expect(mensagens(['manda o boleto da rua do Joao', 'manda o dele'], { terceiro: FULANA }).alvoAmbiguo).toBe('terceiro_nao_vinculado');
+    expect(mensagens(['manda o boleto da rua da Fulana', 'o dela'], { terceiro: FULANA }).alvoAmbiguo).toBeTruthy();
+    expect(seguir(['manda o boleto da rua do Joao', 'o dela'], { terceiro: FULANA }).map((x) => x.alvoAmbiguo))
+      .toEqual(['terceiro_nao_vinculado', 'terceiro_nao_vinculado']);
+  });
   test('com terceiro: a dúvida fraca não cai com "pode mandar"; "o dela" segue o terceiro; "a minha" volta ao titular', () => {
-    const r = seguir(['manda o pix da Rua Nova', 'pode mandar', 'o dela'], { terceiro: FULANA });
+    const r = seguir(['agora o pix da Rua de Teste', 'pode mandar', 'o dela'], { terceiro: FULANA });
     expect(r.map((x) => x.alvoAmbiguo)).toEqual(['proprio_nao_afirmado', 'proprio_nao_afirmado', false]);
     expect(r[2].terceiro).toEqual(FULANA);
     expect(seguir(['manda o pix da Rua Nova', 'a minha fatura da Rua de Teste'], { terceiro: FULANA })[1])

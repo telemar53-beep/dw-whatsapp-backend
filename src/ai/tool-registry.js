@@ -3035,7 +3035,12 @@ const TOOLS = [
       if (pendencias.length > 0) linhas.push(`Pediu atendente com informação pendente: ${pendencias.join('; ')}`);
       // O titular aparece pelo primeiro nome e pelo contrato; o documento dele nunca
       // entra no resumo — não está nem guardado.
-      if (contexto.terceiro) {
+      // A dúvida de endereço (escopo pendente sem contrato) é do próprio cliente: não é pedido de terceiro (revisão do v4).
+      const duvidaDeEndereco = contexto.terceiro && ['endereco_ambiguo', 'endereco_desconhecido'].includes(contexto.terceiro.alvoPendente)
+        && (contexto.terceiro.contratos || []).length === 0;
+      if (duvidaDeEndereco) {
+        linhas.push('Dúvida de endereço: não ficou claro de qual endereço (contrato dele) é a cobrança pedida; nada foi enviado por isso.');
+      } else if (contexto.terceiro) {
         linhas.push(`Pedido de terceiro: titular ${contexto.terceiro.nome || 'não informado'}, contrato ${contexto.terceiro.contratos.map((c) => c.id).join(', ')}`);
       }
       // Contenções operacionais (25/09/2026): a troca do Wi-Fi é feita pela equipe a partir deste

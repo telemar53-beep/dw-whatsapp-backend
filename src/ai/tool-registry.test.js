@@ -3029,6 +3029,16 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
     expect(summary).not.toContain('Pedido de terceiro');
   });
 
+  // Revisão do v4 (07/10/2026, achado A5): a dúvida de endereço é do próprio cliente — o resumo não a chama de pedido de
+  // terceiro nem lista um contrato vazio.
+  test('com a dúvida de endereço gravada, o resumo diz que o endereço não ficou claro, sem "Pedido de terceiro"', async () => {
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido' } });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).not.toContain('Pedido de terceiro');
+    expect(summary).toMatch(/Dúvida de endereço: não ficou claro de qual endereço/);
+  });
+
   test('a linha de ferramentas do resumo é legível, não JSON cru', async () => {
     const contexto = contextoDeTriagemCom({
       registroFerramentas: [{ nome: 'consultar_status_todos_contratos', resultado: '{"contratos":[{"status":"ativo","conexao":"online"}]}' }],

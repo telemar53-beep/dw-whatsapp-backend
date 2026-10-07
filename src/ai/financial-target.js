@@ -245,7 +245,8 @@ function numeroDaPalavra(w) {
  * A rua da mensagem, se ela for o pedido simples: { de, ate, ids } (os contratos dele que batem com a rua e o número),
  * { de, ate, desconhecido } (rua que não é dele, número que não bate, logradouro sem o tipo citado sem número), ou null (não
  * é o pedido simples: a rua não é lida). `de`..`ate` (exclusivo): as palavras da rua e do número. Com `resposta` (a dúvida de
- * endereço gravada), a rua vale também sem "da/do" antes ("é a Rua de Teste").
+ * endereço gravada), a rua vale também sem "da/do" antes ("é a Rua de Teste"). Sem `desconhecida` (terceiro no contexto), só
+ * a rua de um contrato dele é lida, como na produção: a que não é dele, a do número divergente e a sem o tipo não são.
  * - antes de "da/do": só saudação, pedido, cortesia, artigo, cobrança e possessivo ("e" só como primeira palavra), e logo
  *   antes de "da/do", a cobrança ou o artigo ("o pix da", "e o da");
  * - a rua: a do cadastro inteira; ou o tipo do logradouro, "da/do" opcional logo depois dele e de UM a TRÊS nomes ("Rua
@@ -261,7 +262,7 @@ function numeroDaPalavra(w) {
  * rua que bate leva junto as ruas do cadastro que são ela seguida de um número (o logradouro digitado com o número dentro):
  * "o pix da Rua das Flores", sem número ou com o 100, também fica ambíguo — o "Rua das Flores 100" está na mesma rua.
  */
-function ruaDoPedidoSimples(p, ruas, { resposta = false, nome = '', conhecidas = CONHECIDAS, oracoes = p.map(() => 0) } = {}) {
+function ruaDoPedidoSimples(p, ruas, { resposta = false, nome = '', conhecidas = CONHECIDAS, oracoes = p.map(() => 0), desconhecida = true } = {}) {
   if (ruas.length === 0) return null;
   const ehNome = (w) => w !== undefined && (!conhecidas.has(w) || COMPLEMENTOS_DA_COBRANCA.has(w)) && !NEGACAO.has(w)
     && !CORTESIA.has(w) && !SAUDACAO_E_PEDIDO.has(w) && !/\d/.test(w) && !(nome && w === nome);
@@ -282,7 +283,7 @@ function ruaDoPedidoSimples(p, ruas, { resposta = false, nome = '', conhecidas =
     if (iguais.length === 0) {
       // Rua que não é de contrato dele: o tipo do logradouro, "da/do" opcional logo depois dele e de um a três nomes. "da/do"
       // depois de um nome é dono ("Rua Nova do Fulano"): a rua não é lida.
-      if (!TIPOS_DE_LOGRADOURO.has(p[i])) continue;
+      if (!desconhecida || !TIPOS_DE_LOGRADOURO.has(p[i])) continue;
       const inicio = PREPOSICOES_DE_POSSE.has(p[i + 1]) ? i + 2 : i + 1;
       let fim = inicio;
       while (fim - inicio < 3 && ehNome(p[fim]) && oracoes[fim] === oracoes[inicio]) fim += 1;
@@ -312,13 +313,13 @@ function ruaDoPedidoSimples(p, ruas, { resposta = false, nome = '', conhecidas =
     }
     if (!algumaRua) return null;
     batem.push(...extras.filter((x) => !batem.includes(x)));
-    if (batem.length === 0 || pessoaOuRua) return { de: i, ate: ateMax, desconhecido: true };
+    if (batem.length === 0 || pessoaOuRua) return desconhecida ? { de: i, ate: ateMax, desconhecido: true } : null;
     return { de: i, ate: ateMax, ids: [...new Set(batem.map((r) => r.id))] };
   }
   return null;
 }
 
-function lerAlvo(texto, nomeDoTerceiro = null, empresa = null, enderecos = [], { resposta = false } = {}) {
+function lerAlvo(texto, nomeDoTerceiro = null, empresa = null, enderecos = [], { resposta = false, desconhecida = true } = {}) {
   const sinais = {
     proprio: false, mencao: false, pessoaNova: false, outraPessoa: false, desconhecida: false, anafora: false, nome: false,
     incompleto: false, negaAlvo: false, negaOutra: false,
@@ -339,7 +340,8 @@ function lerAlvo(texto, nomeDoTerceiro = null, empresa = null, enderecos = [], {
   let negaProprio = false;
   const outraReferencia = (i) => { if (negado[i]) sinais.negaOutra = true; return !negado[i]; };
   // Pedido por endereço: a rua do pedido simples (ou nenhuma); as palavras dela não são lidas como referência abaixo.
-  const rua = ruaDoPedidoSimples(p, ruasDosContratos(enderecos), { resposta, nome, conhecidas, oracoes: palavras.map((x) => x.oracao) });
+  const ruas = ruasDosContratos(enderecos).filter((r) => desconhecida || r.tipada);
+  const rua = ruaDoPedidoSimples(p, ruas, { resposta, nome, conhecidas, oracoes: palavras.map((x) => x.oracao), desconhecida });
   if (rua && rua.ids) sinais.contratosDaRua = rua.ids;
   else if (rua) sinais.enderecoDesconhecido = true;
   const daRua = (i) => Boolean(rua) && i >= rua.de && i < rua.ate;
@@ -450,11 +452,15 @@ const DUVIDAS_FORTES = new Set([AMBIGUIDADE.TERCEIRO_NAO_VINCULADO, AMBIGUIDADE.
  *   referência negada → dúvida fraca, que se resolve quando ele aponta para o terceiro sem negar; o resto
  *   continua o terceiro, ou a dúvida já gravada.
  */
-function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }) {
+function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [], duvidaDoLote = false, leitura = null }) {
   const pendente = (terceiro && terceiro.alvoPendente) || null;
   // A dúvida de endereço gravada (escopo pendente sem contrato de terceiro): a resposta à pergunta do endereço também conta.
   const duvidaDeEndereco = Boolean(terceiro) && DUVIDAS_DE_ENDERECO.has(pendente) && (terceiro.contratos || []).length === 0;
-  const s = lerAlvo(texto, terceiro && terceiro.nome, empresa, enderecos, { resposta: duvidaDeEndereco });
+  // Revisão do v4 (07/10/2026, achado A3): com terceiro no contexto, só a rua de um contrato dele é lida, como na produção.
+  // Ler "rua do João" como endereço trocava a dúvida forte pela fraca, e "o dele" liberava o terceiro registrado.
+  const s = lerAlvo(texto, terceiro && terceiro.nome, empresa, enderecos, { resposta: duvidaDeEndereco, desconhecida: !terceiro || duvidaDeEndereco });
+  // Para o lote (resolverAlvoDasMensagens): se esta entrada citou um endereço que a regra leu.
+  if (leitura) leitura.citouEndereco = Boolean(s.contratosDaRua) || s.enderecoDesconhecido;
   const diferente = pessoaDiferente(s);
   const aponta = apontaOTerceiro(s);
   const resultado = (alvoAmbiguo, alvoPendente, t = terceiro) => ({ terceiro: t, voltarAoTitular: false, alvoAmbiguo, alvoPendente });
@@ -462,7 +468,6 @@ function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }
   const enderecoAmbiguo = Boolean(s.contratosDaRua) && s.contratosDaRua.length > 1;
   const escolhido = s.contratosDaRua && s.contratosDaRua.length === 1 ? s.contratosDaRua[0] : null;
   const comEscolha = (r) => (escolhido ? { ...r, contratoEscolhido: escolhido } : r);
-  const citouEndereco = Boolean(s.contratosDaRua) || s.enderecoDesconhecido;
   const voltar = { terceiro: null, voltarAoTitular: true, alvoAmbiguo: false, alvoPendente: null };
   const duvida = (motivo) => resultado(motivo, motivo);
   if (!terceiro) {
@@ -479,6 +484,9 @@ function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }
     // agradecimento ou reprocessamento não a tiram, e ela nunca volta sozinha ao titular. Esclarecido que é de outra
     // pessoa, seguem as regras de terceiro (a dúvida forte, que pede o documento dela).
     if (diferente || aponta) return duvida(AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO);
+    // Revisão do v4 (achado A1): a dúvida de um endereço citado neste mesmo lote não termina nele — ninguém perguntou nada
+    // ainda, e a fala seguinte é outro pedido, não resposta.
+    if (duvidaDoLote) return duvida(pendente);
     if (s.incompleto || s.negaOutra || s.negaAlvo) return duvida(pendente);
     if (escolhido) return { ...voltar, contratoEscolhido: escolhido };
     if (enderecoAmbiguo) return duvida(AMBIGUIDADE.ENDERECO_AMBIGUO);
@@ -501,17 +509,16 @@ function resolverAlvoDoTurno({ terceiro, texto, empresa = null, enderecos = [] }
   if (diferente) return trava(AMBIGUIDADE.TERCEIRO_NAO_VINCULADO);
   if (s.proprio && (aponta || s.incompleto)) return trava(AMBIGUIDADE.DOIS_LADOS);
   if (s.proprio) {
-    // A volta explícita ao titular, com a rua: o contrato dela; com mais de um possível, ou com uma rua que não é dele, a
-    // dúvida de endereço, gravada sobre o titular.
+    // A volta explícita ao titular, com a rua dele: o contrato dela; com mais de um possível, a dúvida de qual, gravada sobre
+    // o titular. (Com terceiro no contexto, a rua que não é dele não é lida: achado A3 da revisão do v4.)
     if (enderecoAmbiguo) return { ...voltar, alvoAmbiguo: AMBIGUIDADE.ENDERECO_AMBIGUO, alvoPendente: AMBIGUIDADE.ENDERECO_AMBIGUO };
-    if (s.enderecoDesconhecido) return { ...voltar, alvoAmbiguo: AMBIGUIDADE.ENDERECO_DESCONHECIDO, alvoPendente: AMBIGUIDADE.ENDERECO_DESCONHECIDO };
     return comEscolha(voltar);
   }
   if (s.negaAlvo) return trava(AMBIGUIDADE.TERCEIRO_NAO_VINCULADO);
-  // Com terceiro, a rua no pedido simples (dele, ou que não é dele — pode ser a do terceiro, cujos endereços não estão aqui),
-  // sem afirmar a própria cobrança, é dúvida fraca entre o próprio e o terceiro: nada sai de nenhum dos dois, e não se pede
-  // documento; "o dela" esclarece pelo terceiro já autorizado, "a minha" pelo titular.
-  if (citouEndereco) return trava(AMBIGUIDADE.PROPRIO_NAO_AFIRMADO);
+  // Com terceiro, a rua de um contrato dele no pedido simples, sem afirmar a própria cobrança, é dúvida fraca entre o próprio
+  // e o terceiro (como na produção): nada sai de nenhum dos dois, e não se pede documento; "o dela" esclarece pelo terceiro já
+  // autorizado, "a minha" pelo titular.
+  if (s.contratosDaRua) return trava(AMBIGUIDADE.PROPRIO_NAO_AFIRMADO);
   if (s.incompleto) return trava(AMBIGUIDADE.REFERENCIA_INCOMPLETA);
   if (s.mencao && !aponta) return trava(AMBIGUIDADE.PROPRIO_NAO_AFIRMADO);
   if (s.negaOutra && !aponta) return trava(AMBIGUIDADE.REFERENCIA_INCOMPLETA);
@@ -535,6 +542,11 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   // contratos diferentes valem as duas (nenhuma substitui a outra: a cobrança fica limitada aos dois); uma entrada sem
   // escolha depois ("pode mandar", "ops, é a outra casa", um áudio sem transcrição) desfaz a escolha.
   let escolha = null;
+  // Revisão do v4 (07/10/2026). A1: uma entrada deste lote citou um endereço que deu dúvida de endereço — o resto do lote não
+  // a encerra. A2: a dúvida gravada foi respondida com o contrato — o resto do lote não desfaz essa limitação (só soma
+  // outro pedido simples, ou volta a uma dúvida).
+  let duvidaDoLote = false;
+  let respondida = false;
   // Sem fala nenhuma a reaplicar (a entrada do job já processada, ou um áudio sem transcrição), vale a dúvida
   // já gravada — nunca "sem dúvida" (terceira revisão da F2).
   let alvoAmbiguo = (atual && atual.alvoPendente) || false;
@@ -556,10 +568,14 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       criado = true;
       alvoAmbiguo = false;
     }
-    if (!texto) { escolha = null; continue; }
-    const r = resolverAlvoDoTurno({ terceiro: atual, texto, empresa, enderecos });
+    if (!texto) { if (!respondida) escolha = null; continue; }
+    const eraDuvidaDeEndereco = Boolean(atual) && DUVIDAS_DE_ENDERECO.has(atual.alvoPendente) && (atual.contratos || []).length === 0;
+    const leitura = {};
+    const r = resolverAlvoDoTurno({ terceiro: atual, texto, empresa, enderecos, duvidaDoLote, leitura });
+    if (leitura.citouEndereco && DUVIDAS_DE_ENDERECO.has(r.alvoPendente)) duvidaDoLote = true;
+    if (eraDuvidaDeEndereco && r.voltarAoTitular && r.contratoEscolhido) respondida = true;
     alvoAmbiguo = r.alvoAmbiguo;
-    escolha = r.contratoEscolhido ? [...new Set([...(escolha || []), r.contratoEscolhido])] : null;
+    escolha = r.contratoEscolhido ? [...new Set([...(escolha || []), r.contratoEscolhido])] : (respondida && !r.alvoAmbiguo ? escolha : null);
     if (r.voltarAoTitular) {
       // A volta ao titular com a dúvida de endereço: o titular, com a dúvida gravada (escopo pendente sem contrato).
       atual = r.alvoPendente ? { nome: null, contratos: [], pendente: true, alvoPendente: r.alvoPendente } : null;

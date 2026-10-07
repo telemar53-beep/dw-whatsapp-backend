@@ -81,9 +81,9 @@ const INSTRUCAO_ALVO_NAO_CONFIRMADO = 'Não foi possível confirmar agora de que
 // não a dúvida: nenhum contrato vale (nem o de antes, nem o de quem fala) até ele dizer que é a própria
 // cobrança ou informar o documento.
 const INSTRUCAO_TERCEIRO_EXPIRADO = 'O pedido de cobrança de outra pessoa feito antes nesta conversa não vale mais, e ainda não ficou claro de quem é a cobrança. NÃO envie nada — nem da outra pessoa, nem de quem está falando. Pergunte, curto, se ele quer a própria cobrança ou a de outra pessoa; se for de outra pessoa, peça o CPF ou CNPJ do titular, mesmo que seja o mesmo já informado. Não diga que sabe quem é essa pessoa.';
-// Pedido por endereço (06/10/2026): a rua citada bate com mais de um contrato dele. Não é dúvida sobre outra pessoa: não se
-// pede documento.
-const INSTRUCAO_ENDERECO_AMBIGUO = 'O endereço que ele citou bate com mais de um contrato dele. NÃO envie nada. Pergunte, curto, de qual endereço é a cobrança, citando o endereço completo (com o número) de cada contrato dele; se os endereços forem iguais, cite também o plano de cada um. NÃO peça CPF nem CNPJ: os contratos são dele.';
+// Pedido por endereço (06/10/2026): a rua citada bate com mais de um contrato dele — ou, com a dúvida gravada, ele disse que é
+// a dele e tem mais de um (revisão do v4, achado A5). Não é dúvida sobre outra pessoa: não se pede documento.
+const INSTRUCAO_ENDERECO_AMBIGUO = 'Não ficou claro de qual contrato dele é a cobrança: o endereço citado bate com mais de um contrato dele, ou ele disse que é a dele e tem mais de um. NÃO envie nada. Pergunte, curto, de qual endereço é a cobrança, citando o endereço completo (com o número) de cada contrato dele; se os endereços forem iguais, cite também o plano de cada um. NÃO peça CPF nem CNPJ: os contratos são dele.';
 // Dúvida de endereço (07/10/2026): a rua que ele citou não se liga com segurança a um contrato dele. Pergunta o endereço, sem
 // pedir documento e sem dizer que é de outra pessoa; o documento só se ele disser que é de outra pessoa.
 const INSTRUCAO_ENDERECO_DESCONHECIDO = 'O que ele citou não dá para ligar com segurança a um contrato dele: um endereço que não é o de nenhum contrato, um número que não é o do cadastro, ou um nome que tanto pode ser o do endereço dele quanto o de uma pessoa. NÃO envie nada, não diga que é de outra pessoa e NÃO peça CPF ou CNPJ agora. Pergunte, curto, de qual endereço é a cobrança, citando os endereços (com o número) dos contratos dele. Só se ele disser que é de outra pessoa, peça o CPF ou CNPJ do titular dela.';

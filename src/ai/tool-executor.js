@@ -81,6 +81,10 @@ const INSTRUCAO_ALVO_NAO_CONFIRMADO = 'Não foi possível confirmar agora de que
 // não a dúvida: nenhum contrato vale (nem o de antes, nem o de quem fala) até ele dizer que é a própria
 // cobrança ou informar o documento.
 const INSTRUCAO_TERCEIRO_EXPIRADO = 'O pedido de cobrança de outra pessoa feito antes nesta conversa não vale mais, e ainda não ficou claro de quem é a cobrança. NÃO envie nada — nem da outra pessoa, nem de quem está falando. Pergunte, curto, se ele quer a própria cobrança ou a de outra pessoa; se for de outra pessoa, peça o CPF ou CNPJ do titular, mesmo que seja o mesmo já informado. Não diga que sabe quem é essa pessoa.';
+// Pedido por endereço (06/10/2026): a rua citada bate com mais de um contrato dele. Não é dúvida sobre outra pessoa: não se
+// pede documento.
+const INSTRUCAO_ENDERECO_AMBIGUO = 'O endereço que ele citou bate com mais de um contrato dele. NÃO envie nada. Pergunte, curto, de qual endereço é a cobrança, citando o endereço completo (com o número) de cada contrato dele; se os endereços forem iguais, cite também o plano de cada um. NÃO peça CPF nem CNPJ: os contratos são dele.';
+const instrucaoDoEnderecoEscolhido = (contrato) => `O cliente pediu a cobrança do endereço do contrato ${contrato}. NÃO use outro contrato e nada foi enviado: chame a ferramenta de novo com contratoId ${contrato}.`;
 const INSTRUCAO_TERCEIRO_NAO_VINCULADO = 'Ele citou uma pessoa que não dá para ligar com segurança ao titular do CPF ou CNPJ já informado nesta conversa. NÃO envie nada — nem desse titular, nem de quem está falando. Pergunte, curto, de quem é a cobrança e peça o CPF ou CNPJ desse titular, mesmo que seja o mesmo já informado: só com o documento consultado a cobrança pode sair. Não diga que sabe quem é essa pessoa nem qual a relação dela com quem fala.';
 
 const soDigitos = (valor) => String(valor || '').replace(/\D/g, '');
@@ -95,6 +99,7 @@ function recusaPorAlvoEmDuvida(contexto) {
   if (motivo === AMBIGUIDADE.TERCEIRO_NAO_VINCULADO) instrucao = INSTRUCAO_TERCEIRO_NAO_VINCULADO;
   else if (motivo === AMBIGUIDADE.TERCEIRO_EXPIRADO) instrucao = INSTRUCAO_TERCEIRO_EXPIRADO;
   else if (motivo === AMBIGUIDADE.ESCOPO_NAO_LIDO || motivo === AMBIGUIDADE.TRANSICAO_NAO_GRAVADA) instrucao = INSTRUCAO_ALVO_NAO_CONFIRMADO;
+  else if (motivo === AMBIGUIDADE.ENDERECO_AMBIGUO) instrucao = INSTRUCAO_ENDERECO_AMBIGUO;
   else if (terceiroLocalizado && DUVIDAS_ENTRE_PROPRIO_E_TERCEIRO.has(motivo)) instrucao = INSTRUCAO_ALVO_AMBIGUO_COM_TERCEIRO;
   return recusa('financial_target_ambiguous', motivo, instrucao);
 }
@@ -286,6 +291,10 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
         }
       } else if (proprios.length === 1) {
         args = { ...(args || {}), contratoId: proprios[0].id };
+      } else if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto && contexto.contratoEscolhido) {
+        // Pedido por endereço (06/10/2026): o contrato que o cliente escolheu pela rua (um dos dele), só na cobrança.
+        const escolhido = proprios.find((c) => String(c.id) === String(contexto.contratoEscolhido));
+        if (escolhido) args = { ...(args || {}), contratoId: escolhido.id };
       }
     }
 
@@ -388,6 +397,11 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     // (documento não encontrado): recusa antes de tocar o SGP. Sem fallback nenhum. Fica depois das
     // checagens de posse e de identidade (que continuam dando os motivos delas) e antes da execução.
     if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto.alvoAmbiguo) return recusaPorAlvoEmDuvida(contexto);
+    // Pedido por endereço (06/10/2026): com o contrato escolhido pela rua, a cobrança do próprio cliente só sai dele.
+    if (FERRAMENTAS_DE_COBRANCA.includes(nome) && alvo.tipo !== 'terceiro' && contexto.contratoEscolhido
+        && String(argsValidados.contratoId) !== String(contexto.contratoEscolhido)) {
+      return recusa('financial_target_address_mismatch', null, instrucaoDoEnderecoEscolhido(contexto.contratoEscolhido));
+    }
     if (FERRAMENTAS_DE_COBRANCA.includes(nome) && alvo.tipo === 'terceiro'
         && !alvo.contratos.includes(argsValidados.contratoId)) {
       return recusa('financial_target_mismatch', null, INSTRUCAO_ALVO_TERCEIRO);

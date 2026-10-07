@@ -190,8 +190,8 @@ describe('casos 1 a 12', () => {
     // "só a Beltrana" é o SGP ter sido consultado SÓ no contrato dela.
     expect(via.ok).toBe(true);
     expect(via.resultado.gerado).toBe(true);
-    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(N);
-    expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(L);
+    // Item 3 (07/10/2026): a 2ª via daqui é pedida sem gerar o PIX (ela entrega linha e link, não o PIX).
+    expect(sgpClient.getDuplicateInvoice.mock.calls).toEqual([[N, { gerarPix: false }]]);
   });
 
   test('5. CPF do terceiro não encontrado: nenhuma cobrança da Fulana sai, nem sem contrato nem com o dela', async () => {

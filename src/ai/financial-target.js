@@ -237,6 +237,28 @@ const falaNeutra = (texto) => {
   return q.every((x, i) => FALA_NEUTRA.has(x.p) || (x.p === 'segunda' && q[i + 1] && q[i + 1].p === 'via' && q[i + 1].oracao === x.oracao));
 };
 
+// Rodada 8 (N2, avaliação real do endereço: 3 de 3 conversas): "Ops, me enganei, é o da Avenida de Teste" não era o pedido
+// simples (a interjeição está fora das listas), e "da Avenida de Teste" era lido como o nome de outra pessoa — o código pedia o
+// documento de um terceiro que não existe. Um prefixo de correção desta lista FECHADA (uma ou mais, em sequência) sai da frente
+// e o RESTO é lido como sempre: só a forma estrita do pedido simples, com os contratos conhecidos dele. A interjeição não
+// identifica nem autoriza nada: com terceiro ou dúvida forte, o resto segue a leitura de sempre. "não" fica FORA da lista: "não,
+// é o da …" continua fora do pedido simples, como decidido e revisado na v4 (e "não é o da …" é negação).
+const CORRECOES = [
+  ['eu', 'me', 'enganei'], ['me', 'enganei'], ['enganei'], ['eu', 'errei'], ['errei'], ['ops'], ['oops'], ['opa'], ['opps'],
+  ['epa'], ['desculpa'], ['desculpe'], ['foi', 'mal'], ['na', 'verdade'], ['pera'], ['perai'], ['quer', 'dizer'],
+  ['quis', 'dizer'], ['corrigindo'],
+];
+function prefixoDeCorrecao(palavras) {
+  let k = 0;
+  for (;;) {
+    const m = CORRECOES.find((c) => c.every((w, j) => palavras[k + j] && palavras[k + j].p === w));
+    if (!m) break;
+    k += m.length;
+  }
+  return k;
+}
+const ehCorrecao = (texto) => prefixoDeCorrecao(palavrasDe(texto)) > 0;
+
 /** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com duas palavras ou mais, se tem o tipo do logradouro, e o número. */
 function ruasDosContratos(enderecos) {
   return (Array.isArray(enderecos) ? enderecos : []).map((c) => {
@@ -355,10 +377,18 @@ function lerAlvo(texto, nomeDoTerceiro = null, empresa = null, enderecos = [], {
   const outraReferencia = (i) => { if (negado[i]) sinais.negaOutra = true; return !negado[i]; };
   // Pedido por endereço: a rua do pedido simples (ou nenhuma); as palavras dela não são lidas como referência abaixo.
   const ruas = ruasDosContratos(enderecos).filter((r) => desconhecida || r.tipada);
-  const rua = ruaDoPedidoSimples(p, ruas, { resposta, nome, conhecidas, oracoes: palavras.map((x) => x.oracao), desconhecida });
+  const oracoes = palavras.map((x) => x.oracao);
+  let rua = ruaDoPedidoSimples(p, ruas, { resposta, nome, conhecidas, oracoes, desconhecida });
+  // Rodada 8 (N2): com um prefixo de correção, o resto pode ser o pedido simples; o prefixo não é lido como referência.
+  const correcao = prefixoDeCorrecao(palavras);
+  let prefixo = 0;
+  if (!rua && correcao > 0 && correcao < p.length) {
+    const resto = ruaDoPedidoSimples(p.slice(correcao), ruas, { resposta, nome, conhecidas, oracoes: oracoes.slice(correcao), desconhecida });
+    if (resto) { rua = { ...resto, de: resto.de + correcao, ate: resto.ate + correcao }; prefixo = correcao; }
+  }
   if (rua && rua.ids) sinais.contratosDaRua = rua.ids;
   else if (rua) sinais.enderecoDesconhecido = true;
-  const daRua = (i) => Boolean(rua) && i >= rua.de && i < rua.ate;
+  const daRua = (i) => (Boolean(rua) && i >= rua.de && i < rua.ate) || i < prefixo;
   p.forEach((w, i) => {
     if (!dentro(i) || daRua(i)) return;
     const antes = p[i - 1];
@@ -611,8 +641,22 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       devolvida = true;
       continue;
     }
+    // Rodada 8 (N2): a correção que não identifica outro contrato dele, depois de uma escolha neste lote (a da dúvida respondida
+    // volta pela regra acima), não deixa o contrato desdito como destino — nem a cobrança livre: vira a dúvida de endereço, que
+    // a fala seguinte dele, no mesmo lote, ainda pode responder.
+    const correcao = ehCorrecao(texto);
+    if (correcao && escolha && !respondida && !r.contratoEscolhido && !r.alvoPendente && !r.alvoAmbiguo && !r.voltarAoTitular) {
+      atual = { nome: null, contratos: [], pendente: true, alvoPendente: AMBIGUIDADE.ENDERECO_DESCONHECIDO };
+      criado = true;
+      alvoAmbiguo = AMBIGUIDADE.ENDERECO_DESCONHECIDO;
+      escolha = null;
+      continue;
+    }
     alvoAmbiguo = r.alvoAmbiguo;
-    escolha = r.contratoEscolhido ? [...new Set([...(escolha || []), r.contratoEscolhido])] : (respondida && !r.alvoAmbiguo ? escolha : null);
+    // A correção que escolhe outro contrato SUBSTITUI o desdito; sem correção, duas falas com contratos diferentes valem as duas.
+    escolha = r.contratoEscolhido
+      ? (correcao ? [r.contratoEscolhido] : [...new Set([...(escolha || []), r.contratoEscolhido])])
+      : (respondida && !r.alvoAmbiguo ? escolha : null);
     if (r.voltarAoTitular) {
       // A volta ao titular com a dúvida de endereço: o titular, com a dúvida gravada (escopo pendente sem contrato).
       atual = r.alvoPendente ? { nome: null, contratos: [], pendente: true, alvoPendente: r.alvoPendente } : null;

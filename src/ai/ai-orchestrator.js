@@ -387,7 +387,7 @@ function ferramentasDaTriagem(triagem, config) {
   return lista;
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -463,6 +463,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // Persistência do alvo (03/10/2026): os estados do escopo que este turno conhece (worker). As gravações do
       // escopo pelas ferramentas exigem um deles na própria instrução e atualizam a lista.
       esperadosDoAlvo: Array.isArray(esperadosDoAlvo) ? esperadosDoAlvo.slice() : [],
+      // Revisão da rodada 7 (P2-2): a dúvida de endereço foi respondida neste turno e só sai do banco pela limpeza adiada do
+      // worker, condicional (nenhuma entrada nova esperando). O documento de quem fala, neste turno, só identifica.
+      duvidaDeEnderecoRespondida: duvidaDeEnderecoRespondida === true,
       // Conclusão do atendimento: o encaminhamento tentado e não concluído em turno anterior, e as ferramentas pedidas
       // neste turno (concluir_triagem decide a nova tentativa por elas).
       encaminhamentoNaoConcluido,

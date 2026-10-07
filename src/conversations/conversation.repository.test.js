@@ -1491,12 +1491,44 @@ describe('conversation repository', () => {
         expect(await limpar(conversation.id, aplicada)).toBe(true);
       });
 
-      test('entrada não confirmada mais antiga que as aplicadas não segura a limpeza', async () => {
+      // Revisão da rodada 7 (P2-1): a condição conta a MESMA janela que a leitura das entradas (listarFalasSemAlvoConfirmado):
+      // depois de `desde`, OU sem nenhuma entrada confirmada na conversa, OU depois da última confirmada. A hora da entrada é a
+      // do provedor: a correção entregue atrasada pode vir com created_at anterior a `desde`.
+      const ha = (minutos) => new Date(Date.now() - minutos * 60 * 1000);
+      const antiga = (conversationId, content, minutos) => {
+        n += 1;
+        return createMessage({ conversationId, direction: 'inbound', content, whatsappMessageId: `wamid.c3.${n}.${Date.now()}`, status: 'received', sentAt: ha(minutos) });
+      };
+      const limparDesde = (id, aplicada, desde) => setThirdPartyScope(id, null, {
+        esperados: [{ marca: 'marca-d' }], aceitaNulo: true, semEntradaNova: { ids: [aplicada.id], desde },
+      });
+
+      test('entrada não confirmada anterior a `desde` e à última confirmada não segura a limpeza (a leitura não a lê)', async () => {
         const conversation = await createConversation(contactId, channelId);
         await setThirdPartyScope(conversation.id, D);
-        await mensagem(conversation.id, 'oi');
+        await antiga(conversation.id, 'oi', 60);
+        await marcarFalasComAlvoProcessado([(await antiga(conversation.id, 'manda o pix da Avenida Central', 50)).id]);
         const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
-        expect(await limpar(conversation.id, aplicada)).toBe(true);
+        expect(await limparDesde(conversation.id, aplicada, ha(30))).toBe(true);
+      });
+
+      test('entrada entregue atrasada (hora do provedor anterior a `desde`), depois da última confirmada e não aplicada: não limpa', async () => {
+        const conversation = await createConversation(contactId, channelId);
+        await setThirdPartyScope(conversation.id, D);
+        await marcarFalasComAlvoProcessado([(await antiga(conversation.id, 'manda o pix da Avenida Central', 180)).id]);
+        const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
+        await antiga(conversation.id, 'ops, é a outra casa', 40);
+        expect(await limparDesde(conversation.id, aplicada, ha(30))).toBe(false);
+        expect(await getThirdPartyScope(conversation.id)).toEqual(D);
+      });
+
+      test('sem nenhuma entrada confirmada na conversa, a entrada não aplicada anterior a `desde` segura a limpeza (a leitura a lê)', async () => {
+        const conversation = await createConversation(contactId, channelId);
+        await setThirdPartyScope(conversation.id, D);
+        await antiga(conversation.id, 'ops, é a outra casa', 40);
+        const aplicada = await mensagem(conversation.id, 'é a da Rua de Teste');
+        expect(await limparDesde(conversation.id, aplicada, ha(30))).toBe(false);
+        expect(await getThirdPartyScope(conversation.id)).toEqual(D);
       });
 
       test('a entrada nova já aplicada (marcada) por outro processamento não segura — quem segura então é a marca regravada', async () => {

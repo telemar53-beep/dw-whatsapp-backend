@@ -334,10 +334,12 @@ async function setThirdPartyScope(conversationId, escopo, condicao = null) {
   // (third-party-scope.js), ou o conteúdo de um escopo de antes desta versão (`legado`). Devolve se gravou:
   // false é "outro processamento mudou o estado" — nada foi escrito.
   const { aceitaNulo, marcas, legados } = parametrosDaCondicaoDoEscopo(condicao);
-  // Pedido por endereço, rodada 7 (ressalva C3): `semEntradaNova: { ids, desde }` — só grava se nenhuma entrada do cliente
-  // desde `desde`, fora das `ids` já aplicadas pelo turno, ainda espera ser aplicada (a marca alvoProcessado de
-  // message.repository.js). É a limpeza da dúvida respondida: a correção que chegou durante o turno não pode ser aplicada
-  // depois sobre o estado já limpo.
+  // Pedido por endereço, rodada 7 (ressalva C3): `semEntradaNova: { ids, desde }` — só grava se nenhuma entrada do cliente,
+  // fora das `ids` já aplicadas pelo turno, ainda espera ser aplicada (a marca alvoProcessado de message.repository.js). É a
+  // limpeza da dúvida respondida: a correção que chegou durante o turno não pode ser aplicada depois sobre o estado já limpo.
+  // Revisão da rodada 7 (P2-1): "espera ser aplicada" é a MESMA janela da leitura (listarFalasSemAlvoConfirmado) — depois de
+  // `desde`, OU sem nenhuma entrada confirmada na conversa, OU depois da última confirmada. Só `desde` deixava passar a
+  // correção entregue atrasada (a hora da entrada é a do provedor).
   const semEntradaNova = condicao.semEntradaNova || null;
   const result = await getPool().query(
     `UPDATE conversations c SET ai_triage_third_party = $2
@@ -349,7 +351,16 @@ async function setThirdPartyScope(conversationId, escopo, condicao = null) {
           SELECT 1 FROM messages m
            WHERE m.conversation_id = c.id AND m.direction = 'inbound'
              AND COALESCE(m.metadata->>'alvoProcessado', 'false') <> 'true'
-             AND m.created_at >= $7::timestamptz AND NOT (m.id = ANY($8::uuid[]))))
+             AND NOT (m.id = ANY($8::uuid[]))
+             AND (m.created_at > $7::timestamptz
+               OR NOT EXISTS (
+                 SELECT 1 FROM messages q
+                  WHERE q.conversation_id = c.id AND q.direction = 'inbound' AND q.metadata->>'alvoProcessado' = 'true')
+               OR (m.created_at, m.id) > (
+                 SELECT p.created_at, p.id FROM messages p
+                  WHERE p.conversation_id = c.id AND p.direction = 'inbound' AND p.metadata->>'alvoProcessado' = 'true'
+                  ORDER BY p.created_at DESC, p.id DESC
+                  LIMIT 1))))
       RETURNING c.id`,
     [conversationId, escopo ? JSON.stringify(escopo) : null, aceitaNulo, marcas, legados,
       Boolean(semEntradaNova), semEntradaNova ? semEntradaNova.desde : null, semEntradaNova ? semEntradaNova.ids : []]

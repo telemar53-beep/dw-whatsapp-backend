@@ -735,6 +735,8 @@ describe('pedido por endereço do próprio cliente', () => {
     'não, não é a da Rua de Teste', 'na verdade é a outra', 'errei',
     // Revisão da v4.2 (achado C1): a palavra de escolha — "segunda" só é neutra em "segunda via".
     'a segunda', 'é a segunda', 'manda a segunda', 'a primeira', 'a última', 'a terceira',
+    // Revisão da rodada 7 (P1-1): "via" em outra oração não faz de "segunda" a "segunda via".
+    'a segunda, via pix', 'a segunda. via pix', 'a segunda\nvia pix', 'é a segunda, via pix por favor',
   ])('com a dúvida gravada, a resposta e depois "%s": a dúvida volta, regravada (marca nova), sem contrato escolhido e sem limpar', (correcao) => {
     const TRES = [...ENDERECOS, { id: 304, address: 'Travessa de Teste, 40' }];
     const r = mensagens(['Rua de Teste', correcao], { terceiro: DUVIDA('endereco_desconhecido'), enderecos: TRES });

@@ -1691,6 +1691,18 @@ describe('escopo de terceiro', () => {
     // turno conhece, e aceita a coluna já vazia.
     expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null, expect.objectContaining({ aceitaNulo: true }));
   });
+
+  // Revisão da rodada 7 (P2-2): no turno em que a dúvida de endereço foi respondida, o próprio documento só identifica — a
+  // limpeza adiada do worker (condicional: nenhuma entrada nova esperando) é a única escrita. Sem o sinal, grava como antes.
+  test.each([[true, 0], [false, 1]])('buscar_cliente com o próprio documento e a dúvida de endereço respondida no turno = %s: grava a volta %i vez(es)', async (respondida, vezes) => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 5, name: 'JOAO', document: '11122233344' }, contracts: [{ id: 1, status: 1 }],
+    });
+    const contexto = contextoDeTriagemCom({ terceiro: null, duvidaDeEnderecoRespondida: respondida, contratoEscolhido: '1', contratosEscolhidos: ['1'] });
+    await executeTool('buscar_cliente', { cpf: '11122233344' }, contexto);
+    expect(setThirdPartyScope).toHaveBeenCalledTimes(vezes);
+    expect(contexto.terceiro).toBeNull();
+  });
 });
 
 describe('buscar_cliente no perfil de triagem', () => {

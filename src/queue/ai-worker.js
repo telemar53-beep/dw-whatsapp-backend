@@ -592,6 +592,8 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // dela.
     conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro, alvoAmbiguo, contratoEscolhido, contratosEscolhidos, messageId,
     terceiroLocalizadoEm, reativacao: reativacao || null, esperadosDoAlvo: esperados,
+    // Revisão da rodada 7 (P2-2): a dúvida de endereço respondida neste turno só sai do banco pela limpeza adiada abaixo.
+    duvidaDeEnderecoRespondida: limparDepoisDoTurno,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

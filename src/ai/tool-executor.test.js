@@ -1113,6 +1113,77 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
     expect((await executeTool('buscar_cliente', { cpf: '11144477735' }, semFalas)).ok).toBe(true);
     expect(executar).toHaveBeenCalled();
   });
+
+  // Rodada 8 (N1): com dúvida financeira no turno — gravada no escopo ou do próprio turno — ou depois de ele voltar à própria
+  // cobrança, o documento de OUTRA pessoa só vale se ele o mandou de novo, numa fala nova deste turno (falasNovasDoCliente).
+  // O que só existe no histórico não é consultado: nada é gravado, e a dúvida (ou a volta ao titular) fica.
+  describe('com dúvida financeira: o documento só do histórico não esclarece', () => {
+    const HISTORICO = ['manda o boleto da minha vizinha, o cpf dela é 111.444.777-35', 'agora manda o boleto da rua do João'];
+    const LOCALIZADA = { nome: 'Fulana', contratos: [{ id: 401 }] };
+    const base = (extra) => ({ ...TRIAGEM_IDENTIFICADA, falasDoCliente: HISTORICO, falasNovasDoCliente: ['agora manda o boleto da rua do João'], ...extra });
+    test.each([
+      ['a dúvida forte gravada no escopo', { terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado' }],
+      ['a dúvida fraca gravada no escopo', { terceiro: { ...LOCALIZADA, alvoPendente: 'proprio_nao_afirmado' }, alvoAmbiguo: 'proprio_nao_afirmado' }],
+      ['a dúvida só do turno', { terceiro: LOCALIZADA, alvoAmbiguo: 'referencia_incompleta' }],
+      ['a dúvida de endereço gravada', { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido' }, alvoAmbiguo: 'endereco_desconhecido' }],
+    ])('%s: nada é consultado, e o modelo lê que precisa do documento mandado de novo', async (_, extra) => {
+      const executar = buscar();
+      const r = await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, base(extra));
+      expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
+      expect(r.instrucao).toMatch(/NADA foi consultado/);
+      expect(r.instrucao).toMatch(/mande o CPF ou CNPJ dela de novo/);
+      expect(executar).not.toHaveBeenCalled();
+    });
+    test('a dúvida gravada no escopo vale mesmo que o turno não a repita (alvoAmbiguo vazio)', async () => {
+      const executar = buscar();
+      const r = await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, base({ terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: false }));
+      expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
+      expect(executar).not.toHaveBeenCalled();
+    });
+    test('depois de ele voltar à própria cobrança neste turno: o documento dela do histórico não é consultado', async () => {
+      const executar = buscar();
+      const r = await executeTool('buscar_cliente', { cpf: '11144477735' }, base({ terceiro: null, alvoAmbiguo: false, alvoVoltouAoTitular: true, falasNovasDoCliente: ['agora a minha fatura da Rua de Teste'] }));
+      expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
+      expect(r.instrucao).toMatch(/a cobrança é dele/);
+      expect(executar).not.toHaveBeenCalled();
+    });
+    // A origem efetiva: o documento numa fala a partir da que originou a dúvida (o pedido de terceiro com o CPF na mesma
+    // mensagem) vale; o de antes dela, não.
+    const JANELA = [
+      { id: 'm-1', de: 'cliente', texto: 'manda o boleto da minha vizinha, o cpf dela é 111.444.777-35' },
+      { id: 'm-2', de: 'ia', texto: 'Prontinho!' },
+      { id: 'm-3', de: 'cliente', texto: 'agora manda o boleto da rua do João' },
+    ];
+    test.each([['m-1', true], ['m-3', false], ['m-inexistente', false]])('dúvida gravada desde a entrada %s: o documento da m-1 vale = %s', async (desde, vale) => {
+      const executar = buscar();
+      const ctx = base({ mensagensDaJanela: JANELA, terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento', duvidaDesde: desde }, alvoAmbiguo: 'outra_pessoa_sem_documento', falasNovasDoCliente: ['pode ser o boleto'] });
+      const r = await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, ctx);
+      expect(r.ok !== false).toBe(vale);
+      expect(executar).toHaveBeenCalledTimes(vale ? 1 : 0);
+    });
+
+    test('o mesmo documento mandado de novo numa fala nova deste turno: as regras de sempre (consulta)', async () => {
+      const executar = buscar();
+      const ctx = base({ terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado', falasNovasDoCliente: ['o cpf dela é 111.444.777-35'] });
+      expect((await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, ctx)).ok).toBe(true);
+      expect(executar).toHaveBeenCalled();
+    });
+    test.each([
+      ['sem dúvida e sem volta ao titular', { terceiro: LOCALIZADA, alvoAmbiguo: false }],
+      ['dúvida técnica (escopo não lido)', { terceiro: null, alvoAmbiguo: 'escopo_nao_lido' }],
+      ['sem a lista das falas novas (outro chamador)', { terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado', falasNovasDoCliente: undefined }],
+    ])('%s: a consulta do documento do histórico segue como antes', async (_, extra) => {
+      const executar = buscar();
+      expect((await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, base(extra))).ok).toBe(true);
+      expect(executar).toHaveBeenCalled();
+    });
+    test('o documento de quem fala, com a dúvida: não é esta regra que decide (segue o caminho de sempre)', async () => {
+      const executar = buscar();
+      const ctx = base({ terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado' });
+      expect((await executeTool('buscar_cliente', { cpf: '52998224725' }, ctx)).ok).toBe(true);
+      expect(executar).toHaveBeenCalled();
+    });
+  });
 });
 
 // Fechamento limitado (04/10/2026; não impeditivo B4 da conferência das pendências): números incidentais — telefone,

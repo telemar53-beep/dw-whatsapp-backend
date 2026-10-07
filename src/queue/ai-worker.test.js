@@ -932,10 +932,11 @@ describe('ai-worker — triagem', () => {
         await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
         expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
-          terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }], alvoPendente: 'dois_lados' }, alvoAmbiguo: 'dois_lados',
+          // Rodada 8 (N1): a dúvida gravada neste turno guarda a entrada que a originou.
+          terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }], alvoPendente: 'dois_lados', duvidaDesde: 'm-1' }, alvoAmbiguo: 'dois_lados',
         }));
         // O escopo não é limpo: só ganha a dúvida, com o mesmo prazo.
-        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'dois_lados' }), GRAVACAO_CONDICIONAL);
+        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'dois_lados', duvidaDesde: 'm-1' }), GRAVACAO_CONDICIONAL);
       });
 
       // F2 (30/09/2026): posse de coisa própria é o próprio — com terceiro registrado, é volta explícita.
@@ -962,7 +963,7 @@ describe('ai-worker — triagem', () => {
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
           expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
-          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ nome: 'Beltrana', contratos: [77], expiraEm: FUTURO, alvoPendente: 'terceiro_nao_vinculado' }), GRAVACAO_CONDICIONAL);
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ nome: 'Beltrana', contratos: [77], expiraEm: FUTURO, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'm-1' }), GRAVACAO_CONDICIONAL);
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
         });
 
@@ -1038,6 +1039,11 @@ describe('ai-worker — triagem', () => {
             nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido', marca: expect.any(String),
           }), GRAVACAO_CONDICIONAL);
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'endereco_desconhecido', contratoEscolhido: null }));
+          // Rodada 8 (N1): a dúvida gravada guarda a entrada que a originou, e o turno recebe as falas novas do cliente.
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ duvidaDesde: 'm-1' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+            terceiro: expect.objectContaining({ duvidaDesde: 'm-1' }), falasNovasDoCliente: ['manda o pix da Avenida Central'], alvoVoltouAoTitular: false,
+          }));
         });
 
         test('dúvida de endereço gravada + "pode mandar": continua, sem gravar nada e sem liberar', async () => {
@@ -1395,7 +1401,8 @@ describe('ai-worker — triagem', () => {
 
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado' }), GRAVACAO_CONDICIONAL);
+          // Rodada 8 (N1): a origem da dúvida é a entrada cuja gravação tinha falhado (m-0), reaplicada agora.
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'm-0' }), GRAVACAO_CONDICIONAL);
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
         });
 

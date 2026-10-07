@@ -427,6 +427,9 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   let contratosEscolhidos = null;
   // A resposta que tirou a dúvida de endereço: a volta ao titular é gravada só depois do turno (ver abaixo).
   let limparDepoisDoTurno = false;
+  // Rodada 8 (N1): a afirmação da própria cobrança neste turno tirou o terceiro (ou a dúvida) — o documento de outra pessoa
+  // que só está no histórico não o traz de volta (tool-executor.js).
+  let alvoVoltouAoTitular = false;
   let empresa = null;
   try {
     const cartao = await getCompanyConfig();
@@ -521,13 +524,16 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // sobre ela, com a mesma limitação ao contrato identificado. As transições que restringem continuam antes do turno.
     const respostaADuvidaDeEndereco = alvo.gravar === 'limpar' && Boolean(terceiro) && DUVIDAS_DE_ENDERECO.includes(terceiro.alvoPendente)
       && (terceiro.contratos || []).length === 0;
+    alvoVoltouAoTitular = alvo.gravar === 'limpar';
     if (respostaADuvidaDeEndereco) {
       terceiro = null;
       limparDepoisDoTurno = true;
     } else if (alvo.gravar) {
       let novo = null;
-      if (alvo.gravar === 'criar') novo = comPendenciaDeAlvo(montarEscopo(null, [], new Date(), { pendente: true }), alvo.terceiro.alvoPendente);
-      else if (alvo.gravar === 'pendencia') novo = comPendenciaDeAlvo(escopoDoTerceiro, alvo.terceiro.alvoPendente || null);
+      // Rodada 8 (N1): a dúvida gravada guarda a primeira entrada aplicada neste turno — a origem dela.
+      const desdeDaDuvida = aMarcar[0] || messageId || null;
+      if (alvo.gravar === 'criar') novo = comPendenciaDeAlvo(montarEscopo(null, [], new Date(), { pendente: true }), alvo.terceiro.alvoPendente, desdeDaDuvida);
+      else if (alvo.gravar === 'pendencia') novo = comPendenciaDeAlvo(escopoDoTerceiro, alvo.terceiro.alvoPendente || null, desdeDaDuvida);
       try {
         // Persistência do alvo (03/10/2026): só grava se o banco ainda estiver no estado que o turno leu. A volta
         // ao titular aceita a coluna já vazia (o efeito pedido já vale).
@@ -594,6 +600,10 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     terceiroLocalizadoEm, reativacao: reativacao || null, esperadosDoAlvo: esperados,
     // Revisão da rodada 7 (P2-2): a dúvida de endereço respondida neste turno só sai do banco pela limpeza adiada abaixo.
     duvidaDeEnderecoRespondida: limparDepoisDoTurno,
+    // Rodada 8 (N1): as falas do cliente que este turno aplicou (as novas, ainda não confirmadas, e a do job) — a origem
+    // efetiva de um documento que esclarece uma dúvida; e se a afirmação da própria cobrança tirou o terceiro neste turno.
+    falasNovasDoCliente: Array.isArray(falas) ? falas : null,
+    alvoVoltouAoTitular,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

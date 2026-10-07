@@ -203,6 +203,42 @@ function documentoTemOrigem(documento, contexto) {
   return Boolean(documento) && documentosApresentados(contexto).has(documento);
 }
 
+// Rodada 8 (N1, avaliação real do endereço: 3 de 3 conversas): com a terceira localizada e a dúvida gravada por "a rua do
+// João", o modelo reconsultou o CPF dela, que estava na abertura, e a consulta gravou de novo a terceira localizada — a dúvida
+// sumiu e o boleto dela podia ser reenviado. Depois de "a minha fatura", a mesma reconsulta trouxe a terceira de volta e barrou
+// a cobrança dele. A presença do documento no histórico não prova que a dúvida de agora foi esclarecida: com dúvida financeira
+// no turno (gravada no escopo ou do próprio turno; as técnicas não contam), ou depois de ele voltar à própria cobrança neste
+// turno, o documento de OUTRA pessoa só vale se estiver numa fala NOVA deste turno (a origem efetiva: as falas que o worker
+// aplicou agora). Mandado de novo por ele, segue as regras de sempre. Sem a lista das falas novas (outro chamador), nada muda.
+const DUVIDAS_TECNICAS = new Set(['escopo_nao_lido', 'transicao_nao_gravada']);
+function restricaoDoHistorico(contexto) {
+  if (!contexto || !Array.isArray(contexto.falasNovasDoCliente)) return null;
+  const gravada = contexto.terceiro && contexto.terceiro.alvoPendente;
+  const doTurno = typeof contexto.alvoAmbiguo === 'string' && !DUVIDAS_TECNICAS.has(contexto.alvoAmbiguo);
+  if (gravada || doTurno) return 'duvida';
+  return contexto.alvoVoltouAoTitular === true ? 'titular' : null;
+}
+// A origem efetiva de uma dúvida gravada: as falas da janela a partir da entrada que a originou (duvidaDesde) — o pedido de
+// terceiro que já trazia o CPF na mesma mensagem continua valendo. Sem a entrada na janela, só as falas novas do turno.
+function janelaDesdeADuvida(contexto) {
+  const desde = contexto.terceiro && contexto.terceiro.duvidaDesde;
+  const janela = Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela : [];
+  const i = desde ? janela.findIndex((m) => m && m.id === desde) : -1;
+  return i >= 0 ? janela.slice(i) : [];
+}
+function documentoSoDoHistorico(documento, contexto) {
+  const restricao = restricaoDoHistorico(contexto);
+  if (!restricao || !documento || documento === documentoDoTitularDaConversa(contexto)) return null;
+  if (documentosApresentados({ falasDoCliente: contexto.falasNovasDoCliente }).has(documento)) return null;
+  if (restricao === 'duvida' && documentosApresentados({ mensagensDaJanela: janelaDesdeADuvida(contexto) }).has(documento)) return null;
+  return restricao;
+}
+function instrucaoDoDocumentoDoHistorico(restricao) {
+  return restricao === 'titular'
+    ? 'NADA foi consultado: ele acabou de dizer que a cobrança é dele. O CPF ou CNPJ de outra pessoa que já estava na conversa não vale agora: siga com a cobrança dele, pelo cadastro que você já tem.'
+    : 'NADA foi consultado: este CPF ou CNPJ já estava na conversa antes da dúvida de agora, e consultá-lo de novo não esclarece de quem é a cobrança. Não envie nada de ninguém. Pergunte, curto, de quem é a cobrança; se for de outra pessoa, peça que ele mande o CPF ou CNPJ dela de novo nesta conversa, mesmo que seja o mesmo de antes.';
+}
+
 function instrucaoDoDocumentoSemOrigem(contexto) {
   const identidade = contexto && contexto.identidade;
   const identificado = Boolean(identidade && identidade.nivel === 'forte' && !identidade.contestado);
@@ -341,6 +377,8 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
         if (!documentoTemOrigem(argsValidados.cpf, contexto)) {
           return recusa('document_without_origin', null, instrucaoDoDocumentoSemOrigem(contexto));
         }
+        const doHistorico = documentoSoDoHistorico(argsValidados.cpf, contexto);
+        if (doHistorico) return recusa('document_before_doubt', null, instrucaoDoDocumentoDoHistorico(doHistorico));
         const titular = documentoDoTitularDaConversa(contexto);
         if (titular && titular !== argsValidados.cpf && argsValidados.titularEOutraPessoa !== true) {
           argsValidados = { ...argsValidados, titularEOutraPessoa: true };

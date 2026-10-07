@@ -272,6 +272,15 @@ function terceiroLocalizado(contexto) {
   return Boolean(t && Array.isArray(t.contratos) && t.contratos.length > 0);
 }
 
+// Rodada 8 (N1): a dúvida forte sobre o terceiro localizado ("a rua do João") manda pedir o CPF ou CNPJ de quem é a cobrança,
+// mesmo que seja o mesmo já informado (instrução da recusa, tool-executor.js). Barrar esse pedido como "terceiro já
+// localizado" contradizia a instrução e levava o modelo a reconsultar o documento antigo.
+const DUVIDAS_QUE_PEDEM_DOCUMENTO = new Set(['terceiro_nao_vinculado', 'outra_pessoa_sem_documento', 'terceiro_expirado']);
+function duvidaPedeDocumento(contexto) {
+  const t = contexto && contexto.terceiro;
+  return DUVIDAS_QUE_PEDEM_DOCUMENTO.has(t && t.alvoPendente) || DUVIDAS_QUE_PEDEM_DOCUMENTO.has(contexto && contexto.alvoAmbiguo);
+}
+
 /** O que a resposta NÃO pode pedir neste turno. */
 function violacoesDoDocumento(texto, contexto) {
   if (!pedeDocumento(texto)) return [];
@@ -286,7 +295,7 @@ function violacoesDoDocumento(texto, contexto) {
   if (pendente && (pendente.irritado || (!pendente.mudancaRelevante && !pendente.esclarecimentoDisponivel))) {
     return ['documento_repetido'];
   }
-  if (!pendente && terceiroLocalizado(c) && !pedeODeQuemFala
+  if (!pendente && terceiroLocalizado(c) && !pedeODeQuemFala && !duvidaPedeDocumento(c)
       && !NOVO_TERCEIRO.test(normalizar(c.ultimaFala))) {
     return ['documento_terceiro_localizado'];
   }

@@ -52,4 +52,35 @@ describe('receiptVerdict', () => {
 
     expect(v.details.join(' ')).toMatch(/fatura/i);
   });
+
+  // Rodada 7 (achado 2.3 da revisão do comprovante): "o comprovante não confere" só para o comprovante efetivamente
+  // divergente. Quando a ÚNICA reprovação é não ter havido como conferir o valor (`naoConferido`), o título diz isso.
+  test.each([
+    ['indisponivel', /^Não foi possível conferir o valor: a consulta ao SGP falhou\.$/],
+    ['incompleta', /^Não foi possível conferir o valor com todas as faturas: a consulta de um contrato falhou\.$/],
+    ['desligado', /^Não foi possível conferir o valor: a integração com o SGP está desligada ou sem configuração\.$/],
+    ['sem_contratos', /^Sem contrato no SGP para conferir o valor\.$/],
+    ['sem_faturas', /^Sem fatura em aberto para conferir o valor\.$/],
+    ['sem_documento', /^Não foi possível conferir o valor: o contato não está vinculado a um cadastro do SGP\.$/],
+  ])('valor sem conferência (%s): aviso com o motivo certo, nunca "o comprovante não confere"', (naoConferido, titulo) => {
+    const v = receiptVerdict({ analisado: true, valido: false, naoConferido, motivos: ['motivo do servidor'] });
+
+    expect(v.tone).toBe('warn');
+    expect(v.title).toMatch(titulo);
+    expect(v.title).not.toMatch(/não confere/i);
+    expect(v.details).toContain('motivo do servidor');
+  });
+
+  test('comprovante divergente (sem naoConferido): "o comprovante não confere"', () => {
+    const v = receiptVerdict({ analisado: true, valido: false, naoConferido: null, motivos: ['valor não corresponde a nenhuma fatura em aberto'] });
+
+    expect(v.tone).toBe('error');
+    expect(v.title).toBe('O comprovante não confere.');
+  });
+
+  test('o aviso de já usado vem antes do aviso de conferência', () => {
+    const v = receiptVerdict({ analisado: true, valido: false, jaUtilizado: true, naoConferido: 'indisponivel', motivos: [] });
+
+    expect(v.title).toMatch(/já foi usado/i);
+  });
 });

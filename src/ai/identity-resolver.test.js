@@ -83,6 +83,19 @@ describe('resolverIdentidade', () => {
     expect(r.client).toEqual({ id: 16957, document: '52998224725' });
   });
 
+  // Revisão da rodada 7 (P3-3): por que o SGP não respondeu na identificação pela memória — a conferência do comprovante
+  // distingue integração desligada/sem configuração, documento não encontrado e falha.
+  test.each([
+    ['desligada', () => new sgpClient.SgpDisabledError('off'), 'desligado'],
+    ['sem configuração', () => new sgpClient.SgpNotConfiguredError('sem config'), 'desligado'],
+    ['documento não encontrado', () => new sgpClient.SgpClientNotFoundError('Client not found'), 'nao_encontrado'],
+    ['falha', () => new Error('SGP down'), 'falhou'],
+  ])('memória: SGP %s — a identidade diz o motivo', async (_, erro, motivo) => {
+    sgpClient.lookupClientByCpf.mockRejectedValueOnce(erro());
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5520999990338', sgpDocument: '52998224725', sgpFirstName: 'João' } });
+    expect(r).toMatchObject({ nivel: 'forte', origem: 'memory', sgpIndisponivel: true, motivoSgpIndisponivel: motivo });
+  });
+
   test('memória: com o SGP fora e sem nome guardado, ainda identifica (sem nome)', async () => {
     sgpClient.lookupClientByCpf.mockRejectedValueOnce(new Error('SGP down'));
     const r = await resolverIdentidade({

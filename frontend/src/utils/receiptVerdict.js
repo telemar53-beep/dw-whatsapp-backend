@@ -18,6 +18,17 @@ function formatarData(data) {
   return `${dia}/${mes}/${ano}`;
 }
 
+// Rodada 7 (achado 2.3 da revisão do comprovante): quando a ÚNICA reprovação é não ter havido como conferir o valor
+// (`naoConferido`, calculado no servidor), o título diz isso — "o comprovante não confere" fica para o divergente.
+const SEM_CONFERENCIA = {
+  indisponivel: 'Não foi possível conferir o valor: a consulta ao SGP falhou.',
+  incompleta: 'Não foi possível conferir o valor com todas as faturas: a consulta de um contrato falhou.',
+  desligado: 'Não foi possível conferir o valor: a integração com o SGP está desligada ou sem configuração.',
+  sem_contratos: 'Sem contrato no SGP para conferir o valor.',
+  sem_faturas: 'Sem fatura em aberto para conferir o valor.',
+  sem_documento: 'Não foi possível conferir o valor: o contato não está vinculado a um cadastro do SGP.',
+};
+
 export function receiptVerdict(resultado) {
   const r = resultado || {};
   if (!r.analisado) {
@@ -37,6 +48,9 @@ export function receiptVerdict(resultado) {
   }
   if (r.valido) {
     return { tone: 'ok', title: 'O comprovante confere.', details };
+  }
+  if (r.naoConferido && SEM_CONFERENCIA[r.naoConferido]) {
+    return { tone: 'warn', title: SEM_CONFERENCIA[r.naoConferido], details };
   }
   return { tone: 'error', title: 'O comprovante não confere.', details };
 }

@@ -303,6 +303,30 @@ describe('analisar comprovante pelo chat', () => {
     expect(await screen.findByText(/ja foi usado antes|já foi usado antes/i)).toBeInTheDocument();
   });
 
+  // Rodada 7 (achado 2.3 da revisão do comprovante): o texto exibido distingue "não deu para conferir" de "não confere".
+  test('valor sem conferencia (SGP fora): a bolha diz que nao foi possivel conferir, nunca "o comprovante nao confere"', async () => {
+    const onAnalyzeReceipt = vi.fn().mockResolvedValue({
+      analisado: true, valido: false, naoConferido: 'indisponivel', motivos: ['não foi possível conferir o valor: a consulta das faturas no SGP falhou'],
+    });
+    render(<MessageAttachment message={IMAGEM} onAnalyzeReceipt={onAnalyzeReceipt} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /analisar comprovante/i }));
+
+    expect(await screen.findByText(/Não foi possível conferir o valor: a consulta ao SGP falhou/i)).toBeInTheDocument();
+    expect(screen.queryByText(/o comprovante não confere/i)).not.toBeInTheDocument();
+  });
+
+  test('comprovante efetivamente divergente: a bolha diz "o comprovante nao confere"', async () => {
+    const onAnalyzeReceipt = vi.fn().mockResolvedValue({
+      analisado: true, valido: false, naoConferido: null, motivos: ['valor não corresponde a nenhuma fatura em aberto'],
+    });
+    render(<MessageAttachment message={IMAGEM} onAnalyzeReceipt={onAnalyzeReceipt} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /analisar comprovante/i }));
+
+    expect(await screen.findByText(/o comprovante não confere/i)).toBeInTheDocument();
+  });
+
   test('mostra o motivo quando a analise falha', async () => {
     const onAnalyzeReceipt = vi.fn().mockRejectedValue({ body: { error: 'A OpenAI não está configurada; não é possível ler o comprovante.' } });
     render(<MessageAttachment message={IMAGEM} onAnalyzeReceipt={onAnalyzeReceipt} />);

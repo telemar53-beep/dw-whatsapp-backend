@@ -167,3 +167,94 @@ test('nenhum contrato no SGP: diz que não há contrato para conferir; sem docum
   expect(semDocumento.motivos.join(' ')).toMatch(/não foi possível conferir o valor: o contato não está vinculado a um cadastro do SGP/);
   expect(axios.post).not.toHaveBeenCalled();
 });
+
+// Rodada 7 (achados 2.1 a 2.4 da revisão do comprovante): as situações da conferência do valor ficam distintas, e
+// `naoConferido` só aparece quando a ÚNICA reprovação é não ter havido como conferir o valor. "Não confere" fica para o
+// comprovante efetivamente divergente. O critério (válido ou não) não muda.
+describe('as situações da conferência do valor', () => {
+  const LEITURA = { ehComprovante: true, tipo: 'pix', valor: 100, data: HOJE, favorecido: 'EMPRESA DE TESTE', confianca: 0.95, idTransacao: 'E-TESTE-1' };
+  const sgpSemFatura = () => axios.post.mockImplementation(async (url) => {
+    if (url.endsWith('/api/central/titulos')) return { data: { faturas: [] } };
+    if (url.endsWith('/api/ura/fatura2via')) return { data: { status: 0, links: [] } };
+    throw new Error(`URL inesperada no teste: ${url}`);
+  });
+
+  test('integração desligada ou sem configuração (na rota): diz isso, não "nenhum contrato" nem "não corresponde"', async () => {
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: [], config: CONFIG, consultaDeContratos: 'desligado' });
+    expect(r).toMatchObject({ analisado: true, valido: false, conferenciaDasFaturas: 'desligado', naoConferido: 'desligado' });
+    expect(r.motivos.join(' ')).toMatch(/não foi possível conferir o valor: a integração com o SGP está desligada ou sem configuração/);
+    expect(r.motivos.join(' ')).not.toMatch(/nenhum contrato|não corresponde/);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test('consulta concluída e os contratos sem nenhuma fatura em aberto: "não há fatura em aberto", não "não corresponde"', async () => {
+    sgpSemFatura();
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+    expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'sem_faturas', naoConferido: 'sem_faturas' });
+    expect(r.motivos.join(' ')).toMatch(/não há fatura em aberto nos contratos deste cliente para conferir o valor/);
+    expect(r.motivos).not.toContain(MOTIVO_SEM_FATURA);
+    expect(pediuPix()).toEqual([]);
+  });
+
+  test.each([
+    ['consulta indisponível', () => axios.post.mockRejectedValue(new Error('SGP fora')), CONTRATOS, 'ok', 'indisponivel'],
+    ['nenhum contrato no SGP', () => sgp(), [], 'ok', 'sem_contratos'],
+    ['sem documento vinculado', () => sgp(), [], 'sem_documento', 'sem_documento'],
+  ])('%s, e só o valor ficou sem conferir: naoConferido diz qual', async (_, preparar, contratos, consultaDeContratos, esperado) => {
+    preparar();
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos, config: CONFIG, consultaDeContratos });
+    expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: esperado, naoConferido: esperado });
+  });
+
+  test('comprovante efetivamente divergente (há fatura em aberto e o valor não bate): naoConferido vazio, o motivo de sempre', async () => {
+    sgp();
+    analyzeImage.mockResolvedValue({ ...LEITURA, valor: 77 });
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+    expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'completa', naoConferido: null });
+    expect(r.motivos).toContain(MOTIVO_SEM_FATURA);
+  });
+
+  test('divergente por outro critério (favorecido), mesmo com o SGP fora: naoConferido vazio — o comprovante não confere', async () => {
+    axios.post.mockRejectedValue(new Error('SGP fora'));
+    analyzeImage.mockResolvedValue({ ...LEITURA, favorecido: 'OUTRA EMPRESA QUALQUER' });
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+    expect(r).toMatchObject({ valido: false, naoConferido: null });
+    expect(r.motivos.join(' ')).toMatch(/favorecido/);
+  });
+
+  // Revisão da rodada 7 (P3-1, impeditivo): a 2ª via com corpo de erro em HTTP 200 é consulta que falhou, não "sem fatura" — erro
+  // não pode aparecer como "não há fatura em aberto" nem como "o comprovante não confere".
+  const sgpComErroEm200 = (corpoDoErro, { soNo301 = false } = {}) => axios.post.mockImplementation(async (url, corpo) => {
+    const contrato = /contrato=(\d+)/.exec(String(corpo))?.[1];
+    if (url.endsWith('/api/central/titulos')) return { data: { faturas: [] } };
+    if (url.endsWith('/api/ura/fatura2via')) {
+      if (!soNo301 || contrato === '301') return { data: corpoDoErro };
+      return { data: { status: 1, links: [{ id: '3021', vencimento: '2026-10-12', valor: 99, linhadigitavel: '836-302', codigopix: '000201-302', link: 'https://x/3021' }] } };
+    }
+    throw new Error(`URL inesperada no teste: ${url}`);
+  });
+
+  test.each([['HTML', '<html><body>Erro interno</body></html>'], ['texto', 'erro'], ['objeto sem a lista', { status: 0, msg: 'Erro de teste' }]])(
+    'a 2ª via responde %s em HTTP 200 nos dois contratos: "não foi possível conferir" (indisponível), não "não há fatura"', async (_, corpoDoErro) => {
+      sgpComErroEm200(corpoDoErro);
+      const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+      expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'indisponivel', naoConferido: 'indisponivel' });
+      expect(r.motivos.join(' ')).toMatch(/não foi possível conferir o valor/);
+      expect(r.motivos.join(' ')).not.toMatch(/não há fatura em aberto/);
+      expect(r.motivos).not.toContain(MOTIVO_SEM_FATURA);
+    });
+
+  test('um contrato com fatura e o outro com a 2ª via em HTML 200, e o valor não bate com a que veio: "incompleta", não "não confere"', async () => {
+    sgpComErroEm200('<html>erro</html>', { soNo301: true });
+    analyzeImage.mockResolvedValue({ ...LEITURA, valor: 120 });
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+    expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'incompleta', naoConferido: 'incompleta' });
+    expect(r.motivos).not.toContain(MOTIVO_SEM_FATURA);
+  });
+
+  test('comprovante que confere: naoConferido vazio', async () => {
+    sgp();
+    const r = await analisarComprovante({ conversationId: 'c1', imagem: IMAGEM, contratos: CONTRATOS, config: CONFIG });
+    expect(r).toMatchObject({ valido: true, naoConferido: null });
+  });
+});

@@ -76,12 +76,20 @@ async function backfillPrimeiroNome(contact, identidade) {
  * prompt da triagem vê sgpIndisponivel e proíbe boleto, PIX e status, que
  * dependeriam do SGP de qualquer jeito.
  */
-function porMemoriaSemSgp(contact) {
+function porMemoriaSemSgp(contact, err) {
   return {
     nivel: 'forte', origem: 'memory', primeiroNome: contact.sgpFirstName || null,
     contracts: [], client: { id: contact.sgpClientId || null, document: contact.sgpDocument },
     contestado: false, sgpIndisponivel: true,
+    // Revisão da rodada 7 (P3-3): por que o SGP não respondeu — a conferência do comprovante diz isso à atendente.
+    motivoSgpIndisponivel: motivoDaFalhaDoSgp(err),
   };
+}
+
+function motivoDaFalhaDoSgp(err) {
+  if (err instanceof sgpClient.SgpDisabledError || err instanceof sgpClient.SgpNotConfiguredError) return 'desligado';
+  if (err instanceof sgpClient.SgpClientNotFoundError) return 'nao_encontrado';
+  return 'falhou';
 }
 
 /**
@@ -142,7 +150,7 @@ async function resolverIdentidade({ contact, ignorarTelefone = false }) {
   } catch (err) {
     if (contact.sgpDocument) {
       console.error(`Identity resolved from memory only (SGP unavailable) for contact ${contact.id}: ${mensagemSegura(err)}`);
-      return porMemoriaSemSgp(contact);
+      return porMemoriaSemSgp(contact, err);
     }
     console.error(`Identity resolution failed for contact ${contact.id}: ${mensagemSegura(err)}`);
     return vazio();

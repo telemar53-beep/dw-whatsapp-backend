@@ -1181,6 +1181,26 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
     expect(r).toMatchObject({ liberado: false, motivo: 'O comprovante não conferiu: valor diferente; favorecido não confere.' });
     expect(r.instrucao).toContain('a partir das 08:00');
+    expect(r.instrucao).toContain('o comprovante não conferiu com a fatura em aberto.');
+    expect(ctx.desbloqueioRealizado).toBeFalsy();
+  });
+
+  // Rodada 7 (achado 2.4 da revisão do comprovante): quando o comprovante só não pôde ser conferido (SGP fora, sem fatura em
+  // aberto, sem cadastro), a recusa continua — nada é liberado —, mas a frase ao cliente não diz que ele "não conferiu".
+  test.each([
+    ['indisponivel', 'não consegui conferir o comprovante com as faturas agora.'],
+    ['desligado', 'não consegui conferir o comprovante com as faturas agora.'],
+    ['sem_faturas', 'não encontrei fatura em aberto para conferir com o comprovante.'],
+    ['sem_contratos', 'não encontrei fatura em aberto para conferir com o comprovante.'],
+    ['sem_documento', 'não consegui localizar o cadastro para conferir o comprovante.'],
+  ])('(d2) comprovante que só não pôde ser conferido (%s): recusa sem dizer ao cliente que não conferiu', async (naoConferido, frase) => {
+    const ctx = noturno({ comprovante: { ...COMPROVANTE, valido: false, naoConferido, motivos: ['motivo da conferência'] } });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ liberado: false, motivo: 'O comprovante não pôde ser conferido: motivo da conferência.' });
+    expect(r.instrucao).toContain(frase);
+    expect(r.instrucao).not.toMatch(/não conferiu/);
     expect(ctx.desbloqueioRealizado).toBeFalsy();
   });
 
@@ -2913,6 +2933,21 @@ describe('concluir_triagem', () => {
       expect(summary).toContain('Desbloqueio em confiança: RECUSADO: Só é possível uma liberação em confiança a cada 30 dias.');
     });
 
+    // Rodada 7 (achado 2.4): o comprovante que só não pôde ser conferido aparece assim para a atendente, não como "NÃO conferiu".
+    test('comprovante que só não pôde ser conferido aparece como "não foi possível conferir"', async () => {
+      const c = ctx({
+        triagem: NOTURNO,
+        comprovante: {
+          valido: false, naoConferido: 'indisponivel', tipo: 'pix', valor: 90, data: '2026-09-13', faturaId: null, contratoId: null,
+          motivos: ['não foi possível conferir o valor: a consulta das faturas no SGP falhou'],
+        },
+      });
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary).toContain('NÃO FOI POSSÍVEL CONFERIR: não foi possível conferir o valor: a consulta das faturas no SGP falhou');
+      expect(summary).not.toContain('NÃO conferiu');
+    });
+
     // Mesma armadilha do fix de round 1 da Task 3: valor nulo não pode virar
     // "R$ 0,00" no resumo — o atendente daria baixa num valor inventado.
     test('valor e data não lidos não viram zero nem "null" no resumo', async () => {
@@ -3733,6 +3768,31 @@ describe('analisar_comprovante', () => {
     expect(analyzeImage).not.toHaveBeenCalled();
   });
 
+  // Rodada 7 (achado 2.4 da revisão do comprovante): com o SGP fora na identificação do turno, os contratos chegam vazios —
+  // a análise tem de dizer "não foi possível conferir", não "nenhum contrato encontrado". O critério (válido) não muda.
+  test('(rodada 7) SGP fora na identificação: "não foi possível conferir", e o contexto guarda naoConferido', async () => {
+    const c = ctx({ contracts: [], identidade: { nivel: 'forte', primeiroNome: 'Ana', sgpIndisponivel: true } });
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    expect(r).toMatchObject({ analisado: true, valido: false, conferenciaDasFaturas: 'indisponivel', naoConferido: 'indisponivel' });
+    expect(r.motivos.join(' ')).not.toMatch(/nenhum contrato/);
+    expect(c.comprovante).toMatchObject({ valido: false, naoConferido: 'indisponivel' });
+  });
+
+  // Revisão da rodada 7 (P3-3): a integração desligada/sem configuração diz isso; o documento da memória que o SGP não achou é
+  // consulta concluída sem contratos; só a falha é "não foi possível conferir: a consulta falhou".
+  test.each([['desligado', 'desligado'], ['nao_encontrado', 'sem_contratos'], ['falhou', 'indisponivel']])(
+    '(rodada 7) SGP fora na identificação pela memória, motivo %s: a conferência sai %s', async (motivo, esperado) => {
+      const c = ctx({ contracts: [], identidade: { nivel: 'forte', primeiroNome: 'Ana', client: { id: 5 }, sgpIndisponivel: true, motivoSgpIndisponivel: motivo } });
+      const r = await findTool('analisar_comprovante').executar({}, c);
+      expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: esperado, naoConferido: esperado });
+    });
+
+  test('(rodada 7) sem cadastro identificado: "o contato não está vinculado", não "nenhum contrato"', async () => {
+    const c = ctx({ contracts: [], identidade: { nivel: 'none', primeiroNome: null, client: null } });
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    expect(r).toMatchObject({ valido: false, conferenciaDasFaturas: 'sem_documento', naoConferido: 'sem_documento' });
+  });
+
   test('(d) MIME fora da lista (PDF) não vai para a OpenAI', async () => {
     findLatestInboundImage.mockResolvedValue({ ...IMAGEM, mediaMimeType: 'application/pdf' });
     const r = await findTool('analisar_comprovante').executar({}, ctx());
@@ -3767,7 +3827,7 @@ describe('analisar_comprovante', () => {
     expect(c.comprovante).toEqual({
       valido: true, contratoId: 17402, faturaId: '4321', valor: 135,
       data: LEITURA.data, tipo: 'pix', idTransacao: ID_TRANSACAO, motivos: [],
-      usoAnterior: null,
+      naoConferido: null, usoAnterior: null,
     });
   });
 

@@ -220,6 +220,8 @@ describe('DIA', () => {
     const r = await findTool('gerar_segunda_via').executar({ contratoId: 100 }, ctx());
     expect(r.temFaturaAberta).toBe(true);
     expect(r.faturas.map((f) => f.faturaId)).toEqual([1251]);
+    // Item 3 (07/10/2026): a 2ª via não usa o PIX — pedida sem gerá-lo, também com 1 vencida.
+    expect(sgpClient.getDuplicateInvoice.mock.calls).toEqual([[100, { gerarPix: false }]]);
   });
 
   test('12c. 1 vencida + contratoTitulosAReceber alto: o contador do SGP não é contagem de atraso', async () => {

@@ -90,14 +90,14 @@ Adicionar ao final do bloco `describe('agent repository', ...)` em
 
 ```js
   test('findAgentById includes phone and avatarPath (both null by default)', async () => {
-    const created = await createAgent({ name: 'Helena', email: 'h@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Helena', email: 'h@dw.test', password: 'secret123', role: 'agent' });
     const agent = await findAgentById(created.id);
     expect(agent.phone).toBeNull();
     expect(agent.avatarPath).toBeNull();
   });
 
   test('updateAgentProfile updates name and phone', async () => {
-    const created = await createAgent({ name: 'Igor', email: 'i@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Igor', email: 'i@dw.test', password: 'secret123', role: 'agent' });
 
     const updated = await updateAgentProfile(created.id, { name: 'Igor Silva', phone: '11999998888' });
 
@@ -106,7 +106,7 @@ Adicionar ao final do bloco `describe('agent repository', ...)` em
   });
 
   test('updateAgentProfile clears phone when given null', async () => {
-    const created = await createAgent({ name: 'Julia', email: 'j@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Julia', email: 'j@dw.test', password: 'secret123', role: 'agent' });
     await updateAgentProfile(created.id, { name: 'Julia', phone: '11999998888' });
 
     const updated = await updateAgentProfile(created.id, { name: 'Julia', phone: null });
@@ -120,7 +120,7 @@ Adicionar ao final do bloco `describe('agent repository', ...)` em
   });
 
   test('setAgentAvatarPath sets and then clears the avatar path', async () => {
-    const created = await createAgent({ name: 'Karen', email: 'k@dw.com', password: 'secret123', role: 'agent' });
+    const created = await createAgent({ name: 'Karen', email: 'k@dw.test', password: 'secret123', role: 'agent' });
 
     await setAgentAvatarPath(created.id, 'avatars/karen.jpg');
     expect((await findAgentById(created.id)).avatarPath).toBe('avatars/karen.jpg');
@@ -272,7 +272,7 @@ beforeEach(() => jest.clearAllMocks());
 
 describe('GET /api/agents', () => {
   test('includes avatarPath for each agent', async () => {
-    listAgents.mockResolvedValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: 'avatars/a1.jpg' }]);
+    listAgents.mockResolvedValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', avatarPath: 'avatars/a1.jpg' }]);
     isAgentOnline.mockReturnValue(false);
 
     const res = await request(buildApp())
@@ -286,7 +286,7 @@ describe('GET /api/agents', () => {
 
 describe('GET /api/agents/me', () => {
   test('returns the authenticated agent\'s own profile', async () => {
-    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', phone: '11999998888', avatarPath: null });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', phone: '11999998888', avatarPath: null });
 
     const res = await request(buildApp())
       .get('/api/agents/me')
@@ -294,7 +294,7 @@ describe('GET /api/agents/me', () => {
 
     expect(res.status).toBe(200);
     expect(findAgentById).toHaveBeenCalledWith('agent-1');
-    expect(res.body).toEqual({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null, role: 'agent' });
+    expect(res.body).toEqual({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: '11999998888', avatarPath: null, role: 'agent' });
   });
 
   test('returns 401 without a token', async () => {
@@ -305,7 +305,7 @@ describe('GET /api/agents/me', () => {
 
 describe('PATCH /api/agents/me', () => {
   test('updates name and phone', async () => {
-    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.com', role: 'agent', phone: '11988887777', avatarPath: null });
+    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.test', role: 'agent', phone: '11988887777', avatarPath: null });
 
     const res = await request(buildApp())
       .patch('/api/agents/me')
@@ -318,7 +318,7 @@ describe('PATCH /api/agents/me', () => {
   });
 
   test('treats a missing phone as null', async () => {
-    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', phone: null, avatarPath: null });
+    updateAgentProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', role: 'agent', phone: null, avatarPath: null });
 
     await request(buildApp())
       .patch('/api/agents/me')
@@ -952,7 +952,7 @@ vi.mock('../services/api');
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123' });
-  api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null, role: 'agent' });
+  api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: '11999998888', avatarPath: null, role: 'agent' });
 });
 
 describe('ProfileModal', () => {
@@ -960,11 +960,11 @@ describe('ProfileModal', () => {
     render(<ProfileModal onClose={vi.fn()} />);
     expect(await screen.findByDisplayValue('Ana')).toBeInTheDocument();
     expect(screen.getByDisplayValue('11999998888')).toBeInTheDocument();
-    expect(screen.getByText('ana@dw.com')).toBeInTheDocument();
+    expect(screen.getByText('ana@dw.test')).toBeInTheDocument();
   });
 
   test('saves name and phone', async () => {
-    api.updateMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.com', phone: '11988887777', avatarPath: null, role: 'agent' });
+    api.updateMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana Paula', email: 'ana@dw.test', phone: '11988887777', avatarPath: null, role: 'agent' });
     const onProfileUpdated = vi.fn();
     render(<ProfileModal onClose={vi.fn()} onProfileUpdated={onProfileUpdated} />);
     await screen.findByDisplayValue('Ana');
@@ -993,7 +993,7 @@ describe('ProfileModal', () => {
   });
 
   test('removes the avatar when Remover foto is clicked', async () => {
-    api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: null, avatarPath: 'avatars/a1.jpg', role: 'agent' });
+    api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.test', phone: null, avatarPath: 'avatars/a1.jpg', role: 'agent' });
     api.deleteMyAvatar.mockResolvedValue({ ok: true });
     render(<ProfileModal onClose={vi.fn()} />);
     await screen.findByDisplayValue('Ana');

@@ -177,15 +177,15 @@ describe('greetingForNow', () => {
 
 describe('firstNameOf', () => {
   test('returns the whole name when it is a single word', () => {
-    expect(firstNameOf('Geovanna')).toBe('Geovanna');
+    expect(firstNameOf('Fulana')).toBe('Fulana');
   });
 
   test('returns only the first word of a multi-word name', () => {
-    expect(firstNameOf('Geovanna Silva Santos')).toBe('Geovanna');
+    expect(firstNameOf('Fulana Silva Santos')).toBe('Fulana');
   });
 
   test('trims and collapses extra whitespace before splitting', () => {
-    expect(firstNameOf('  Geovanna   Silva  ')).toBe('Geovanna');
+    expect(firstNameOf('  Fulana   Silva  ')).toBe('Fulana');
   });
 });
 
@@ -195,11 +195,11 @@ describe('substituteAssignmentPlaceholders', () => {
     jest.spyOn(global, 'Date').mockImplementation(() => fixedMorning);
     const template = '@chat_saudacao_maiusculo, meu nome é @chat_atendente. O protocolo do seu atendimento é @chat_protocolo';
     const result = substituteAssignmentPlaceholders(template, {
-      agentName: 'Geovanna Silva',
+      agentName: 'Fulana Silva',
       protocolNumber: 1042,
     });
     global.Date.mockRestore();
-    expect(result).toBe('Bom dia, meu nome é Geovanna. O protocolo do seu atendimento é 1042');
+    expect(result).toBe('Bom dia, meu nome é Fulana. O protocolo do seu atendimento é 1042');
   });
 
   test('leaves text without placeholders unchanged', () => {
@@ -322,7 +322,7 @@ describe('assignment message repository', () => {
   });
 
   test('upsertAssignmentMessageConfig creates the row and the agent/channel selections on first save', async () => {
-    const agent = await createAgent({ name: 'Geovanna Silva', email: 'geovanna@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ name: 'Fulana Silva', email: 'fulana@dw.test', password: 'secret123', role: 'agent' });
     const channel = await createChannel({
       type: 'meta_cloud',
       name: 'Canal Teste',
@@ -372,8 +372,8 @@ describe('assignment message repository', () => {
   });
 
   test('upsertAssignmentMessageConfig replaces the agent/channel selection, not appends to it', async () => {
-    const agent1 = await createAgent({ email: 'a1@dw.com', password: 'secret123', role: 'agent' });
-    const agent2 = await createAgent({ email: 'a2@dw.com', password: 'secret123', role: 'agent' });
+    const agent1 = await createAgent({ email: 'a1@dw.test', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'a2@dw.test', password: 'secret123', role: 'agent' });
 
     await upsertAssignmentMessageConfig({
       enabled: true,
@@ -573,14 +573,14 @@ Add these two tests to the existing `describe('conversation repository', ...)` b
 ```js
   test('claimConversation returns protocolNumber as null before any protocol has been claimed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent-protocol@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent-protocol@dw.test', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conversation.id, agent.id);
     expect(claimed.protocolNumber).toBeNull();
   });
 
   test('closeConversation returns the protocol_number set for the conversation, if any', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'agent-protocol-2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'agent-protocol-2@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
     await getPool().query('UPDATE conversations SET protocol_number = 42 WHERE id = $1', [conversation.id]);
 
@@ -743,7 +743,7 @@ describe('sendOpeningMessageIfApplicable', () => {
       channelIds: ['channel-1'],
       openingMessage: 'Olá, meu nome é @chat_atendente, protocolo @chat_protocolo',
     });
-    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Geovanna Silva' });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Fulana Silva' });
     claimProtocolNumber.mockResolvedValue(1042);
     enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1' });
 
@@ -753,7 +753,7 @@ describe('sendOpeningMessageIfApplicable', () => {
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'conv-1',
       channelId: 'channel-1',
-      content: 'Olá, meu nome é Geovanna, protocolo 1042',
+      content: 'Olá, meu nome é Fulana, protocolo 1042',
     });
   });
 });
@@ -772,7 +772,7 @@ describe('sendClosingMessageIfApplicable', () => {
       channelIds: [],
       closingMessage: 'Encerrando o atendimento @chat_protocolo, @chat_atendente',
     });
-    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Geovanna Silva' });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Fulana Silva' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'msg-2' });
 
     await sendClosingMessageIfApplicable({ ...CONVERSATION, protocolNumber: 1042 }, 'agent-1');
@@ -780,7 +780,7 @@ describe('sendClosingMessageIfApplicable', () => {
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'conv-1',
       channelId: 'channel-1',
-      content: 'Encerrando o atendimento 1042, Geovanna',
+      content: 'Encerrando o atendimento 1042, Fulana',
     });
   });
 });
@@ -1511,8 +1511,8 @@ describe('Atribuir um atendimento', () => {
   beforeEach(() => {
     useAgentsAdmin.mockReturnValue({
       agents: [
-        { id: 'agent-1', name: 'Geovanna Silva', email: 'geovanna@dw.com' },
-        { id: 'agent-2', name: 'Carlos Souza', email: 'carlos@dw.com' },
+        { id: 'agent-1', name: 'Fulana Silva', email: 'fulana@dw.test' },
+        { id: 'agent-2', name: 'Carlos Souza', email: 'carlos@dw.test' },
       ],
       loading: false,
       refresh: vi.fn(),
@@ -1542,7 +1542,7 @@ describe('Atribuir um atendimento', () => {
     await userEvent.click(screen.getByRole('button', { name: /criar atribuição|criar/i }));
     await userEvent.type(screen.getByLabelText(/mensagem de abertura/i), 'Olá @chat_atendente');
     await userEvent.type(screen.getByLabelText(/mensagem de encerramento/i), 'Tchau @chat_protocolo');
-    await userEvent.click(screen.getByLabelText('Geovanna Silva'));
+    await userEvent.click(screen.getByLabelText('Fulana Silva'));
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
     await waitFor(() =>
@@ -1812,7 +1812,7 @@ Add the new section to `MessagesAdminTab`'s render, between "Avisos por cidade" 
               <li><code>@chat_protocolo</code> — número do protocolo do atendimento</li>
             </ul>
             <p className="mt-2 italic">
-              Exemplo: "Bom dia, meu nome é Geovanna. Irei iniciar seu atendimento,
+              Exemplo: "Bom dia, meu nome é Fulana. Irei iniciar seu atendimento,
               como posso te ajudar? O protocolo do seu atendimento é 1042"
             </p>
           </SectionHelp>

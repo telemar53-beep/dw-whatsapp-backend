@@ -947,7 +947,7 @@ Add this test right after the existing `'listConversationsByAgent includes the c
     const city = await createCity({ name: 'Bahia' });
     await updateContact(contactId, { displayName: 'Joao', cityId: city.id });
     const conversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'listagent5@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'listagent5@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
 
     const mine = await listConversationsByAgent(agent.id);

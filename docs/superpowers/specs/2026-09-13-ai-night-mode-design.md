@@ -89,7 +89,7 @@ Uma conversa que começa 19:55 e continua 20:10 vira noturna no turno das 20:10.
 
 ```
 Modo noturno · 23:12
-Comprovante (visão): PIX R$ 135,00 em 13/09/2026, favorecido confere, fatura 4321 do contrato 17402 — Agenor Costa, 523
+Comprovante (visão): PIX R$ 135,00 em 13/09/2026, favorecido confere, fatura 4321 do contrato 17402 — Beltrano Teste, 200
 Desbloqueio em confiança: REALIZADO (3 dias) | RECUSADO: <motivo>
 Pendente: conferir pagamento e dar baixa
 ```

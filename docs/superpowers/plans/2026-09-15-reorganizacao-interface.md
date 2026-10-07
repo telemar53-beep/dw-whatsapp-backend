@@ -2237,7 +2237,7 @@ Substituir os dois testes `getMetricsBySector counts a closed conversation towar
 
 ```js
   test('getMetricsBySector agrupa pelo setor da conversa, uma vez por conversa', async () => {
-    const agent = await createAgent({ email: 'metrics-multisector@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-multisector@dw.test', password: 'secret123', role: 'agent' });
     const financeiro = await createSector({ name: 'Financeiro' });
     const comercial = await createSector({ name: 'Comercial' });
     await setAgentSectors(agent.id, [financeiro.id, comercial.id]);
@@ -2255,7 +2255,7 @@ Substituir os dois testes `getMetricsBySector counts a closed conversation towar
   });
 
   test('getMetricsBySector mostra "Sem setor" para conversa encerrada sem setor, por último', async () => {
-    const agent = await createAgent({ email: 'metrics-nosector@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-nosector@dw.test', password: 'secret123', role: 'agent' });
     const suporte = await createSector({ name: 'Suporte' });
     const channelId = await seedChannel();
 
@@ -2278,7 +2278,7 @@ Substituir os dois testes `getMetricsBySector counts a closed conversation towar
   });
 
   test('getMetricsByReason mostra "Sem motivo" para encerramento sem motivo', async () => {
-    const agent = await createAgent({ email: 'metrics-noreason@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'metrics-noreason@dw.test', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();
     const senha = await createReason({ name: 'Troca de senha' });
     await seedClosedConversation({ channelId, contactId: await seedContact(), agentId: agent.id, reasonId: senha.id,

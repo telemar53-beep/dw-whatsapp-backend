@@ -289,14 +289,14 @@ hashed password...'` test:
 ```js
   test('createAgent stores canManageIntegrations for a manager', async () => {
     const agent = await createAgent({
-      name: 'Marcia', email: 'marcia@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Marcia', email: 'marcia@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
     expect(agent.role).toBe('manager');
     expect(agent.canManageIntegrations).toBe(true);
   });
 
   test('createAgent defaults canManageIntegrations to false when omitted', async () => {
-    const agent = await createAgent({ name: 'Nilo', email: 'nilo@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ name: 'Nilo', email: 'nilo@dw.test', password: 'secret123', role: 'agent' });
     expect(agent.canManageIntegrations).toBe(false);
   });
 ```
@@ -306,7 +306,7 @@ Add after `'findAgentById returns the agent without its password hash'`:
 ```js
   test('findAgentById includes canManageIntegrations', async () => {
     const created = await createAgent({
-      name: 'Otavio', email: 'otavio@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Otavio', email: 'otavio@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
     const agent = await findAgentById(created.id);
     expect(agent.canManageIntegrations).toBe(true);
@@ -318,9 +318,9 @@ Add after `'findAgentByEmail returns the agent with its password hash and active
 ```js
   test('findAgentByEmail includes canManageIntegrations', async () => {
     await createAgent({
-      name: 'Paula', email: 'paula@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Paula', email: 'paula@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
-    const agent = await findAgentByEmail('paula@dw.com');
+    const agent = await findAgentByEmail('paula@dw.test');
     expect(agent.canManageIntegrations).toBe(true);
   });
 ```
@@ -330,7 +330,7 @@ Add after `'setAgentActive deactivates and reactivates an agent'`:
 ```js
   test('setAgentActive preserves canManageIntegrations', async () => {
     const created = await createAgent({
-      name: 'Quenia', email: 'quenia@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+      name: 'Quenia', email: 'quenia@dw.test', password: 'secret123', role: 'manager', canManageIntegrations: true,
     });
     const updated = await setAgentActive(created.id, false);
     expect(updated.canManageIntegrations).toBe(true);
@@ -500,10 +500,10 @@ are valid'`:
   test('login embeds canManageIntegrations in the token and the returned agent', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
     findAgentByEmail.mockResolvedValue({
-      id: 'agent-1', email: 'a@dw.com', role: 'manager', canManageIntegrations: true, passwordHash,
+      id: 'agent-1', email: 'a@dw.test', role: 'manager', canManageIntegrations: true, passwordHash,
     });
 
-    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+    const result = await login({ email: 'a@dw.test', password: 'secret123' });
 
     const decoded = jwt.verify(result.token, 'test-secret');
     expect(decoded.canManageIntegrations).toBe(true);
@@ -512,9 +512,9 @@ are valid'`:
 
   test('login defaults canManageIntegrations to false when the repository omits it', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
-    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.test', role: 'agent', passwordHash });
 
-    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+    const result = await login({ email: 'a@dw.test', password: 'secret123' });
 
     const decoded = jwt.verify(result.token, 'test-secret');
     expect(decoded.canManageIntegrations).toBe(false);
@@ -589,45 +589,45 @@ In `src/api/admin-agents.routes.test.js`, add inside `describe('POST
 ```js
   test('creates a manager with canManageIntegrations', async () => {
     createAgent.mockResolvedValue({
-      id: 'agent-5', name: 'Marcia', email: 'marcia@dw.com', role: 'manager', canManageIntegrations: true, active: true, createdAt: new Date(),
+      id: 'agent-5', name: 'Marcia', email: 'marcia@dw.test', role: 'manager', canManageIntegrations: true, active: true, createdAt: new Date(),
     });
 
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Marcia', email: 'marcia@dw.com', password: 'temporaria123', role: 'manager', canManageIntegrations: true });
+      .send({ name: 'Marcia', email: 'marcia@dw.test', password: 'temporaria123', role: 'manager', canManageIntegrations: true });
 
     expect(res.status).toBe(201);
     expect(createAgent).toHaveBeenCalledWith({
-      name: 'Marcia', email: 'marcia@dw.com', password: 'temporaria123', role: 'manager', canManageIntegrations: true,
+      name: 'Marcia', email: 'marcia@dw.test', password: 'temporaria123', role: 'manager', canManageIntegrations: true,
     });
     expect(res.body.canManageIntegrations).toBe(true);
   });
 
   test('forces canManageIntegrations to false for a role other than manager', async () => {
     createAgent.mockResolvedValue({
-      id: 'agent-6', name: 'Nilo', email: 'nilo@dw.com', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
+      id: 'agent-6', name: 'Nilo', email: 'nilo@dw.test', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
     });
 
     await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ name: 'Nilo', email: 'nilo@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: true });
+      .send({ name: 'Nilo', email: 'nilo@dw.test', password: 'temporaria123', role: 'agent', canManageIntegrations: true });
 
     expect(createAgent).toHaveBeenCalledWith({
-      name: 'Nilo', email: 'nilo@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: false,
+      name: 'Nilo', email: 'nilo@dw.test', password: 'temporaria123', role: 'agent', canManageIntegrations: false,
     });
   });
 
   test('a manager can create an agent', async () => {
     createAgent.mockResolvedValue({
-      id: 'agent-7', name: 'Otavio', email: 'otavio@dw.com', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
+      id: 'agent-7', name: 'Otavio', email: 'otavio@dw.test', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
     });
 
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
-      .send({ name: 'Otavio', email: 'otavio@dw.com', password: 'temporaria123', role: 'agent' });
+      .send({ name: 'Otavio', email: 'otavio@dw.test', password: 'temporaria123', role: 'agent' });
 
     expect(res.status).toBe(201);
   });
@@ -636,7 +636,7 @@ In `src/api/admin-agents.routes.test.js`, add inside `describe('POST
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
-      .send({ name: 'Paula', email: 'paula@dw.com', password: 'temporaria123', role: 'manager' });
+      .send({ name: 'Paula', email: 'paula@dw.test', password: 'temporaria123', role: 'manager' });
 
     expect(res.status).toBe(403);
     expect(createAgent).not.toHaveBeenCalled();
@@ -646,7 +646,7 @@ In `src/api/admin-agents.routes.test.js`, add inside `describe('POST
     const res = await request(buildApp())
       .post('/api/admin/agents')
       .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
-      .send({ name: 'Quenia', email: 'quenia@dw.com', password: 'temporaria123', role: 'admin' });
+      .send({ name: 'Quenia', email: 'quenia@dw.test', password: 'temporaria123', role: 'admin' });
 
     expect(res.status).toBe(403);
     expect(createAgent).not.toHaveBeenCalled();
@@ -659,7 +659,7 @@ non-admin agent'`:
 ```js
   test('a manager can deactivate an agent', async () => {
     findAgentById.mockResolvedValue({ id: 'agent-4', role: 'agent' });
-    setAgentActive.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.com', role: 'agent', active: false, createdAt: new Date() });
+    setAgentActive.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.test', role: 'agent', active: false, createdAt: new Date() });
 
     const res = await request(buildApp())
       .patch('/api/admin/agents/agent-4')
@@ -1689,7 +1689,7 @@ an admin when the admin role is selected'` test:
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Marcia Reis');
-    await userEvent.type(screen.getByLabelText(/email/i), 'marcia@dw.com');
+    await userEvent.type(screen.getByLabelText(/email/i), 'marcia@dw.test');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp11223');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
     await userEvent.click(screen.getByLabelText(/pode gerenciar canais e integrações/i));
@@ -1697,7 +1697,7 @@ an admin when the admin role is selected'` test:
 
     await waitFor(() =>
       expect(api.createAgent).toHaveBeenCalledWith(
-        { name: 'Marcia Reis', email: 'marcia@dw.com', password: 'temp11223', role: 'manager', canManageIntegrations: true },
+        { name: 'Marcia Reis', email: 'marcia@dw.test', password: 'temp11223', role: 'manager', canManageIntegrations: true },
         'tok-123'
       )
     );
@@ -1708,14 +1708,14 @@ an admin when the admin role is selected'` test:
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Nilo Reis');
-    await userEvent.type(screen.getByLabelText(/email/i), 'nilo@dw.com');
+    await userEvent.type(screen.getByLabelText(/email/i), 'nilo@dw.test');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp44556');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
       expect(api.createAgent).toHaveBeenCalledWith(
-        { name: 'Nilo Reis', email: 'nilo@dw.com', password: 'temp44556', role: 'manager', canManageIntegrations: false },
+        { name: 'Nilo Reis', email: 'nilo@dw.test', password: 'temp44556', role: 'manager', canManageIntegrations: false },
         'tok-123'
       )
     );
@@ -1883,7 +1883,7 @@ In `frontend/src/components/AgentsAdminTab.test.jsx`, add:
 ```js
   test('shows Gerente as the role label for a manager', () => {
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'a1', name: 'Marcia', email: 'marcia@dw.com', role: 'manager', active: true, sectors: [] }],
+      agents: [{ id: 'a1', name: 'Marcia', email: 'marcia@dw.test', role: 'manager', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);

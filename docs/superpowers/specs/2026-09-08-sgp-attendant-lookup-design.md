@@ -147,7 +147,7 @@ o dado simplesmente não sai do `sgp-client.js`).
       "plan": "1GB",
       "openInvoicesCount": 1,
       "openAmount": 0,
-      "address": "AGENOR COSTA, 523 - RODAGEM, CÂNDIDO MENDES/MA",
+      "address": "BELTRANO TESTE, 200 - BAIRRO DE TESTE, CIDADE DE TESTE/UF",
       "phones": ["(20) 99999-0338"],
       "emails": ["exemplo@dominio.com"]
     }

@@ -270,7 +270,7 @@ test('listWaitingConversations returns only waiting conversations with contact i
   const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
   const waitingConversation = await createConversation(contactId, channelId);
   const assignedConversation = await createConversation(otherContact.id, channelId);
-  const agent = await createAgent({ email: 'listagent1@dw.com', password: 'secret123', role: 'agent' });
+  const agent = await createAgent({ email: 'listagent1@dw.test', password: 'secret123', role: 'agent' });
   await claimConversation(assignedConversation.id, agent.id);
 
   const waiting = await listWaitingConversations();
@@ -282,8 +282,8 @@ test('listWaitingConversations returns only waiting conversations with contact i
 
 test('listConversationsByAgent returns only that agent non-closed conversations', async () => {
   const conversation = await createConversation(contactId, channelId);
-  const agent = await createAgent({ email: 'listagent2@dw.com', password: 'secret123', role: 'agent' });
-  const otherAgent = await createAgent({ email: 'listagent3@dw.com', password: 'secret123', role: 'agent' });
+  const agent = await createAgent({ email: 'listagent2@dw.test', password: 'secret123', role: 'agent' });
+  const otherAgent = await createAgent({ email: 'listagent3@dw.test', password: 'secret123', role: 'agent' });
   await claimConversation(conversation.id, agent.id);
   const otherContact = await findOrCreateContactByPhoneNumber('+5511911119999', 'Outra Pessoa');
   const otherConversation = await createConversation(otherContact.id, channelId);

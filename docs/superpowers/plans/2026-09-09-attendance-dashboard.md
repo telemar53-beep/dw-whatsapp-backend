@@ -36,7 +36,7 @@ Add to `src/conversations/conversation.repository.test.js`, just before the file
   test('listInProgressConversations returns only assigned conversations, most recently updated first', async () => {
     const waitingConversation = await createConversation(contactId, channelId);
     const assignedConversation = await createConversation(contactId, channelId);
-    const agent = await createAgent({ email: 'dash1@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash1@dw.test', password: 'secret123', role: 'agent' });
     await claimConversation(assignedConversation.id, agent.id);
 
     const result = await listInProgressConversations();
@@ -49,7 +49,7 @@ Add to `src/conversations/conversation.repository.test.js`, just before the file
   test('listWaitingForAgentConversations returns waiting conversations whose triage is not pending', async () => {
     const waiting = await createConversation(contactId, channelId);
     const inTriage = await createConversation(contactId, channelId, 'pending');
-    const agent = await createAgent({ email: 'dash2@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash2@dw.test', password: 'secret123', role: 'agent' });
     const assigned = await createConversation(contactId, channelId);
     await claimConversation(assigned.id, agent.id);
 
@@ -70,7 +70,7 @@ Add to `src/conversations/conversation.repository.test.js`, just before the file
   });
 
   test('countClosedSince counts only conversations closed at or after the given time', async () => {
-    const agent = await createAgent({ email: 'dash3@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash3@dw.test', password: 'secret123', role: 'agent' });
     const oldEnough = await createConversation(contactId, channelId);
     await claimConversation(oldEnough.id, agent.id);
     await closeConversation(oldEnough.id, agent.id);
@@ -85,7 +85,7 @@ Add to `src/conversations/conversation.repository.test.js`, just before the file
   });
 
   test('listClosedSince returns closed conversations most recently closed first, with closedAt and pagination', async () => {
-    const agent = await createAgent({ email: 'dash4@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await createAgent({ email: 'dash4@dw.test', password: 'secret123', role: 'agent' });
     const first = await createConversation(contactId, channelId);
     await claimConversation(first.id, agent.id);
     await closeConversation(first.id, agent.id);
@@ -1122,7 +1122,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123' });
   useChannels.mockReturnValue({ channels: [{ id: 'chan-1', name: 'WhatsApp Vendas' }], loading: false, refresh: vi.fn() });
-  useAgents.mockReturnValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com' }]);
+  useAgents.mockReturnValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.test' }]);
   useSectors.mockReturnValue({ sectors: [{ id: 'sector-1', name: 'Financeiro' }], loading: false, refresh: vi.fn() });
   getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false });
   useAttendanceDashboard.mockReturnValue({

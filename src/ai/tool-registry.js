@@ -389,6 +389,11 @@ async function voltarAoTitularPeloDocumento(contexto) {
   // dúvida no turno, pendente sem contrato ou dúvida gravada, o próprio documento só identifica — o alvo continua
   // travado até a própria cobrança afirmada ou uma consulta de terceiro gravada. Só um terceiro localizado, sem
   // dúvida, volta ao titular pelo documento (regra que já vale na produção).
+  // Revisão da rodada 7 (P2-2): a dúvida de endereço respondida neste turno só sai do banco pela limpeza adiada do worker,
+  // que exige que nenhuma entrada nova do cliente espere ser aplicada. Gravar a volta aqui passaria por cima dessa condição
+  // (a correção que chegou durante o turno seria aplicada depois sobre o estado limpo). O documento só identifica; a cobrança
+  // do turno continua limitada ao contrato que a resposta escolheu.
+  if (contexto.duvidaDeEnderecoRespondida) return true;
   const t = contexto.terceiro;
   const semContrato = Boolean(t && Array.isArray(t.contratos) && t.contratos.length === 0);
   // Um terceiro consultado NESTE turno também não é desfeito pelo documento de quem fala, em qualquer ordem

@@ -1047,6 +1047,7 @@ describe('ai-worker — triagem', () => {
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
           expect(setThirdPartyScope).not.toHaveBeenCalled();
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: DUVIDA_NO_TURNO, alvoAmbiguo: 'endereco_desconhecido', contratoEscolhido: null }));
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ duvidaDeEnderecoRespondida: false }));
         });
 
         // Revisão do v4 (07/10/2026, achado A2): a resposta que tira a dúvida de endereço só é gravada DEPOIS do turno, junto com
@@ -1065,8 +1066,10 @@ describe('ai-worker — triagem', () => {
           const ordem = ordemDoJob();
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false, contratoEscolhido: '302', contratosEscolhidos: ['302'] }));
+          // Revisão da rodada 7 (P2-2): o turno sabe que a dúvida foi respondida (o próprio documento só identifica nele).
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ duvidaDeEnderecoRespondida: true }));
           expect(ordem).toEqual(['turno', 'limpar', 'marcar']);
-          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, { esperados: [{ marca: 'marca-duvida' }], aceitaNulo: true });
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, { esperados: [{ marca: 'marca-duvida' }], aceitaNulo: true, semEntradaNova: { ids: ['m-1'], desde: expect.any(Date) } });
         });
         test('a resposta à dúvida e o turno cai no meio: a dúvida continua gravada, nada é marcado, e o reprocessamento relê a mesma resposta com a mesma limitação', async () => {
           const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -1079,7 +1082,7 @@ describe('ai-worker — triagem', () => {
           expect(marcarFalasComAlvoProcessado).not.toHaveBeenCalled();
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
           expect(runAiTurn).toHaveBeenLastCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false, contratosEscolhidos: ['302'] }));
-          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, { esperados: [{ marca: 'marca-duvida' }], aceitaNulo: true });
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null, { esperados: [{ marca: 'marca-duvida' }], aceitaNulo: true, semEntradaNova: { ids: ['m-1'], desde: expect.any(Date) } });
           errorSpy.mockRestore();
         });
         test.each([['o estado mudou', () => setThirdPartyScope.mockResolvedValueOnce(false)], ['erro do banco', () => setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'))]])(

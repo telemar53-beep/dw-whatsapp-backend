@@ -231,9 +231,10 @@ const CONFIRMACAO = new Set([
 ]);
 // "segunda" só é neutra em "segunda via" (revisão da v4.2, achado C1): sozinha, pode ser a escolha do segundo endereço.
 const FALA_NEUTRA = new Set([...ANTES_DA_RUA, ...CONFIRMACAO].filter((w) => w !== 'segunda'));
+// Revisão da rodada 7 (P1-1): o "via" tem de vir logo depois e na MESMA oração ("a segunda, via pix" é escolha + meio).
 const falaNeutra = (texto) => {
-  const p = palavrasDe(texto).map((x) => x.p);
-  return p.every((w, i) => FALA_NEUTRA.has(w) || (w === 'segunda' && p[i + 1] === 'via'));
+  const q = palavrasDe(texto);
+  return q.every((x, i) => FALA_NEUTRA.has(x.p) || (x.p === 'segunda' && q[i + 1] && q[i + 1].p === 'via' && q[i + 1].oracao === x.oracao));
 };
 
 /** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com duas palavras ou mais, se tem o tipo do logradouro, e o número. */
@@ -563,6 +564,9 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   // Revisão da v4.1 (achado B1): a dúvida que a resposta encerrou neste lote, para devolvê-la se vier uma correção.
   let duvidaRespondida = null;
   let criadoAntesDaResposta = false;
+  // Rodada 7 (ressalva C3): a dúvida devolvida neste lote é REGRAVADA (marca nova), mesmo com o mesmo motivo — a limpeza
+  // adiada de outro processamento, condicional à marca antiga, não passa por cima dela.
+  let devolvida = false;
   // Sem fala nenhuma a reaplicar (a entrada do job já processada, ou um áudio sem transcrição), vale a dúvida
   // já gravada — nunca "sem dúvida" (terceira revisão da F2).
   let alvoAmbiguo = (atual && atual.alvoPendente) || false;
@@ -604,6 +608,7 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       escolha = null;
       respondida = false;
       duvidaDoLote = true;
+      devolvida = true;
       continue;
     }
     alvoAmbiguo = r.alvoAmbiguo;
@@ -628,6 +633,7 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   if (criado) gravar = 'criar';
   else if (terceiro && !atual) gravar = 'limpar';
   else if (terceiro && ((terceiro.alvoPendente || null) !== (atual.alvoPendente || null))) gravar = 'pendencia';
+  else if (terceiro && atual && devolvida) gravar = 'pendencia';
   return {
     terceiro: atual, alvoAmbiguo, gravar,
     ...(escolha ? { contratosEscolhidos: escolha } : {}),

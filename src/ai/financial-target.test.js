@@ -715,6 +715,7 @@ describe('pedido por endereço do próprio cliente', () => {
     [['Rua de Teste', 'ok, pode mandar'], ['301']],
     [['Rua de Teste', 'isso mesmo, obrigado'], ['301']],
     [['Rua de Teste', 'manda o pix'], ['301']],
+    [['Rua de Teste', 'manda a segunda via'], ['301']],
     [['Rua de Teste', '👍'], ['301']],
     [['Rua de Teste', ''], ['301']],
     [['Rua de Teste', null], ['301']],
@@ -732,6 +733,8 @@ describe('pedido por endereço do próprio cliente', () => {
   test.each([
     'ops, é a outra casa', 'não, Avenida de Teste', 'não é essa', 'Avenida de Teste', 'é a outra', 'pera, é a Travessa de Teste, 40',
     'não, não é a da Rua de Teste', 'na verdade é a outra', 'errei',
+    // Revisão da v4.2 (achado C1): a palavra de escolha — "segunda" só é neutra em "segunda via".
+    'a segunda', 'é a segunda', 'manda a segunda', 'a primeira', 'a última', 'a terceira',
   ])('com a dúvida gravada, a resposta e depois "%s": a dúvida volta, sem contrato escolhido e sem limpar', (correcao) => {
     const TRES = [...ENDERECOS, { id: 304, address: 'Travessa de Teste, 40' }];
     const r = mensagens(['Rua de Teste', correcao], { terceiro: DUVIDA('endereco_desconhecido'), enderecos: TRES });
@@ -742,13 +745,17 @@ describe('pedido por endereço do próprio cliente', () => {
     expect(mensagens(['pode mandar'], { terceiro: r.terceiro, enderecos: TRES }))
       .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: null });
   });
-  test('com a dúvida gravada, a resposta e depois "é da minha mãe" ou "a de cima": vale o mais restritivo (outra pessoa), não a resposta', () => {
-    expect(mensagens(['Rua de Teste', 'é da minha mãe'], { terceiro: DUVIDA('endereco_desconhecido') }).alvoAmbiguo).toBe('outra_pessoa_sem_documento');
-    // "a de cima" é lido como sempre (referência a outra pessoa): também o mais restritivo, nunca a resposta.
-    expect(mensagens(['Rua de Teste', 'a de cima'], { terceiro: DUVIDA('endereco_desconhecido') }).alvoAmbiguo).toBe('outra_pessoa_sem_documento');
+  // Revisão da v4.2 (achado C4): o que se GRAVA também é o mais restritivo — a dúvida nova é criada, nunca a volta ao titular.
+  test('com a dúvida gravada, a resposta e depois "é da minha mãe" ou "a de cima": vale o mais restritivo (outra pessoa), gravado', () => {
+    for (const fala of ['é da minha mãe', 'a de cima']) {
+      // "a de cima" é lido como sempre (referência a outra pessoa): também o mais restritivo, nunca a resposta.
+      expect(mensagens(['Rua de Teste', fala], { terceiro: DUVIDA('endereco_desconhecido') }))
+        .toEqual({ terceiro: DUVIDA('outra_pessoa_sem_documento'), alvoAmbiguo: 'outra_pessoa_sem_documento', gravar: 'criar' });
+    }
   });
-  test('com a dúvida gravada, a resposta e depois um endereço desconhecido: volta a dúvida', () => {
-    expect(mensagens(['Rua de Teste', 'e o da Rua Nova'], { terceiro: DUVIDA('endereco_desconhecido') }).alvoAmbiguo).toBe('endereco_desconhecido');
+  test('com a dúvida gravada, a resposta e depois um endereço desconhecido: volta a dúvida, gravada', () => {
+    expect(mensagens(['Rua de Teste', 'e o da Rua Nova'], { terceiro: DUVIDA('endereco_desconhecido') }))
+      .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
   });
 
   test('duas falas com contratos diferentes: os dois valem, nenhum substitui o outro; fala neutra no meio desfaz a primeira', () => {

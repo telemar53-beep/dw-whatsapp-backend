@@ -229,8 +229,12 @@ const CONFIRMACAO = new Set([
   'e', 'eh', 'ok', 'okay', 'blz', 'beleza', 'sim', 'isso', 'certo', 'certinho', 'valeu', 'vlw', 'perfeito', 'show', 'ta', 'combinado',
   'entendi', 'aguardo', 'aguardando', 'fico', 'no', 'tudo', 'bem', 'essa', 'esse', 'esta', 'este', 'mesmo', 'mesma', 'pronto', 'otimo',
 ]);
-const FALA_NEUTRA = new Set([...ANTES_DA_RUA, ...CONFIRMACAO]);
-const falaNeutra = (texto) => palavrasDe(texto).every((x) => FALA_NEUTRA.has(x.p));
+// "segunda" só é neutra em "segunda via" (revisão da v4.2, achado C1): sozinha, pode ser a escolha do segundo endereço.
+const FALA_NEUTRA = new Set([...ANTES_DA_RUA, ...CONFIRMACAO].filter((w) => w !== 'segunda'));
+const falaNeutra = (texto) => {
+  const p = palavrasDe(texto).map((x) => x.p);
+  return p.every((w, i) => FALA_NEUTRA.has(w) || (w === 'segunda' && p[i + 1] === 'via'));
+};
 
 /** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com duas palavras ou mais, se tem o tipo do logradouro, e o número. */
 function ruasDosContratos(enderecos) {

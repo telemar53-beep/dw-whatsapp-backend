@@ -160,6 +160,18 @@ describe('módulo financeiro', () => {
       expect(umContrato).not.toMatch(/Pedido de boleto ou PIX com mais de um contrato/);
     });
 
+    // Rodada 9 (N5; avaliação real r2, S5): com o contrato já escolhido pela rua (estado confirmado pelo código), a regra de
+    // mais de um contrato mandava consultar todos e perguntar o endereço de novo.
+    test('com o contrato já escolhido pelo código, a regra de mais de um contrato não entra', () => {
+      const contratos = [
+        { id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço 1]', status: 'ativo' },
+        { id: 2, plano: '[plano]', velocidade: null, endereco: '[endereço 2]', status: 'ativo' },
+      ];
+      expect(texto({ contratos, alvoFinanceiro: { alvo: 'titular', escolhidos: ['[endereço 1]'] } })).not.toMatch(/Pedido de boleto ou PIX com mais de um contrato/);
+      expect(texto({ contratos, alvoFinanceiro: { alvo: 'titular', escolhidos: [] } })).toMatch(/Pedido de boleto ou PIX com mais de um contrato/);
+      expect(texto({ contratos, alvoFinanceiro: { alvo: 'indefinido', escolhidos: [] } })).toMatch(/Pedido de boleto ou PIX com mais de um contrato/);
+    });
+
     // Task 18 — antes: ai-orchestrator.test.js:1083, :1833 e :1834. 1º teste
     // real com dois contratos: o modelo gastou as duas perguntas ("qual
     // contrato", "qual endereço") e encaminhou sem mandar o PIX que já podia

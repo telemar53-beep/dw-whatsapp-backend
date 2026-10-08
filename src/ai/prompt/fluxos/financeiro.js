@@ -103,7 +103,11 @@ module.exports = {
         ].join('\n')
         : 'Identidade JÁ confirmada: NÃO peça CPF. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o setor da lista acima que cuidar do financeiro.',
     ];
-    if (contratos.length > 1) {
+    // Rodada 9 (N5): com o contrato já escolhido pela rua (estado confirmado; fluxos/alvo-financeiro.js), esta regra mandava
+    // consultar todos e perguntar o endereço de novo — a ordem contrária à do código.
+    const jaEscolhido = Boolean(estado.alvoFinanceiro && estado.alvoFinanceiro.alvo === 'titular'
+      && Array.isArray(estado.alvoFinanceiro.escolhidos) && estado.alvoFinanceiro.escolhidos.length > 0);
+    if (contratos.length > 1 && !jaEscolhido) {
       l.push('Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, no modelo: "Claro, vou te ajudar com o PIX 😊 Vi que você tem mais de um contrato com a gente. Para eu te enviar os dados do pagamento certinho, pode me confirmar de qual endereço você precisa?" (cite os endereços se ajudar) e entregue na resposta seguinte. Para BOLETO, o mesmo pedido sem emoji: "Claro, vou te ajudar com o boleto. Vi que você tem mais de um contrato com a gente. Para eu te enviar o boleto certinho, pode me confirmar de qual endereço você precisa?"');
     }
     l.push(

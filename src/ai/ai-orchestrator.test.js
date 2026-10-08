@@ -511,6 +511,47 @@ describe('perfil de triagem', () => {
     return createChatCompletion.mock.calls[0][0];
   }
 
+  // Rodada 9 (N5): os fatos do alvo financeiro entram no prompt da triagem e acompanham o estado confirmado no meio do turno
+  // (a consulta que localiza a outra pessoa muda o alvo; a chamada seguinte já recebe o estado novo).
+  test('os fatos do alvo financeiro entram e são recompostos quando a ferramenta muda o alvo no meio do turno', async () => {
+    const respostas = [
+      {
+        message: { role: 'assistant', content: null, tool_calls: [{ id: 'c-1', type: 'function', function: { name: 'buscar_cliente', arguments: '{"cpf":"11144477735","titularEOutraPessoa":true}' } }] },
+        usage: { promptTokens: 100, completionTokens: 20 },
+      },
+      { message: { content: 'Localizei.' }, usage: { promptTokens: 150, completionTokens: 12 } },
+    ];
+    const prompts = [];
+    createChatCompletion.mockImplementation(async (params) => {
+      prompts.push(params.messages[0].content);
+      return respostas.shift();
+    });
+    executeTool.mockImplementation(async (nome, args, ctx) => {
+      ctx.alvoTerceiro = { contratos: [401] };
+      ctx.alvoAmbiguo = false;
+      return { ok: true, resultado: { localizado: true } };
+    });
+    await runAiTurn({
+      conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto',
+      terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento' }, alvoAmbiguo: 'outra_pessoa_sem_documento',
+    });
+    const [primeira, segunda] = prompts;
+    expect(primeira).toMatch(/ALVO FINANCEIRO AGORA/);
+    expect(primeira).toMatch(/- Alvo da cobrança: ainda não definido\./);
+    expect(segunda).toMatch(/- Alvo da cobrança: a cobrança da outra pessoa, já localizada/);
+    executeTool.mockReset();
+  });
+
+  test('a volta à própria cobrança com o contrato escolhido: os fatos dizem o contrato, sem a regra de perguntar o endereço', async () => {
+    // (ver também a bateria n5-prompt-s5: sem o pedido do documento da outra pessoa no prompt da fala 4)
+    const DOIS = { ...IDENT_FORTE, contracts: [{ id: 301, statusCode: 1, plan: '600MB', address: 'Rua de Teste, 300', login: 'a' }, { id: 302, statusCode: 1, plan: '600MB', address: 'Avenida de Teste, 30', login: 'b' }] };
+    const req = await contexto({ identidade: DOIS, alvoVoltouAoTitular: true, alvoVoltouDeTerceiro: true, contratoEscolhido: '301', contratosEscolhidos: ['301'] });
+    const sistema = req.messages[0].content;
+    expect(sistema).toMatch(/- Contrato escolhido: o do endereço Rua de Teste, 300 — ele disse a rua/);
+    expect(sistema).toMatch(/- Alvo da cobrança: a cobrança DELE/);
+    expect(sistema).not.toMatch(/Pedido de boleto ou PIX com mais de um contrato/);
+  });
+
   test('manda só a lista fixa de ferramentas, ignorando o cartão de permissões', async () => {
     const req = await contexto();
     const nomes = req.tools.map((t) => t.function.name).sort();
@@ -3021,16 +3062,55 @@ describe('documento pendente: não repetir o pedido de CPF/CNPJ', () => {
     expect(r.texto).toBe('Entendi, desculpe a insistência.');
   });
 
+  // Rodada 9 (N5): o estado que o worker grava para "quero o pix da Beltrana" — o escopo pendente e a dúvida. O pedido do
+  // documento da outra pessoa só vale com uma outra pessoa no alvo (ver o teste seguinte).
+  const BELTRANA_PENDENTE = { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento' }, alvoAmbiguo: 'outra_pessoa_sem_documento' };
   test('10. terceiro: o CPF pendente é o da Beltrana — o da Fulana não responde', async () => {
     roteiro(final('Esse documento é o seu. Para o PIX da Beltrana, preciso do CPF ou CNPJ dela.'));
     const r = await turno(
       [entrada('quero o pix da Beltrana'), pediu('Qual o CPF ou CNPJ da Beltrana?', 'terceiro'), entrada(`é o meu: ${CPF_A}`)],
-      { identidade: FULANA },
+      { identidade: FULANA, ...BELTRANA_PENDENTE },
     );
     expect(vistas[0].sistema).toMatch(/da OUTRA pessoa/);
     expect(vistas[0].sistema).toMatch(/o que ele mandou é o dele mesmo/);
     expect(r.texto).toBe('Esse documento é o seu. Para o PIX da Beltrana, preciso do CPF ou CNPJ dela.');
     expect(r.pedidoDeDocumento).toEqual({ alvo: 'terceiro' });
+  });
+
+  // Rodada 9 (N5; avaliação real r2, S5): com o alvo confirmado em quem fala — sem terceiro no escopo e sem dúvida (a volta à
+  // própria cobrança limpou o escopo) —, o pedido do documento da outra pessoa não é mais o de agora: nem no prompt, nem na guarda.
+  test('10b. o pedido do documento da outra pessoa, com o alvo confirmado em quem fala: fora do prompt e da guarda', async () => {
+    roteiro(final('Prontinho, Fulana.'));
+    await turno(
+      [entrada('quero o pix da Beltrana'), pediu('Qual o CPF ou CNPJ da Beltrana?', 'terceiro'), entrada('deixa, agora a minha fatura')],
+      { identidade: FULANA, alvoVoltouAoTitular: true },
+    );
+    expect(vistas[0].sistema).not.toContain('DOCUMENTO JÁ PEDIDO');
+    roteiro(final('Prontinho, Fulana.'));
+    await turno(
+      [entrada('quero o pix da Beltrana'), pediu('Qual o CPF ou CNPJ da Beltrana?', 'terceiro'), entrada('e aí?')],
+      { identidade: FULANA, ...BELTRANA_PENDENTE },
+    );
+    expect(vistas[0].sistema).toContain('DOCUMENTO JÁ PEDIDO');
+  });
+
+  // Rodada 9 (N5): a consulta deste turno localizou a outra pessoa (documento confirmado): a chamada seguinte já não recebe o
+  // "DOCUMENTO JÁ PEDIDO" (o mesmo estado que a guarda lê, pendenteAgora).
+  test('10c. o documento da outra pessoa confirmado no meio do turno sai do prompt da chamada seguinte', async () => {
+    roteiro(chamada('buscar_cliente'), final('Localizei.'));
+    executeTool.mockImplementation(async (nome, args, ctx) => {
+      ctx.alvoTerceiro = { contratos: [77] };
+      ctx.alvoAmbiguo = false;
+      return { ok: true, resultado: { localizado: true } };
+    });
+    await turno(
+      [entrada('quero o pix da Beltrana'), pediu('Qual o CPF ou CNPJ da Beltrana?', 'terceiro'), entrada('é 111.444.777-35')],
+      { identidade: FULANA, ...BELTRANA_PENDENTE },
+    );
+    expect(vistas[0].sistema).toContain('DOCUMENTO RECEBIDO');
+    expect(vistas[1].sistema).not.toContain('DOCUMENTO RECEBIDO');
+    expect(vistas[1].sistema).not.toContain('DOCUMENTO JÁ PEDIDO');
+    executeTool.mockReset();
   });
 
   test('11. terceiro já localizado: não pede o documento dela de novo', async () => {

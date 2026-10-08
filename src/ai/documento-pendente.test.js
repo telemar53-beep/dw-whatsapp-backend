@@ -255,6 +255,40 @@ describe('o que a resposta não pode pedir', () => {
     expect(violacoesDoDocumento('Esse é o seu CPF, preciso do CPF da Beltrana.', c)).toEqual([]);
   });
 
+  // Rodada 9 (N6; avaliação real r2, S5 #3): com quem fala identificado e o alvo confirmado nele mesmo (sem terceiro e sem
+  // dúvida), "o CPF do titular" é o documento DELE — barrado como o "seu CPF". Não é bloqueio da expressão: com terceiro
+  // pendente, identidade contestada, alvo em dúvida ou quem fala sem identificação, e no pedido explícito de outra pessoa, passa.
+  describe('N6: o documento do titular com o alvo confirmado no próprio cliente identificado', () => {
+    const FRASE = 'Claro! Para eu localizar certinho, me confirme o CPF ou CNPJ do titular da fatura.';
+    test.each([
+      ['alvo dele', {}, FRASE],
+      ['depois da volta à própria cobrança', { alvoVoltouAoTitular: true }, FRASE],
+      ['pedido seco do CPF', {}, 'Me confirma o CPF, por favor?'],
+    ])('titular identificado, %s: barrado', (_, extra, frase) => {
+      expect(violacoesDoDocumento(frase, ctx({ documento: null, identidade: FULANA, ...extra }))).toEqual(['documento_ja_identificado']);
+    });
+    test.each([
+      ['terceiro pendente (dúvida forte gravada)', { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'outra_pessoa_sem_documento' }, alvoAmbiguo: 'outra_pessoa_sem_documento' }],
+      ['terceiro localizado, com dúvida forte', { terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }], alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado' }],
+      ['identidade contestada', { identidade: { ...FULANA, contestado: true } }],
+      ['alvo ambíguo do turno', { alvoAmbiguo: 'dois_lados' }],
+      ['dúvida de endereço gravada', { terceiro: { nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido' }, alvoAmbiguo: 'endereco_desconhecido' }],
+      ['quem fala sem identificação', { identidade: SEM_IDENT }],
+    ])('%s: permitido', (_, extra) => {
+      expect(violacoesDoDocumento(FRASE, ctx({ documento: null, identidade: FULANA, ...extra }))).toEqual([]);
+    });
+    test('terceiro localizado, sem dúvida: o pedido genérico é o do terceiro já localizado, não o de quem fala', () => {
+      const c = ctx({ documento: null, identidade: FULANA, terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] }, ultimaFala: 'manda o pix dela' });
+      expect(violacoesDoDocumento(FRASE, c)).toEqual(['documento_terceiro_localizado']);
+    });
+    test('alvo dele, mas o pedido é explicitamente do documento de outra pessoa: permitido', () => {
+      const c = ctx({ documento: null, identidade: FULANA });
+      expect(violacoesDoDocumento('Se for de outra pessoa, me mande o CPF ou CNPJ do titular.', c)).toEqual([]);
+      expect(violacoesDoDocumento('Qual o CPF da Beltrana?', c)).toEqual([]);
+      expect(violacoesDoDocumento('Me passa o CPF da sua mãe?', c)).toEqual([]);
+    });
+  });
+
   // Rodada 8 (N1): com a dúvida forte gravada sobre o terceiro localizado ("a rua do João"), a instrução da recusa manda pedir
   // o documento de quem é a cobrança — a guarda do "terceiro já localizado" não pode barrar esse pedido.
   test('com a dúvida forte sobre o terceiro localizado, pedir o documento não é barrado; com a dúvida fraca, continua barrado', () => {

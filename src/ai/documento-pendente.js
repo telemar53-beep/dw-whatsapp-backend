@@ -29,7 +29,7 @@
 // O CÓDIGO decide quando pedir de novo é repetição; a IA continua conduzindo a conversa. Tudo aqui
 // é puro; o orquestrador aplica (prompt + correção no laço + troca final) e o worker marca.
 
-const { intencaoDeAlvo } = require('./financial-target');
+const { intencaoDeAlvo, alvoFinanceiro } = require('./financial-target');
 const { escopoValido, MINUTOS_DE_VIDA } = require('./third-party-scope');
 
 const normalizar = (texto) => String(texto || '')
@@ -64,6 +64,11 @@ const DE_OUTRA_PESSOA = /\b(?:cpf|cnpj|documento)(?: ou (?:cpf|cnpj))? (?:dela|d
 
 const identificado = (contexto) => Boolean(contexto && contexto.identidade
   && contexto.identidade.nivel === 'forte' && !contexto.identidade.contestado);
+
+// Rodada 9 (N6): o alvo confirmado é quem fala — nenhum terceiro no turno nem no escopo (alvoFinanceiro), e nenhuma dúvida
+// (a do turno ou a gravada). Com qualquer um deles, um documento de outra pessoa ainda pode ser necessário.
+const alvoEhQuemFala = (c) => alvoFinanceiro(c).tipo === 'principal' && typeof c.alvoAmbiguo !== 'string'
+  && !(c.terceiro && c.terceiro.alvoPendente);
 
 /**
  * De quem é o documento que a resposta está pedindo, com o contexto do fim do turno. Quem fala já
@@ -290,6 +295,11 @@ function violacoesDoDocumento(texto, contexto) {
   // "Esse é o seu CPF, preciso do CPF da Beltrana" pede o de OUTRA pessoa: não é pedir o dele.
   const pedeODeQuemFala = pedidos.some((f) => DE_QUEM_FALA.test(f) && !DE_OUTRA_PESSOA.test(f));
   if (identificado(c) && pedeODeQuemFala) return ['documento_ja_identificado'];
+  // Rodada 9 (N6; avaliação real r2): com o alvo confirmado nele mesmo, o pedido que não cita outra pessoa ("o CPF do titular",
+  // "o CPF") também é o documento dele. O pedido explícito de outra pessoa continua passando.
+  if (identificado(c) && alvoEhQuemFala(c) && pedidos.some((f) => !DE_OUTRA_PESSOA.test(f) && !NOVO_TERCEIRO.test(f))) {
+    return ['documento_ja_identificado'];
+  }
   const pendente = pendenteAgora(c);
   // Sem mudança relevante, pedir de novo só passa se o esclarecimento da cadeia ainda está disponível.
   if (pendente && (pendente.irritado || (!pendente.mudancaRelevante && !pendente.esclarecimentoDisponivel))) {

@@ -271,6 +271,30 @@ async function repeteRespostaRecenteDaIa(conversationId, texto) {
   return daIa.slice(-RESPOSTAS_COMPARADAS).some((m) => normalizarResposta(m.content) === alvo);
 }
 
+// Revisão da rodada 8 (achado 2): a entrada que deixou o alvo financeiro como ficou no fim do lote — a última cuja aplicação mudou o
+// estado (a dúvida, ou a volta ao titular). Reaplica a regra pura sobre os prefixos do lote (poucas entradas; sem banco). É a
+// origem efetiva usada para o documento: o que veio antes dela, mesmo no lote, não esclarece a dúvida (tool-executor.js).
+// Revisão do incremento (achado B): SEM terceiro localizado antes do turno não há autorização anterior a restaurar — se o lote
+// mudou o alvo, a origem é o começo dele, como na produção (o CPF mandado na mesma rajada, antes do pedido, vale). A última
+// mudança só vale COM terceiro localizado, que é o caso da reconsulta (achado 2). Achado F: acima de LOTE_MAXIMO_DA_ORIGEM
+// falas, a regra não é reaplicada a cada prefixo (custo quadrático no processo do servidor) — a origem é a última fala, a mais
+// restritiva.
+const LOTE_MAXIMO_DA_ORIGEM = 50;
+function indiceDaOrigemDoAlvo({ terceiro, textos, documentos, empresa, enderecos }) {
+  const estado = (r) => JSON.stringify([r.alvoAmbiguo || false, (r.terceiro && r.terceiro.alvoPendente) || null, Boolean(r.terceiro)]);
+  let anterior = estado(resolverAlvoDasMensagens({ terceiro, textos: [], empresa, documentos: [], enderecos }));
+  const havia = Boolean(terceiro && Array.isArray(terceiro.contratos) && terceiro.contratos.length > 0);
+  if (!havia) return estado(resolverAlvoDasMensagens({ terceiro, textos, empresa, documentos, enderecos })) !== anterior ? 0 : null;
+  if (textos.length > LOTE_MAXIMO_DA_ORIGEM) return textos.length - 1;
+  let origem = null;
+  for (let k = 1; k <= textos.length; k += 1) {
+    const agora = estado(resolverAlvoDasMensagens({ terceiro, textos: textos.slice(0, k), empresa, documentos: documentos.slice(0, k), enderecos }));
+    if (agora !== anterior) origem = k - 1;
+    anterior = agora;
+  }
+  return origem;
+}
+
 // Um aviso por turno (25/09/2026): o aviso saiu para o cliente NESTE turno se o worker acabou de
 // mandá-lo, ou se a entrada desta mesma mensagem mandou — a entrega é registrada logo depois da
 // mensagem. A margem cobre a diferença entre o horário do provedor (created_at da mensagem) e o do
@@ -427,6 +451,9 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   let contratosEscolhidos = null;
   // A resposta que tirou a dúvida de endereço: a volta ao titular é gravada só depois do turno (ver abaixo).
   let limparDepoisDoTurno = false;
+  // Rodada 8 (N1): a afirmação da própria cobrança neste turno tirou o terceiro (ou a dúvida) — o documento de outra pessoa
+  // que só está no histórico não o traz de volta (tool-executor.js).
+  let alvoVoltouAoTitular = false;
   let empresa = null;
   try {
     const cartao = await getCompanyConfig();
@@ -437,6 +464,10 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   }
   let falas = null;
   let documentos = [];
+  // Revisão da rodada 8 (achado 2): o id de cada fala lida (na mesma ordem de `falas`) e a entrada que deixou o alvo como
+  // ficou no fim do lote.
+  let idsDasFalas = [];
+  let origemDoAlvoNoTurno = null;
   // As entradas que o turno aplicou, para marcar depois dele; null = não marcar (a transição não foi gravada).
   let entradasDoTurno = null;
   // As entradas deste turno: as lidas e a do job. A do job já marcada (reprocessamento) não é reaplicada:
@@ -482,20 +513,24 @@ async function handleTriageTurn({ conversation, config, messageId }) {
       };
       const lidasComTexto = [];
       const documentosLidos = [];
+      const idsLidos = [];
       for (const m of validas) {
         if (m.id !== messageId && m.metadata && m.metadata.autorrespostaProvavel === true) continue;
         const texto = (m.id === messageId ? textoDoCliente : (m.messageType === 'audio' ? m.transcription : m.content)) || '';
         // Entrada sem texto (imagem, áudio sem transcrição) entra vazia: não muda o alvo, mas desfaz a escolha de contrato
         // pela rua de uma fala anterior (pedido por endereço, 06/10/2026).
         lidasComTexto.push(texto);
+        idsLidos.push(m.id);
         documentosLidos.push(m.id === messageId || !texto ? null : documentosDaEntrada(texto));
       }
       if (!jobNaLista && !entradaJaProcessada) {
         lidasComTexto.push(textoDoCliente || '');
+        idsLidos.push(messageId);
         documentosLidos.push(null);
       }
       falas = lidasComTexto;
       documentos = documentosLidos;
+      idsDasFalas = idsLidos;
     } catch (err) {
       console.error(`Failed to read the unconfirmed customer messages for conversation ${conversation.id}: ${mensagemSegura(err)}`);
     }
@@ -512,6 +547,9 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // Os sem endereço também entram: "é a minha" só escolhe sozinho quando ele tem um contrato só.
     const enderecos = ((identidade && identidade.contracts) || []).filter((c) => c && c.id != null).map((c) => ({ id: c.id, address: c.address || '' }));
     const alvo = resolverAlvoDasMensagens({ terceiro, textos: falas, empresa, documentos, enderecos });
+    // Revisão da rodada 8 (achado 2): a entrada que deixou o alvo como está (a dúvida, ou a volta ao titular).
+    const indiceDaOrigem = indiceDaOrigemDoAlvo({ terceiro, textos: falas, documentos, empresa, enderecos });
+    origemDoAlvoNoTurno = indiceDaOrigem === null ? null : (idsDasFalas[indiceDaOrigem] || null);
     ({ alvoAmbiguo } = alvo);
     contratoEscolhido = alvo.contratoEscolhido || null;
     contratosEscolhidos = alvo.contratosEscolhidos || null;
@@ -521,13 +559,16 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // sobre ela, com a mesma limitação ao contrato identificado. As transições que restringem continuam antes do turno.
     const respostaADuvidaDeEndereco = alvo.gravar === 'limpar' && Boolean(terceiro) && DUVIDAS_DE_ENDERECO.includes(terceiro.alvoPendente)
       && (terceiro.contratos || []).length === 0;
+    alvoVoltouAoTitular = alvo.gravar === 'limpar';
     if (respostaADuvidaDeEndereco) {
       terceiro = null;
       limparDepoisDoTurno = true;
     } else if (alvo.gravar) {
       let novo = null;
-      if (alvo.gravar === 'criar') novo = comPendenciaDeAlvo(montarEscopo(null, [], new Date(), { pendente: true }), alvo.terceiro.alvoPendente);
-      else if (alvo.gravar === 'pendencia') novo = comPendenciaDeAlvo(escopoDoTerceiro, alvo.terceiro.alvoPendente || null);
+      // Rodada 8 (N1): a dúvida gravada guarda a primeira entrada aplicada neste turno — a origem dela.
+      const desdeDaDuvida = origemDoAlvoNoTurno || aMarcar[0] || messageId || null;
+      if (alvo.gravar === 'criar') novo = comPendenciaDeAlvo(montarEscopo(null, [], new Date(), { pendente: true }), alvo.terceiro.alvoPendente, desdeDaDuvida);
+      else if (alvo.gravar === 'pendencia') novo = comPendenciaDeAlvo(escopoDoTerceiro, alvo.terceiro.alvoPendente || null, desdeDaDuvida);
       try {
         // Persistência do alvo (03/10/2026): só grava se o banco ainda estiver no estado que o turno leu. A volta
         // ao titular aceita a coluna já vazia (o efeito pedido já vale).
@@ -594,6 +635,16 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     terceiroLocalizadoEm, reativacao: reativacao || null, esperadosDoAlvo: esperados,
     // Revisão da rodada 7 (P2-2): a dúvida de endereço respondida neste turno só sai do banco pela limpeza adiada abaixo.
     duvidaDeEnderecoRespondida: limparDepoisDoTurno,
+    // Rodada 8 (N1): as falas do cliente que este turno aplicou (as novas, ainda não confirmadas, e a do job) — a origem
+    // efetiva de um documento que esclarece uma dúvida; e se a afirmação da própria cobrança tirou o terceiro neste turno.
+    // Revisão da rodada 8 (achado 8): sem as falas lidas (a leitura falhou), a lista vai VAZIA — nunca null, que desligaria a
+    // regra do documento do histórico com a dúvida gravada (falha aberta).
+    falasNovasDoCliente: Array.isArray(falas) ? falas : [],
+    alvoVoltouAoTitular,
+    origemDoAlvoNoTurno,
+    idsDasFalasNovas: Array.isArray(falas) ? idsDasFalas.slice() : [],
+    // Revisão do incremento (achado D): sem as falas lidas, a origem efetiva do documento é desconhecida.
+    falasNovasLidas: Array.isArray(falas),
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

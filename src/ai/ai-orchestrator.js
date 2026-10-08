@@ -387,7 +387,7 @@ function ferramentasDaTriagem(triagem, config) {
   return lista;
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false, falasNovasDoCliente = null, alvoVoltouAoTitular = false, origemDoAlvoNoTurno = null, idsDasFalasNovas = null, falasNovasLidas = true }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -466,6 +466,12 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // Revisão da rodada 7 (P2-2): a dúvida de endereço foi respondida neste turno e só sai do banco pela limpeza adiada do
       // worker, condicional (nenhuma entrada nova esperando). O documento de quem fala, neste turno, só identifica.
       duvidaDeEnderecoRespondida: duvidaDeEnderecoRespondida === true,
+      // Rodada 8 (N1): ver tool-executor.js (documento só do histórico).
+      falasNovasDoCliente: Array.isArray(falasNovasDoCliente) ? falasNovasDoCliente.slice() : null,
+      alvoVoltouAoTitular: alvoVoltouAoTitular === true,
+      origemDoAlvoNoTurno: typeof origemDoAlvoNoTurno === 'string' ? origemDoAlvoNoTurno : null,
+      idsDasFalasNovas: Array.isArray(idsDasFalasNovas) ? idsDasFalasNovas.slice() : null,
+      falasNovasLidas: falasNovasLidas !== false,
       // Conclusão do atendimento: o encaminhamento tentado e não concluído em turno anterior, e as ferramentas pedidas
       // neste turno (concluir_triagem decide a nova tentativa por elas).
       encaminhamentoNaoConcluido,

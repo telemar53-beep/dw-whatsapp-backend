@@ -85,9 +85,12 @@ const PENDENCIAS_DE_ALVO = ['terceiro_nao_vinculado', 'outra_pessoa_sem_document
 const PENDENCIA_MAIS_FORTE = 'terceiro_nao_vinculado';
 
 /** O escopo com a dúvida gravada (ou sem ela, com null). Nunca mexe no prazo nem nos contratos. É uma gravação nova: marca nova. */
-function comPendenciaDeAlvo(escopo, motivo) {
-  const { alvoPendente, ...resto } = escopo;
-  return comNovaMarca(motivo ? { ...resto, alvoPendente: motivo } : resto);
+// Rodada 8 (N1): `desde` é o id da primeira entrada do cliente aplicada no turno que gravou a dúvida — a origem dela. Um
+// documento de outra pessoa só esclarece a dúvida se estiver numa fala a partir dessa entrada (tool-executor.js). Sem ele
+// (regravação por um chamador antigo), a origem antiga não fica: vale o mais restritivo (só as falas novas do turno).
+function comPendenciaDeAlvo(escopo, motivo, desde = null) {
+  const { alvoPendente, duvidaDesde, ...resto } = escopo;
+  return comNovaMarca(motivo ? { ...resto, alvoPendente: motivo, ...(desde ? { duvidaDesde: desde } : {}) } : resto);
 }
 
 // A dúvida de endereço só existe no escopo pendente sem contrato de terceiro (revisão da v4.1, achado B5): num escopo com
@@ -108,6 +111,7 @@ function paraContexto(escopo) {
     ...(escopo.alvoPendente !== undefined
       ? { alvoPendente: pendenciaValida(escopo) ? escopo.alvoPendente : PENDENCIA_MAIS_FORTE }
       : {}),
+    ...(escopo.alvoPendente !== undefined && typeof escopo.duvidaDesde === 'string' ? { duvidaDesde: escopo.duvidaDesde } : {}),
   };
 }
 

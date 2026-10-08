@@ -255,6 +255,18 @@ describe('o que a resposta não pode pedir', () => {
     expect(violacoesDoDocumento('Esse é o seu CPF, preciso do CPF da Beltrana.', c)).toEqual([]);
   });
 
+  // Rodada 8 (N1): com a dúvida forte gravada sobre o terceiro localizado ("a rua do João"), a instrução da recusa manda pedir
+  // o documento de quem é a cobrança — a guarda do "terceiro já localizado" não pode barrar esse pedido.
+  test('com a dúvida forte sobre o terceiro localizado, pedir o documento não é barrado; com a dúvida fraca, continua barrado', () => {
+    const localizado = { nome: 'Fulana', contratos: [{ id: 401 }] };
+    const forte = ctx({ documento: null, terceiro: { ...localizado, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado', ultimaFala: 'agora manda o boleto da rua do João' });
+    expect(violacoesDoDocumento('Para eu enviar, me passe o CPF ou CNPJ da titular dessa cobrança.', forte)).toEqual([]);
+    const soDoTurno = ctx({ documento: null, terceiro: localizado, alvoAmbiguo: 'terceiro_nao_vinculado', ultimaFala: 'agora manda o boleto da rua do João' });
+    expect(violacoesDoDocumento('Me passe o CPF ou CNPJ da titular dessa cobrança.', soDoTurno)).toEqual([]);
+    const fraca = ctx({ documento: null, terceiro: { ...localizado, alvoPendente: 'proprio_nao_afirmado' }, alvoAmbiguo: 'proprio_nao_afirmado', ultimaFala: 'manda o boleto da Rua de Teste' });
+    expect(violacoesDoDocumento('Qual o CPF dela?', fraca)).toEqual(['documento_terceiro_localizado']);
+  });
+
   test('11. terceiro já localizado: pedir o documento dele de novo é barrado; novo terceiro, não', () => {
     const localizado = { nome: 'Beltrana', contratos: [{ id: 77 }] };
     expect(violacoesDoDocumento('Qual o CPF dela?', ctx({ documento: null, terceiro: localizado, ultimaFala: 'manda o pix dela' }))).toEqual(['documento_terceiro_localizado']);

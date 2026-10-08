@@ -932,10 +932,11 @@ describe('ai-worker — triagem', () => {
         await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
         expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
-          terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }], alvoPendente: 'dois_lados' }, alvoAmbiguo: 'dois_lados',
+          // Rodada 8 (N1): a dúvida gravada neste turno guarda a entrada que a originou.
+          terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }], alvoPendente: 'dois_lados', duvidaDesde: 'm-1' }, alvoAmbiguo: 'dois_lados',
         }));
         // O escopo não é limpo: só ganha a dúvida, com o mesmo prazo.
-        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'dois_lados' }), GRAVACAO_CONDICIONAL);
+        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'dois_lados', duvidaDesde: 'm-1' }), GRAVACAO_CONDICIONAL);
       });
 
       // F2 (30/09/2026): posse de coisa própria é o próprio — com terceiro registrado, é volta explícita.
@@ -962,7 +963,7 @@ describe('ai-worker — triagem', () => {
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
           expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
-          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ nome: 'Beltrana', contratos: [77], expiraEm: FUTURO, alvoPendente: 'terceiro_nao_vinculado' }), GRAVACAO_CONDICIONAL);
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ nome: 'Beltrana', contratos: [77], expiraEm: FUTURO, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'm-1' }), GRAVACAO_CONDICIONAL);
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
         });
 
@@ -1038,6 +1039,83 @@ describe('ai-worker — triagem', () => {
             nome: null, contratos: [], pendente: true, alvoPendente: 'endereco_desconhecido', marca: expect.any(String),
           }), GRAVACAO_CONDICIONAL);
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'endereco_desconhecido', contratoEscolhido: null }));
+          // Rodada 8 (N1): a dúvida gravada guarda a entrada que a originou, e o turno recebe as falas novas do cliente.
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ duvidaDesde: 'm-1' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+            terceiro: expect.objectContaining({ duvidaDesde: 'm-1' }), falasNovasDoCliente: ['manda o pix da Avenida Central'], alvoVoltouAoTitular: false,
+          }));
+        });
+
+        // Revisão da rodada 8 (achado 8): a leitura das entradas não confirmadas falhou, mas o escopo com a dúvida foi lido — o
+        // turno recebe a lista de falas novas VAZIA (nunca null), e a regra do documento do histórico continua valendo.
+        test('a leitura das falas falhou com a dúvida gravada: o turno recebe as falas novas vazias, não a ausência delas', async () => {
+          const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+          getThirdPartyScope.mockResolvedValue({ ...DUVIDA_GRAVADA, duvidaDesde: 'm-0' });
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockRejectedValueOnce(new Error('banco fora'));
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'é da Fulana mesmo, pode reenviar' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ falasNovasDoCliente: [], idsDasFalasNovas: [] }));
+          // Revisão do incremento (achado D): o turno sabe que as falas do lote não foram lidas.
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ falasNovasLidas: false }));
+          errorSpy.mockRestore();
+        });
+
+        // Revisão do incremento (achado B): SEM terceiro localizado antes do turno não há autorização anterior a restaurar — a
+        // origem é o começo do lote, e o CPF mandado na mesma rajada, antes do pedido, vale (como na produção).
+        test('sem terceiro localizado antes do turno: a origem é o começo do lote', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-0', direction: 'inbound', messageType: 'text', content: 'bom dia', createdAt: new Date() },
+            { id: 'm-1', direction: 'inbound', messageType: 'text', content: 'manda o pix da Avenida Central', createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o pix da Avenida Central' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ alvoPendente: 'endereco_desconhecido', duvidaDesde: 'm-0' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-0', falasNovasLidas: true }));
+        });
+        test('sem terceiro localizado: o CPF na mesma rajada, antes do pedido de outra pessoa, fica dentro da origem', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-3', direction: 'inbound', messageType: 'text', content: '111.444.777-35', createdAt: new Date() },
+            { id: 'm-4', direction: 'inbound', messageType: 'text', content: 'é da minha mãe, manda o boleto dela', createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-4', messageType: 'text', content: 'é da minha mãe, manda o boleto dela' });
+          findLatestInboundMessageId.mockResolvedValue('m-4');
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-4' });
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ alvoPendente: 'outra_pessoa_sem_documento', duvidaDesde: 'm-3' }), GRAVACAO_CONDICIONAL);
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-3' }));
+        });
+
+        // Revisão da rodada 8 (achado 2; mutação R1-7): COM terceiro localizado antes do turno, a origem é a entrada que deixou o
+        // alvo como ficou — a ÚLTIMA mudança do lote (a volta ao titular na m-0, a dúvida de endereço na m-1), não a primeira.
+        test('com terceiro localizado: lote com duas mudanças do alvo, a origem é a última delas', async () => {
+          getThirdPartyScope.mockResolvedValue({ nome: 'Fulana', contratos: [401], expiraEm: FUTURO, marca: 'marca-t' });
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-0', direction: 'inbound', messageType: 'text', content: 'agora a minha fatura da Rua de Teste', createdAt: new Date() },
+            { id: 'm-1', direction: 'inbound', messageType: 'text', content: 'manda o boleto da rua do João', createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto da rua do João' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', expect.objectContaining({ alvoPendente: 'endereco_desconhecido', duvidaDesde: 'm-1' }), expect.anything());
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-1', idsDasFalasNovas: ['m-0', 'm-1'] }));
+        });
+
+        // Revisão do incremento (achado F): lote acima do limite, com terceiro localizado: a origem é a última fala (a mais
+        // restritiva), sem reaplicar a regra a cada prefixo do lote.
+        test('lote acima do limite com terceiro localizado: a origem é a última fala', async () => {
+          getThirdPartyScope.mockResolvedValue({ nome: 'Fulana', contratos: [401], expiraEm: FUTURO, marca: 'marca-t' });
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          const lote = Array.from({ length: 60 }, (_, i) => ({ id: `m-${i}`, direction: 'inbound', messageType: 'text', content: 'obrigado', createdAt: new Date() }));
+          lote[0].content = 'agora manda o boleto da rua do João';
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce(lote);
+          findMessageById.mockResolvedValue({ id: 'm-59', messageType: 'text', content: 'obrigado' });
+          findLatestInboundMessageId.mockResolvedValue('m-59');
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-59' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-59' }));
         });
 
         test('dúvida de endereço gravada + "pode mandar": continua, sem gravar nada e sem liberar', async () => {
@@ -1395,7 +1473,8 @@ describe('ai-worker — triagem', () => {
 
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado' }), GRAVACAO_CONDICIONAL);
+          // Rodada 8 (N1): a origem da dúvida é a entrada cuja gravação tinha falhado (m-0), reaplicada agora.
+          expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', comMarca({ ...ESCOPO, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'm-0' }), GRAVACAO_CONDICIONAL);
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'terceiro_nao_vinculado' }));
         });
 

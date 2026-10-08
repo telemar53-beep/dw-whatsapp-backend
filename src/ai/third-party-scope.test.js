@@ -82,6 +82,17 @@ describe('dúvida sobre o alvo gravada no escopo', () => {
     expect(escopoValido(comDuvida, new Date('2026-09-17T20:30:01.000Z'))).toBe(false);
   });
 
+  // Rodada 8 (N1): a entrada que originou a dúvida fica no escopo (duvidaDesde) e chega ao turno; resolver tira as duas.
+  test('a dúvida guarda a entrada que a originou; o contexto do turno a recebe; resolver tira as duas', () => {
+    const comDuvida = comPendenciaDeAlvo(escopo, 'terceiro_nao_vinculado', 'msg-2');
+    expect(comDuvida).toEqual({ ...escopo, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'msg-2', marca: expect.any(String) });
+    expect(paraContexto(comDuvida)).toEqual({ nome: 'Maria', contratos: [{ id: 10 }], alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'msg-2' });
+    expect(comPendenciaDeAlvo(comDuvida, null)).toEqual({ ...escopo, marca: expect.any(String) });
+    // Regravada sem a entrada (chamador antigo): a origem antiga não fica (o mais restritivo).
+    expect(comPendenciaDeAlvo(comDuvida, 'proprio_nao_afirmado')).toEqual({ ...escopo, alvoPendente: 'proprio_nao_afirmado', marca: expect.any(String) });
+    expect(paraContexto({ ...escopo, duvidaDesde: 'msg-2' })).toEqual({ nome: 'Maria', contratos: [{ id: 10 }] });
+  });
+
   test('resolver a dúvida tira a chave, e só ela', () => {
     expect(comPendenciaDeAlvo({ ...escopo, alvoPendente: 'dois_lados' }, null)).toEqual({ ...escopo, marca: expect.any(String) });
   });

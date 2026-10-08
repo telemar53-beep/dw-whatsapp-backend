@@ -14,7 +14,7 @@ const linhas = (ctx, opcoes) => alvoFinanceiro.linhas(estadoBase({ alvoFinanceir
 
 describe('fatos do alvo financeiro (N5)', () => {
   test('a volta à própria cobrança pela rua: o alvo é ele, o contrato é o da rua, sem dúvida e nada a perguntar', () => {
-    const t = linhas(contexto({ alvoVoltouAoTitular: true, contratoEscolhido: '301', contratosEscolhidos: ['301'] }));
+    const t = linhas(contexto({ alvoVoltouAoTitular: true, alvoVoltouDeTerceiro: true, contratoEscolhido: '301', contratosEscolhidos: ['301'] }));
     expect(t).toMatch(/ALVO FINANCEIRO AGORA/);
     expect(t).toMatch(/não autoriza nada, não promete envio e não obriga a chamar ferramenta/);
     expect(t).toMatch(/- Quem fala: Sicrano, identificado\./);
@@ -23,6 +23,15 @@ describe('fatos do alvo financeiro (N5)', () => {
     expect(t).toMatch(/- Dúvida: nenhuma\./);
     expect(t).toMatch(/- Falta saber: nada sobre o alvo\./);
     expect(t).not.toMatch(/\b30[12]\b/);
+  });
+
+  // Revisão da rodada 9 (achado 4): a resposta à dúvida de endereço também limpa o escopo, mas não havia outra pessoa — a frase
+  // não fala de "outra pessoa citada antes".
+  test('a resposta à dúvida de endereço: a cobrança dele, sem falar de outra pessoa', () => {
+    const t = linhas(contexto({ alvoVoltouAoTitular: true, alvoVoltouDeTerceiro: false, contratoEscolhido: '301', contratosEscolhidos: ['301'] }));
+    expect(t).toMatch(/- Alvo da cobrança: a cobrança dele — ele disse de qual endereço é\./);
+    expect(t).not.toMatch(/outra pessoa/);
+    expect(t).toMatch(/- Contrato escolhido: o do endereço Rua de Teste, 300/);
   });
 
   test('dois contratos escolhidos pelas ruas', () => {

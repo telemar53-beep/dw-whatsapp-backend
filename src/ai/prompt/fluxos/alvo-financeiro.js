@@ -40,6 +40,8 @@ function fatosDoAlvoFinanceiro(contexto, { pedidoDeDocumentoPermitido = true } =
     primeiroNome: identidade.primeiroNome || null,
     alvo,
     voltouAoTitular: alvo === 'titular' && c.alvoVoltouAoTitular === true,
+    // Revisão da rodada 9 (achado 4): a volta tirou um terceiro — só então se fala da outra pessoa.
+    voltouDeTerceiro: alvo === 'titular' && c.alvoVoltouAoTitular === true && c.alvoVoltouDeTerceiro === true,
     escolhidos,
     quantosContratos: contratos.length,
     duvida,
@@ -57,9 +59,10 @@ function linhaDoAlvo(f) {
   if (f.alvo === 'indefinido') return '- Alvo da cobrança: ainda não definido.';
   if (f.alvo === 'travado') return '- Alvo da cobrança: nenhuma cobrança liberada neste turno.';
   if (f.alvo === 'terceiro') return '- Alvo da cobrança: a cobrança da outra pessoa, já localizada pelo documento que ele informou.';
-  if (f.voltouAoTitular) {
+  if (f.voltouDeTerceiro) {
     return '- Alvo da cobrança: a cobrança DELE — ele acabou de dizer que é a dele. A outra pessoa citada antes não é o alvo agora: não peça o documento dela nem fale da cobrança dela.';
   }
+  if (f.voltouAoTitular) return '- Alvo da cobrança: a cobrança dele — ele disse de qual endereço é.';
   return f.quemFala === 'identificado' ? '- Alvo da cobrança: a cobrança dele.' : '- Alvo da cobrança: a de quem fala, que ainda não está identificado.';
 }
 

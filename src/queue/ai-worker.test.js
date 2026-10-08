@@ -1118,6 +1118,20 @@ describe('ai-worker — triagem', () => {
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-59' }));
         });
 
+        // Revisão da rodada 9 (achado 4, N5): o turno sabe se a volta ao titular tirou um terceiro ou só respondeu a dúvida de
+        // endereço (as duas limpam o escopo).
+        test('a volta ao titular: de um terceiro, ou a resposta da dúvida de endereço', async () => {
+          getThirdPartyScope.mockResolvedValue({ nome: 'Fulana', contratos: [401], expiraEm: FUTURO, marca: 'marca-t', alvoPendente: 'terceiro_nao_vinculado' });
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'agora a minha fatura da Rua de Teste' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenLastCalledWith(expect.objectContaining({ alvoVoltouAoTitular: true, alvoVoltouDeTerceiro: true }));
+          getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'é a da Rua de Teste' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenLastCalledWith(expect.objectContaining({ alvoVoltouAoTitular: true, alvoVoltouDeTerceiro: false }));
+        });
+
         test('dúvida de endereço gravada + "pode mandar": continua, sem gravar nada e sem liberar', async () => {
           getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
           resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);

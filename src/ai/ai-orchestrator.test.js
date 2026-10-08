@@ -545,7 +545,7 @@ describe('perfil de triagem', () => {
   test('a volta à própria cobrança com o contrato escolhido: os fatos dizem o contrato, sem a regra de perguntar o endereço', async () => {
     // (ver também a bateria n5-prompt-s5: sem o pedido do documento da outra pessoa no prompt da fala 4)
     const DOIS = { ...IDENT_FORTE, contracts: [{ id: 301, statusCode: 1, plan: '600MB', address: 'Rua de Teste, 300', login: 'a' }, { id: 302, statusCode: 1, plan: '600MB', address: 'Avenida de Teste, 30', login: 'b' }] };
-    const req = await contexto({ identidade: DOIS, alvoVoltouAoTitular: true, contratoEscolhido: '301', contratosEscolhidos: ['301'] });
+    const req = await contexto({ identidade: DOIS, alvoVoltouAoTitular: true, alvoVoltouDeTerceiro: true, contratoEscolhido: '301', contratosEscolhidos: ['301'] });
     const sistema = req.messages[0].content;
     expect(sistema).toMatch(/- Contrato escolhido: o do endereço Rua de Teste, 300 — ele disse a rua/);
     expect(sistema).toMatch(/- Alvo da cobrança: a cobrança DELE/);

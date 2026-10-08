@@ -400,7 +400,7 @@ function fatosDoAlvo(contexto) {
   });
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false, falasNovasDoCliente = null, alvoVoltouAoTitular = false, origemDoAlvoNoTurno = null, idsDasFalasNovas = null, falasNovasLidas = true }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false, falasNovasDoCliente = null, alvoVoltouAoTitular = false, origemDoAlvoNoTurno = null, idsDasFalasNovas = null, falasNovasLidas = true, alvoVoltouDeTerceiro = false }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -482,6 +482,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // Rodada 8 (N1): ver tool-executor.js (documento só do histórico).
       falasNovasDoCliente: Array.isArray(falasNovasDoCliente) ? falasNovasDoCliente.slice() : null,
       alvoVoltouAoTitular: alvoVoltouAoTitular === true,
+      // Rodada 9 (N5): a volta tirou um terceiro (fluxos/alvo-financeiro.js); a resposta da dúvida de endereço não.
+      alvoVoltouDeTerceiro: alvoVoltouDeTerceiro === true,
       origemDoAlvoNoTurno: typeof origemDoAlvoNoTurno === 'string' ? origemDoAlvoNoTurno : null,
       idsDasFalasNovas: Array.isArray(idsDasFalasNovas) ? idsDasFalasNovas.slice() : null,
       falasNovasLidas: falasNovasLidas !== false,

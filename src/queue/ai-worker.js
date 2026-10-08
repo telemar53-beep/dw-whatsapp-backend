@@ -515,6 +515,8 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // Rodada 8 (N1): a afirmação da própria cobrança neste turno tirou o terceiro (ou a dúvida) — o documento de outra pessoa
   // que só está no histórico não o traz de volta (tool-executor.js).
   let alvoVoltouAoTitular = false;
+  // Revisão da rodada 9 (achado 4, N5): a volta ao titular tirou um terceiro (não só respondeu a dúvida de endereço).
+  let alvoVoltouDeTerceiro = false;
   let empresa = null;
   try {
     const cartao = await getCompanyConfig();
@@ -621,6 +623,8 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     const respostaADuvidaDeEndereco = alvo.gravar === 'limpar' && Boolean(terceiro) && DUVIDAS_DE_ENDERECO.includes(terceiro.alvoPendente)
       && (terceiro.contratos || []).length === 0;
     alvoVoltouAoTitular = alvo.gravar === 'limpar';
+    alvoVoltouDeTerceiro = alvoVoltouAoTitular && Boolean(terceiro)
+      && ((Array.isArray(terceiro.contratos) && terceiro.contratos.length > 0) || !['endereco_ambiguo', 'endereco_desconhecido'].includes(terceiro.alvoPendente));
     if (respostaADuvidaDeEndereco) {
       terceiro = null;
       limparDepoisDoTurno = true;
@@ -702,6 +706,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // regra do documento do histórico com a dúvida gravada (falha aberta).
     falasNovasDoCliente: Array.isArray(falas) ? falas : [],
     alvoVoltouAoTitular,
+    alvoVoltouDeTerceiro,
     origemDoAlvoNoTurno,
     idsDasFalasNovas: Array.isArray(falas) ? idsDasFalas.slice() : [],
     // Revisão do incremento (achado D): sem as falas lidas, a origem efetiva do documento é desconhecida.

@@ -1124,8 +1124,9 @@ describe('ai-worker — triagem', () => {
           // Revisão da rodada 8 (achado 5): a dúvida foi resolvida no próprio turno (buscar_cliente localizou quem ele disse, ou a
           // dúvida do fim do turno é outra): a resposta curta não sai — só a supressão de sempre.
           test.each([
-            // Mutação R3-1: só a ferramenta (sem a dúvida do fim no turno, como num turno de antes desta versão).
-            ['buscar_cliente rodou no turno', { toolsExecutadas: [{ nome: 'buscar_cliente' }] }],
+            // Revisão do incremento (achado E): buscar_cliente que mudou a dúvida do fim não deixa a resposta curta sair (pela dúvida
+            // do fim); esquecer_identificacao, por si.
+            ['buscar_cliente rodou e a dúvida do fim mudou', { toolsExecutadas: [{ nome: 'buscar_cliente' }], alvoAmbiguoNoFim: false }],
             ['esquecer_identificacao rodou no turno', { toolsExecutadas: [{ nome: 'esquecer_identificacao' }] }],
             ['a dúvida do fim do turno é outra', { alvoAmbiguoNoFim: false }],
           ])('%s: a resposta curta não sai', async (_, turno) => {
@@ -1134,6 +1135,17 @@ describe('ai-worker — triagem', () => {
             repetindo([{ id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'Quer o boleto ou o PIX?' }, { id: 'm-3', direction: 'inbound', content: 'é do João, o cpf dele é 390.533.447-05' }], 'Quer o boleto ou o PIX?', turno);
             await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
             expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+          });
+
+          // Revisão do incremento (achado E): o modelo reconsultou o CPF do próprio cliente (buscar_cliente ok) e a dúvida do fim
+          // continua a do começo: a resposta curta sai (o cliente não fica sem resposta).
+          test('buscar_cliente rodou mas a dúvida do fim é a mesma: a resposta curta sai', async () => {
+            getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
+            resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+            repetindo([{ id: 'o-1', direction: 'outbound', sentBy: 'ai', content: PERGUNTA }, { id: 'm-3', direction: 'inbound', content: 'pode mandar' }], PERGUNTA, { toolsExecutadas: [{ nome: 'buscar_cliente' }], alvoAmbiguoNoFim: 'endereco_desconhecido' });
+            await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+            expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+            expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: PRIMEIRA }));
           });
 
           // Revisão da rodada 8 (achado 7): as duas redações já saíram — nunca a mesma duas vezes seguidas; a resposta curta conta

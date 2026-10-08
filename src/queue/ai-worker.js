@@ -312,9 +312,10 @@ function esclarecimentoDaDuvida(duvida, identidade, podePedirDocumento = true) {
   return null;
 }
 
-// Revisão da rodada 8 (achado 5): a resposta curta só com a dúvida ainda em aberto no FIM do turno — nenhuma ferramenta que
-// muda o alvo rodou, e a dúvida do fim é a do começo.
-const FERRAMENTAS_QUE_MUDAM_O_ALVO = new Set(['buscar_cliente', 'esquecer_identificacao']);
+// Revisão da rodada 8 (achado 5): a resposta curta só com a dúvida ainda em aberto no FIM do turno — a dúvida do fim é a do
+// começo, e a identificação não foi esquecida. Revisão do incremento (achado E): buscar_cliente não entra na lista — a consulta
+// que localiza (ou não) a outra pessoa muda a dúvida do fim; a reconsulta do próprio cliente não, e o silêncio voltaria.
+const FERRAMENTAS_QUE_MUDAM_O_ALVO = new Set(['esquecer_identificacao']);
 function respostaCurtaDaDuvida(duvida, turno, identidade) {
   if (typeof duvida !== 'string') return null;
   if ((turno.toolsExecutadas || []).some((t) => t && FERRAMENTAS_QUE_MUDAM_O_ALVO.has(t.nome))) return null;

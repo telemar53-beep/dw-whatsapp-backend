@@ -44,7 +44,7 @@ const { preencherCidadePeloSgp } = require('../../cities/contact-city.service');
 const { enviarAvisoDeCidadeSePreciso } = require('../../city-notices/city-notice.service');
 const { motivoDeEncerramentoAtivo } = require('../triage-close-reason');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('../receipt-usage.repository');
-const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('../billing-delivery.repository');
+const { claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestDeliveryOfContract } = require('../billing-delivery.repository');
 
 const { IDENTIDADES, prepararSgpFalso, SETORES, MOTIVOS } = require('./sgp-falso');
 
@@ -242,7 +242,7 @@ function prepararMundo({ config, conversa, contact, historico, entregas }) {
   // ordem em que o Postgres as aplicaria — e a verificação e a escrita
   // acontecem sem `await` entre elas, que é o que o `INSERT ... ON CONFLICT DO
   // NOTHING` garante no banco.
-  aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDelivery }, entregas);
+  aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestDeliveryOfContract }, entregas);
 }
 
 /**
@@ -257,7 +257,7 @@ function prepararMundo({ config, conversa, contact, historico, entregas }) {
  * dentro daquele arquivo, então as duas cópias andam juntas de propósito:
  * mexeu numa, mexa na outra.
  */
-function aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDelivery }, entregas) {
+function aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestDeliveryOfContract }, entregas) {
   const chaveDaMensagem = (e) => [e.conversationId, e.tool, e.contractId, String(e.invoiceId), String(e.messageId)].join('|');
   const chaveDaFatura = (e) => [e.conversationId, e.tool, e.contractId, String(e.invoiceId)].join('|');
 
@@ -292,6 +292,18 @@ function aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDe
   releaseDelivery.mockImplementation(async (id) => {
     for (const [chave, { registro }] of entregas) if (registro.id === id && !registro.enqueuedAt) entregas.delete(chave);
   });
+  // Rodada 10 (08/10/2026): a última TENTATIVA desta ferramenta para este contrato (confirmada ou não), com a mensagem que a pediu.
+  if (findLatestDeliveryOfContract && findLatestDeliveryOfContract.mockImplementation) {
+    findLatestDeliveryOfContract.mockImplementation(async ({ conversationId, tool, contractId }) => {
+      let ultima = null;
+      for (const { porFatura, registro } of entregas.values()) {
+        const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
+        if (conversa === String(conversationId) && ferramenta === tool && Number(contrato) === Number(contractId)
+          && (!ultima || registro.claimedAt >= ultima.claimedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
+      }
+      return ultima;
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -423,6 +435,8 @@ async function conversar(roteiro, anterior = null) {
     // enviada, acima, não gasta id).
     mensagensDoCliente += 1;
     const messageId = `${conversationId}-msg-${mensagensDoCliente}`;
+    // Rodada 10: como em produção, a mensagem do cliente na janela tem o id que o turno usa (a entrega guarda esse id).
+    historico[historico.length - 1].id = messageId;
     const antes = retrato({ identidade, terceiro, attempts });
     const jaGravadas = recordAiInteraction.mock.calls.length;
 

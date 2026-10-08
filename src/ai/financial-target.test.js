@@ -1,4 +1,4 @@
-const { intencaoDeAlvo, resolverAlvoDoTurno, resolverAlvoDasMensagens, fixarAlvoTerceiro, documentosValidos } = require('./financial-target');
+const { intencaoDeAlvo, resolverAlvoDoTurno, resolverAlvoDasMensagens, fixarAlvoTerceiro, documentosValidos, classificarPedido } = require('./financial-target');
 
 // Formas do resultado de resolverAlvoDoTurno. `alvoPendente` é a dúvida que o worker grava no escopo
 // persistido ao fim do turno (null = nenhuma): é ela que faz a trava sobreviver aos turnos.
@@ -959,9 +959,9 @@ describe('pedido por endereço do próprio cliente', () => {
       for (const fala of ['opa, obrigado', 'pera, pode mandar', 'desculpa, obrigado']) {
         expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(mensagens(['manda o pix da Rua de Teste', 'obrigado']));
       }
-      // Rodada 9 (N4-C): fora da lista neutra, a fala depois do pedido pela rua vira a dúvida de endereço SÓ DO TURNO (o lado
-      // seguro: nem o pedido forçado, nem os outros liberados) — "desculpa a demora" incluída; nada se grava.
-      expect(mensagens(['manda o pix da Rua de Teste', 'desculpa a demora'])).toEqual({ terceiro: null, alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+      // Rodada 9 (N4-C): fora da lista neutra, a fala depois do pedido pela rua vira a dúvida de endereço (o lado seguro: nem o
+      // pedido forçado, nem os outros liberados) — "desculpa a demora" incluída. Rodada 10 (ordem, item 1): a dúvida é gravada.
+      expect(mensagens(['manda o pix da Rua de Teste', 'desculpa a demora'])).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
       expect(mensagens(['Opa, é o da Avenida de Teste.'])).toEqual(so(['302']));
     });
 
@@ -978,7 +978,8 @@ describe('pedido por endereço do próprio cliente', () => {
   describe('a fala depois do pedido pela rua (rodada 9, N4-C)', () => {
     const so = (contratos) => ({ terceiro: null, alvoAmbiguo: false, gravar: null, contratosEscolhidos: contratos, ...(contratos.length === 1 ? { contratoEscolhido: contratos[0] } : {}) });
     const DESISTIU = { terceiro: null, alvoAmbiguo: 'desistencia', gravar: null };
-    const DUVIDA_DO_TURNO = { terceiro: null, alvoAmbiguo: 'endereco_desconhecido', gravar: null };
+    // Rodada 10 (ordem, item 1): a dúvida que a fala não classificada deixa é GRAVADA, pelo mesmo mecanismo da correção (N2).
+    const DUVIDA_DO_TURNO = { terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' };
     const NADA = { terceiro: null, alvoAmbiguo: false, gravar: null };
     test.each([['obrigado'], ['Obrigado!'], ['ok'], ['beleza, pode mandar'], ['valeu 👍'], ['sim'], ['pode ser'], [''], [null]])(
       '%j depois do pedido: mantém exatamente o contrato pedido', (fala) => {
@@ -992,7 +993,7 @@ describe('pedido por endereço do próprio cliente', () => {
       ['troca pra Avenida de Teste'], ['é a Avenida de Teste'], ['Avenida de Teste, 30'], ['muda pra Avenida de Teste'],
       ['é a outra casa'], ['a outra'], ['não é essa'], ['errado'], ['e como faço pra pagar?'], ['manda logo por favor'],
       ['obrigado, não tenho outra dúvida'],
-    ])('%j depois do pedido (dois contratos): nem o pedido antigo é forçado nem os outros liberados — dúvida de endereço só do turno', (fala) => {
+    ])('%j depois do pedido (dois contratos): nem o pedido antigo é forçado nem os outros liberados — dúvida de endereço gravada', (fala) => {
       expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(DUVIDA_DO_TURNO);
     });
     test.each([['não sei pagar pelo app'], ['obrigado, não tenho outra dúvida'], ['e como faço pra pagar?']])(
@@ -1031,6 +1032,59 @@ describe('pedido por endereço do próprio cliente', () => {
     });
     test('sem pedido pela rua antes, a fala não classificada não cria nada', () => {
       expect(mensagens(['é a outra casa'])).toEqual(NADA);
+    });
+  });
+
+  // Rodada 10 (08/10/2026; ordem, item 1): identidade, alvo e PEDIDO DE AÇÃO são coisas diferentes. A desistência é lida pela
+  // forma (o marcador e o que ele cancela), não pela ausência de palavra de cobrança; o que não é desistência não trava.
+  describe('pedido de ação: desistência e pedido de envio (rodada 10)', () => {
+    test.each([
+      ['esquece o PIX'], ['Esquece o pix'], ['cancela o boleto'], ['não quero mais o pix'], ['não precisa mandar'], ['não precisa do boleto'],
+      ['deixa pra lá'], ['esquece'], ['não quero o boleto'], ['não manda o pix'], ['depois eu vejo'], ['não quero receber o boleto'],
+      ['deixa, não precisa mais'], ['não precisa'], ['não quero pagar agora'], ['deixa que eu pago no banco'],
+    ])('%j: desistência', (fala) => {
+      expect(classificarPedido(fala)).toBe('desistencia');
+    });
+    test.each([
+      ['não precisa ter pressa'], ['deixa eu ver'], ['não quero ficar sem internet'], ['não precisa se preocupar'], ['deixa eu te perguntar uma coisa'],
+    ])('%j: não é desistência', (fala) => {
+      expect(classificarPedido(fala)).not.toBe('desistencia');
+    });
+    test.each([
+      ['manda o pix'], ['pode mandar'], ['esquece o pix, manda o boleto'], ['esquece o pix e manda o boleto'], ['não quero boleto, quero pix'],
+      ['manda de novo'], ['o boleto'], ['reenvia por favor'], ['não precisa do boleto, manda só o pix'], ['me manda o pix, depois eu vejo o boleto'],
+      ['quero o boleto sim'], ['pode mandar o pix sim'], ['não chegou, manda de novo'],
+    ])('%j: pedido', (fala) => {
+      expect(classificarPedido(fala)).toBe('pedido');
+    });
+    test.each([['ok'], ['obrigado'], ['não chegou'], ['tudo bem'], ['sim'], ['não precisa ter pressa'], ['deixa eu ver']])('%j sozinho: nem pedido nem desistência', (fala) => {
+      expect(classificarPedido(fala)).toBe(null);
+    });
+    test('a resposta afirmativa só é pedido depois de uma pergunta da IA sobre a cobrança', () => {
+      expect(classificarPedido('sim', { falaDaIa: 'Tudo bem. Você ainda quer o PIX?' })).toBe('pedido');
+      expect(classificarPedido('quero', { falaDaIa: 'Quer que eu reenvie o boleto?' })).toBe('pedido');
+      expect(classificarPedido('ok', { falaDaIa: 'Quer que eu envie de novo?' })).toBe('pedido');
+      expect(classificarPedido('sim', { falaDaIa: 'Tudo bem! Posso ajudar em algo mais?' })).toBe(null);
+      expect(classificarPedido('ok', { falaDaIa: 'Tudo bem, não vou enviar o PIX.' })).toBe(null);
+      expect(classificarPedido('sim', { falaDaIa: null })).toBe(null);
+    });
+    test('com contrato único, "esquece o PIX" depois do pedido é desistência no lote', () => {
+      expect(mensagens(['manda o pix', 'esquece o PIX'], { enderecos: UM_SO })).toEqual({ terceiro: null, alvoAmbiguo: 'desistencia', gravar: null });
+      expect(mensagens(['manda o pix da Rua de Teste', 'cancela o pix'], { enderecos: UM_SO })).toEqual({ terceiro: null, alvoAmbiguo: 'desistencia', gravar: null });
+    });
+    test('"não precisa ter pressa" depois do pedido não é desistência: com contrato único, mantém o pedido', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'não precisa ter pressa'], { enderecos: UM_SO }))
+        .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null, contratosEscolhidos: ['301'], contratoEscolhido: '301' });
+      expect(mensagens(['manda o pix', 'não precisa ter pressa'], { enderecos: UM_SO })).toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null });
+    });
+    test('a dúvida da fala não classificada fica gravada: "pode mandar" no turno seguinte não escolhe; a rua escolhe', () => {
+      const lote = mensagens(['manda o pix da Rua de Teste', 'troca pra Avenida de Teste']);
+      expect(lote).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+      const depois = resolverAlvoDasMensagens({ terceiro: lote.terceiro, textos: ['pode mandar'], enderecos: ENDERECOS });
+      expect(depois.alvoAmbiguo).toBe('endereco_desconhecido');
+      expect(depois.contratoEscolhido).toBeUndefined();
+      const respondida = resolverAlvoDasMensagens({ terceiro: lote.terceiro, textos: ['a da Avenida de Teste'], enderecos: ENDERECOS });
+      expect(respondida).toMatchObject({ alvoAmbiguo: false, contratoEscolhido: '302' });
     });
   });
 });

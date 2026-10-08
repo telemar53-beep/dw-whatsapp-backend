@@ -115,9 +115,10 @@ test('pedido e desistência no mesmo lote: nada sai, nem o contrato pedido; a in
   expect(viasPedidas()).toEqual([]);
   expect(pixEnviado()).toEqual([]);
 });
-test('pedido e contradição sem marcador ("é a outra casa"): o contrato pedido não sai; a pergunta é de endereço (dúvida só do turno)', async () => {
+test('pedido e contradição sem marcador ("é a outra casa"): o contrato pedido não sai; a pergunta é de endereço (dúvida gravada)', async () => {
   const { alvo, contexto } = turno(['manda o pix da Rua de Teste', 'é a outra casa']);
-  expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+  // Rodada 10 (ordem, item 1): a dúvida fica gravada, como a da correção (N2).
+  expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
   expect(await executeTool('gerar_pix', { contratoId: 301 }, contexto)).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
   expect(pixEnviado()).toEqual([]);
 });
@@ -126,7 +127,7 @@ test('pedido e contradição sem marcador ("é a outra casa"): o contrato pedido
 test.each([['troca pra Avenida de Teste'], ['é a Avenida de Teste'], ['Avenida de Teste, 30']])(
   'pedido e %j: o contrato antigo não é forçado; nada sai até esclarecer', async (fala) => {
     const { alvo, contexto } = turno(['manda o pix da Rua de Teste', fala]);
-    expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+    expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
     expect(alvo.contratoEscolhido).toBeUndefined();
     const semContrato = await executeTool('gerar_pix', {}, contexto);
     expect(semContrato).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });

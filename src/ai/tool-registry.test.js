@@ -47,7 +47,7 @@ const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findEnqueuedDeliveryOfInvoice, findLatestEnqueuedDeliveryOfOtherInvoice,
-  findLatestEnqueuedDelivery,
+  findLatestEnqueuedDelivery, findLatestDeliveryOfContract,
 } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { listarPlanosDisponiveis } = require('../plans/plan.repository');
@@ -151,6 +151,16 @@ beforeEach(() => {
     for (const { porFatura, registro } of entregas.values()) {
       const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
       if (conversa === conversationId && registro.enqueuedAt && (!ultima || registro.enqueuedAt >= ultima.enqueuedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
+    }
+    return ultima;
+  });
+  // Rodada 10 (08/10/2026): a última TENTATIVA desta ferramenta para este contrato (confirmada ou não), do mesmo armazenamento.
+  findLatestDeliveryOfContract.mockImplementation(async ({ conversationId, tool, contractId }) => {
+    let ultima = null;
+    for (const { porFatura, registro } of entregas.values()) {
+      const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
+      if (conversa === conversationId && ferramenta === tool && Number(contrato) === Number(contractId)
+        && (!ultima || registro.claimedAt >= ultima.claimedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
     }
     return ultima;
   });

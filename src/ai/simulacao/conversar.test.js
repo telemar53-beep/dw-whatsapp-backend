@@ -331,14 +331,17 @@ describe('idempotência da entrega no harness', () => {
 
     expect(documentos()).toHaveLength(1);
     expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledTimes(1);
-    // A identidade é a MESMA nas duas; só a permissão mudou.
-    expect(pedidos()).toEqual(['sim-89-msg-1', 'sim-89-msg-1+reenvio']);
+    // Rodada 10 (ordem, item 1): o reenviar do modelo, sem pedido do cliente depois da entrega desta mesma mensagem, é recusado
+    // ANTES da geração — nem chega à reserva.
+    expect(pedidos()).toEqual(['sim-89-msg-1']);
   });
 
   // A prova de que o id é ESTÁVEL dentro do turno: duas chamadas de reenvio
   // da mesma mensagem produzem a mesma chave, e só uma entrega. Um id novo
   // por tool call (ou por chamada à OpenAI) daria duas chaves e dois boletos.
-  test('duas tool calls de reenvio da MESMA mensagem usam o mesmo id', async () => {
+  // Rodada 10 (ordem, item 1): sem entrega anterior, o reenviar do modelo não vale nada — a 1ª chamada é o envio inicial; a 2ª,
+  // sem pedido dele depois da entrega desta mesma mensagem, é recusada antes da geração. Uma entrega só.
+  test('duas tool calls de reenvio da MESMA mensagem, sem entrega anterior: uma entrega só, como envio inicial', async () => {
     enfileirar([
       respostaComFerramenta('enviar_boleto', { contratoId: 101, reenviar: true }),
       respostaComFerramenta('enviar_boleto', { contratoId: 101, reenviar: true }),
@@ -349,9 +352,8 @@ describe('idempotência da entrega no harness', () => {
     await conversar({ ...ROTEIRO_ENTREGA, numero: 90, mensagens: ['Não recebi o boleto, manda de novo'] });
 
     expect(documentos()).toHaveLength(1);
-    const reenvios = idsDeReenvio();
-    expect(reenvios).toHaveLength(2);
-    expect(new Set(reenvios).size).toBe(1);
+    expect(pedidos()).toEqual(['sim-90-msg-1']);
+    expect(idsDeReenvio()).toHaveLength(0);
   });
 
   test('mensagens diferentes do cliente recebem ids diferentes', async () => {

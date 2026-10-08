@@ -1452,6 +1452,28 @@ describe('perfil de triagem', () => {
       expect(semMarca.alvoMudouNaEntrega).toBe(false);
     });
 
+    // Rodada 8 (N3, revisão, achados 5 e 6): o turno devolve a dúvida do FIM (a que uma ferramenta deixou) e se a guarda do
+    // documento permitiria, agora, pedir o documento do titular — é o que a resposta curta do worker usa.
+    test('o turno devolve alvoAmbiguoNoFim e pedidoDeDocumentoDeTerceiroPermitido', async () => {
+      // Cada turno com as suas respostas (sem sobra de um turno para o outro).
+      const turno = async (respostas, aoExecutar) => {
+        createChatCompletion.mockReset().mockResolvedValue({ message: { content: 'Certo.' }, usage: {} });
+        for (const r of respostas) createChatCompletion.mockResolvedValueOnce(r);
+        executeTool.mockReset().mockImplementation(async (nome, args, contexto) => { aoExecutar(contexto); return { ok: true }; });
+        return runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto', alvoAmbiguo: 'terceiro_nao_vinculado' });
+      };
+      const chamada = (nome) => ({ message: { content: null, tool_calls: [{ id: 't1', function: { name: nome, arguments: '{}' } }] }, usage: {} });
+      const resolvida = await turno([chamada('buscar_cliente')], (c) => { c.alvoAmbiguo = false; });
+      expect(resolvida.alvoAmbiguoNoFim).toBe(false);
+      const aberta = await turno([{ message: { content: 'De quem é a cobrança?' }, usage: {} }], () => {});
+      expect(aberta.alvoAmbiguoNoFim).toBe('terceiro_nao_vinculado');
+      expect(aberta.pedidoDeDocumentoDeTerceiroPermitido).toBe(true);
+      // Depois de encaminhar no próprio turno, a guarda barra qualquer pedido de documento.
+      const encaminhada = await turno([chamada('concluir_triagem')], (c) => { c.triagemConcluida = { setor: 'Financeiro' }; });
+      expect(encaminhada.triagemConcluida).toEqual({ setor: 'Financeiro' });
+      expect(encaminhada.pedidoDeDocumentoDeTerceiroPermitido).toBe(false);
+    });
+
     test('sem liberação no turno, desbloqueioRealizado sai false (nunca undefined)', async () => {
       createChatCompletion.mockResolvedValueOnce({ message: { content: 'Me manda o comprovante, João.' }, usage: {} });
       const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });

@@ -295,6 +295,67 @@ function indiceDaOrigemDoAlvo({ terceiro, textos, documentos, empresa, enderecos
   return origem;
 }
 
+// Rodada 8 (N3, avaliação real do endereço: 2 de 3 conversas do "pode mandar" sem resposta): o modelo repetiu a pergunta do
+// endereço palavra por palavra, a guarda acima a suprimiu e o cliente ficou sem nada. Só quando o turno ainda tem o
+// esclarecimento FINANCEIRO em aberto (a dúvida de endereço, ou de quem é a conta), a pergunta suprimida vira uma resposta curta
+// da dúvida atual, composta aqui — sem chamar o modelo de novo, sem ferramenta, sem entrega, sem contar pergunta. As opções
+// (as ruas dos contratos dele) só com a identidade confirmada e de 2 a 4 contratos, todos com endereço. Duas redações: se a
+// primeira também já saiu, vai a segunda — o silêncio é pior que a frase repetida. As outras repetições continuam suprimidas.
+const DUVIDAS_DE_TERCEIRO = new Set([AMBIGUIDADE.TERCEIRO_NAO_VINCULADO, AMBIGUIDADE.OUTRA_PESSOA_SEM_DOCUMENTO, AMBIGUIDADE.TERCEIRO_EXPIRADO]);
+const DUVIDAS_DE_QUEM = new Set([AMBIGUIDADE.PROPRIO_NAO_AFIRMADO, AMBIGUIDADE.DOIS_LADOS, AMBIGUIDADE.REFERENCIA_INCOMPLETA]);
+function enderecosParaCitar(identidade) {
+  if (!identidade || identidade.nivel !== 'forte' || identidade.contestado) return null;
+  const contratos = Array.isArray(identidade.contracts) ? identidade.contracts : [];
+  if (contratos.length < 2 || contratos.length > 4) return null;
+  const ruas = contratos.map((c) => String((c && c.address) || '').split(' - ')[0].trim());
+  if (ruas.some((r) => !r)) return null;
+  const distintas = [...new Set(ruas)];
+  return distintas.length > 1 ? distintas : null;
+}
+function esclarecimentoDaDuvida(duvida, identidade, podePedirDocumento = true) {
+  if (DUVIDAS_DE_ENDERECO.includes(duvida)) {
+    const ruas = enderecosParaCitar(identidade);
+    const opcoes = ruas ? `: ${ruas.slice(0, -1).join(', ')} ou ${ruas[ruas.length - 1]}` : '';
+    return { redacoes: [`Para eu seguir, preciso saber de qual endereço é a conta${opcoes}.`, `Ainda preciso que você me diga de qual endereço é a conta${opcoes}.`] };
+  }
+  if (DUVIDAS_DE_TERCEIRO.has(duvida)) {
+    // Revisão da rodada 8 (achado 6): a guarda do documento barraria o pedido (já pedido sem mudança, cliente irritado…): só a
+    // pergunta, sem o pedido e sem a marca.
+    if (!podePedirDocumento) return { redacoes: ['Para eu seguir, preciso saber de quem é essa conta.', 'Ainda preciso saber de quem é a conta.'] };
+    return {
+      redacoes: [
+        'Para eu seguir, preciso saber de quem é essa conta. Se for de outra pessoa, me mande o CPF ou CNPJ do titular.',
+        'Ainda preciso saber de quem é a conta. Se for de outra pessoa, me mande o CPF ou CNPJ do titular.',
+      ],
+      metadata: { pedidoDeDocumento: { alvo: 'terceiro' } },
+    };
+  }
+  if (DUVIDAS_DE_QUEM.has(duvida)) {
+    return { redacoes: ['Para eu seguir, me diga de quem é a conta: é sua ou de outra pessoa?', 'Ainda preciso saber se a conta é sua ou de outra pessoa.'] };
+  }
+  return null;
+}
+
+// Revisão da rodada 8 (achado 5): a resposta curta só com a dúvida ainda em aberto no FIM do turno — a dúvida do fim é a do
+// começo, e a identificação não foi esquecida. Revisão do incremento (achado E): buscar_cliente não entra na lista — a consulta
+// que localiza (ou não) a outra pessoa muda a dúvida do fim; a reconsulta do próprio cliente não, e o silêncio voltaria.
+const FERRAMENTAS_QUE_MUDAM_O_ALVO = new Set(['esquecer_identificacao']);
+function respostaCurtaDaDuvida(duvida, turno, identidade) {
+  if (typeof duvida !== 'string') return null;
+  if ((turno.toolsExecutadas || []).some((t) => t && FERRAMENTAS_QUE_MUDAM_O_ALVO.has(t.nome))) return null;
+  if (turno.alvoAmbiguoNoFim !== undefined && turno.alvoAmbiguoNoFim !== duvida) return null;
+  return esclarecimentoDaDuvida(duvida, turno.identidade || identidade, turno.pedidoDeDocumentoDeTerceiroPermitido === true);
+}
+// Revisão da rodada 8 (achado 7): a redação que não repete — a que ainda não saiu; se as duas já saíram, a que não foi a última.
+async function redacaoQueNaoRepete(conversationId, [primeira, segunda]) {
+  const recentes = (await listRecentMessagesByConversation(conversationId, 10)) || [];
+  const daIa = recentes.filter((m) => m && m.direction === 'outbound' && m.sentBy === 'ai' && m.content)
+    .slice(-RESPOSTAS_COMPARADAS).map((m) => normalizarResposta(m.content));
+  if (!daIa.includes(normalizarResposta(primeira))) return primeira;
+  if (!daIa.includes(normalizarResposta(segunda))) return segunda;
+  return daIa[daIa.length - 1] === normalizarResposta(primeira) ? segunda : primeira;
+}
+
 // Um aviso por turno (25/09/2026): o aviso saiu para o cliente NESTE turno se o worker acabou de
 // mandá-lo, ou se a entrada desta mesma mensagem mandou — a entrega é registrada logo depois da
 // mensagem. A margem cobre a diferença entre o horário do provedor (created_at da mensagem) e o do
@@ -772,7 +833,22 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // Nunca a mesma resposta duas vezes seguidas (sem efeito por trás): melhor
   // o silêncio de um "Ah"/"Pai!" do que a IA parecendo travada.
   if (texto && !turnoTeveEfeito(turno) && await repeteRespostaRecenteDaIa(conversation.id, texto)) {
-    console.warn(`AI reply repeated a recent AI message in conversation ${conversation.id}; not sent`);
+    // Rodada 8 (N3): ver esclarecimentoDaDuvida. A releitura acima já descartou a conversa assumida, encerrada ou silenciada.
+    const esclarecimento = respostaCurtaDaDuvida(alvoAmbiguo, turno, identidade);
+    if (!esclarecimento) {
+      console.warn(`AI reply repeated a recent AI message in conversation ${conversation.id}; not sent`);
+      return;
+    }
+    const resposta = await redacaoQueNaoRepete(conversation.id, esclarecimento.redacoes);
+    console.warn(`AI reply repeated a recent AI message in conversation ${conversation.id}; sent the pending financial clarification instead`);
+    await enqueueOutboundMessage({
+      conversationId: conversation.id, channelId: conversation.channelId, content: resposta, sentBy: 'ai',
+      ...(esclarecimento.metadata ? { metadata: esclarecimento.metadata } : {}),
+    });
+    // Revisão da rodada 8 (achado 7): a resposta curta é uma pergunta como as outras — conta, e no limite de perguntas o
+    // atendimento vai para a fila, como no envio normal (nenhuma outra ação).
+    await incrementTriageAttempts(conversation.id);
+    if (forcarConclusao) await concluirEmCodigo(conversation.id, `Triagem inconclusiva após ${attempts} perguntas.`);
     return;
   }
   if (texto) {

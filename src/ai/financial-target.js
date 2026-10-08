@@ -335,9 +335,11 @@ const oracoesDe = (texto) => {
 // (A1-1): também "nem" ("nem precisa mandar") e "para de"/"chega de" ("para de mandar boleto").
 // Revisão do incremento (R1): só perto do verbo, com palavras auxiliares no meio ("não chegou, manda de novo" sem vírgula e
 // "nem recebi o boleto manda de novo" continuam pedido).
-const ENTRE_NEGACAO_E_VERBO = new Set(['me', 'te', 'lhe', 'nos', 'precisa', 'precisar', 'pode', 'quero', 'queria', 'que', 'vai', 'mais', 'se']);
+// Checagem própria depois das ressalvas: o pronome de tratamento também ("não quero mais que você mande").
+const ENTRE_NEGACAO_E_VERBO = new Set(['me', 'te', 'lhe', 'nos', 'precisa', 'precisar', 'pode', 'quero', 'queria', 'que', 'vai', 'mais', 'se',
+  'voce', 'vc', 'voces', 'vcs', 'o', 'a', 'senhor', 'senhora']);
 const negadoAntes = (q, i) => {
-  for (let k = i - 1; k >= 0 && k >= i - 4; k -= 1) {
+  for (let k = i - 1; k >= 0 && k >= i - 6; k -= 1) {
     if (q[k] === 'nao' || q[k] === 'nem') return true;
     if (q[k] === 'de' && PARAR.has(q[k - 1])) return true;
     if (!ENTRE_NEGACAO_E_VERBO.has(q[k])) return false;

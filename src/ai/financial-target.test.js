@@ -1137,3 +1137,12 @@ describe('pedido de ação: ressalvas da revisão do incremento', () => {
     expect(classificarPedido('não', { falaDaIa: 'Quer que eu reenvie o boleto?' })).toBe('desistencia');
   });
 });
+
+// Checagem própria depois das ressalvas (08/10/2026): a janela da negação antes do verbo aceita o pronome de tratamento — sem isto,
+// "não quero mais que você mande" virava pedido.
+describe('negação antes do verbo com o pronome de tratamento', () => {
+  test.each([['não quero mais que você mande'], ['não precisa que você mande nada'], ['não quero que vocês mandem'], ['não quero que o senhor mande']])(
+    '%j é desistência', (fala) => { expect(classificarPedido(fala)).toBe('desistencia'); },
+  );
+  test.each([['não chegou você manda de novo?'], ['não chegou manda de novo']])('%j é pedido', (fala) => { expect(classificarPedido(fala)).toBe('pedido'); });
+});

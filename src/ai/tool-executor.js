@@ -87,6 +87,8 @@ const INSTRUCAO_ENDERECO_AMBIGUO = 'Não ficou claro de qual contrato dele é a 
 // Dúvida de endereço (07/10/2026): a rua que ele citou não se liga com segurança a um contrato dele. Pergunta o endereço, sem
 // pedir documento e sem dizer que é de outra pessoa; o documento só se ele disser que é de outra pessoa.
 const INSTRUCAO_ENDERECO_DESCONHECIDO = 'O que ele citou não dá para ligar com segurança a um contrato dele: um endereço que não é o de nenhum contrato, um número que não é o do cadastro, ou um nome que tanto pode ser o do endereço dele quanto o de uma pessoa. NÃO envie nada, não diga que é de outra pessoa e NÃO peça CPF ou CNPJ agora. Pergunte, curto, de qual endereço é a cobrança, citando os endereços (com o número) dos contratos dele. Só se ele disser que é de outra pessoa, peça o CPF ou CNPJ do titular dela.';
+// Rodada 9 (N4-C): a última fala dele pode ser a desistência do pedido. Nada sai; ele decide se ainda quer.
+const INSTRUCAO_DESISTENCIA = 'NADA foi enviado: a mensagem dele pode ser uma desistência do pedido. Não envie nada agora e não diga que enviou; pergunte, curto, se ele ainda quer a cobrança.';
 const instrucaoDoEnderecoEscolhido = (contratos) => (contratos.length === 1
   ? `O cliente pediu a cobrança do endereço do contrato ${contratos[0]}. NÃO use outro contrato e nada foi enviado: chame a ferramenta de novo com contratoId ${contratos[0]}.`
   : `O cliente pediu a cobrança dos endereços dos contratos ${contratos.join(' e ')}. NÃO use outro contrato e nada foi enviado: chame a ferramenta de novo com um desses contratoId.`);
@@ -111,6 +113,7 @@ function recusaPorAlvoEmDuvida(contexto) {
   else if (motivo === AMBIGUIDADE.ESCOPO_NAO_LIDO || motivo === AMBIGUIDADE.TRANSICAO_NAO_GRAVADA) instrucao = INSTRUCAO_ALVO_NAO_CONFIRMADO;
   else if (motivo === AMBIGUIDADE.ENDERECO_AMBIGUO) instrucao = INSTRUCAO_ENDERECO_AMBIGUO;
   else if (motivo === AMBIGUIDADE.ENDERECO_DESCONHECIDO) instrucao = INSTRUCAO_ENDERECO_DESCONHECIDO;
+  else if (motivo === AMBIGUIDADE.DESISTENCIA) instrucao = INSTRUCAO_DESISTENCIA;
   else if (terceiroLocalizado && DUVIDAS_ENTRE_PROPRIO_E_TERCEIRO.has(motivo)) instrucao = INSTRUCAO_ALVO_AMBIGUO_COM_TERCEIRO;
   return recusa('financial_target_ambiguous', motivo, instrucao);
 }

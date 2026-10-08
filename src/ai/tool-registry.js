@@ -791,6 +791,19 @@ function fraseDasDemaisVencidas(contexto) {
  *   confirmou → `envioAnteriorIncerto`, e a instrução NÃO pode afirmar que o
  *   cliente recebeu, porque não sabemos.
  */
+/**
+ * Rodada 9 (N4-C): chegou mensagem do cliente que este turno não considerou — nada foi enviado. A mensagem nova tem o próprio
+ * processamento, que relê o pedido junto com ela (as falas deste turno não são marcadas); se ele se perder (falha da fila), o
+ * pedido espera a próxima mensagem do cliente. Por isso a instrução não promete envio nem retomada.
+ */
+function respostaDeMensagemNova(item) {
+  return {
+    enviado: false,
+    mensagemNova: true,
+    instrucao: `O ${item} NÃO foi enviado: chegou mensagem nova do cliente que esta resposta ainda não considerou. Não diga que enviou nem prometa enviar, e não chame a ferramenta de novo agora.`,
+  };
+}
+
 /** O alvo da cobrança mudou durante o turno (outro processamento): nada foi enviado. */
 function respostaDeAlvoMudou(item) {
   return {
@@ -1216,7 +1229,10 @@ async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contex
   // Falha fechado por construção: na triagem a condição sempre vai; sem estados conhecidos, a lista vazia recusa.
   const condicaoDoAlvo = perfilTriagem(contexto)
     ? { esperados: Array.isArray(contexto.esperadosDoAlvo) ? contexto.esperadosDoAlvo : [] } : null;
-  const { obtido, registro, alvoMudou } = await claimDelivery({
+  // Rodada 9 (N4-C): na triagem, a reserva também exige que nenhuma mensagem do cliente fora das que o turno aplicou ainda espere.
+  const semEntradaNova = condicaoDoAlvo && Array.isArray(contexto.entradasDoTurno)
+    ? { ids: contexto.entradasDoTurno, desde: contexto.desdeDaLeitura || null } : null;
+  const { obtido, registro, alvoMudou, mensagemNova } = await claimDelivery({
     conversationId: contexto.conversationId,
     tool,
     contractId: contratoId,
@@ -1224,7 +1240,15 @@ async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contex
     messageId,
     isResend: args && args.reenviar === true,
     condicaoDoAlvo,
+    semEntradaNova,
   });
+  if (mensagemNova) {
+    console.error(`${tool}: chegou mensagem nova do cliente na conversa ${contexto.conversationId} durante o turno; nada foi enviado.`);
+    // O mesmo efeito do "alvo mudou": as falas do turno não são marcadas (o turno seguinte as relê com a mensagem nova).
+    contexto.alvoMudouNaEntrega = true;
+    travarCobrancaDoTurno(contexto);
+    return { resposta: respostaDeMensagemNova(item) };
+  }
   if (alvoMudou) {
     console.error(`${tool}: o alvo financeiro da conversa ${contexto.conversationId} mudou durante o turno; nada foi enviado.`);
     contexto.alvoMudouNaEntrega = true;

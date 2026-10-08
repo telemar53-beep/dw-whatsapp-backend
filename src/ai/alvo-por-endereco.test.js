@@ -96,6 +96,32 @@ test('endereço de contrato do próprio cliente: só esse contrato é cobrado; o
   expect(pixEnviado()).toEqual(['PIX-301']);
 });
 
+// Rodada 9 (N4-C): depois do pedido pela rua, no mesmo lote, o agradecimento mantém exatamente o contrato pedido; a desistência
+// não deixa autorização nenhuma; a contradição sem marcador não deixa o contrato pedido como destino.
+test('pedido e agradecimento no mesmo lote: só o contrato pedido é cobrado; o outro é recusado', async () => {
+  const { contexto } = turno(['manda o pix da Rua de Teste', 'obrigado']);
+  expect(await executeTool('gerar_pix', { contratoId: 302 }, contexto)).toMatchObject({ ok: false, motivo: 'financial_target_address_mismatch' });
+  expect((await executeTool('gerar_pix', {}, contexto)).ok).toBe(true);
+  expect(pixEnviado()).toEqual(['PIX-301']);
+});
+test('pedido e desistência no mesmo lote: nada sai, nem o contrato pedido; a instrução pergunta se ele ainda quer', async () => {
+  const { alvo, contexto } = turno(['manda o pix da Rua de Teste', 'deixa, não precisa mais']);
+  expect(alvo).toMatchObject({ alvoAmbiguo: 'desistencia', gravar: null });
+  const r = await executeTool('gerar_pix', { contratoId: 301 }, contexto);
+  expect(r).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
+  expect(r.instrucao).toMatch(/NADA foi enviado/);
+  expect(r.instrucao).toMatch(/pergunte, curto, se ele ainda quer/);
+  expect(r.instrucao).not.toMatch(/de quem é a cobrança|CPF/);
+  expect(viasPedidas()).toEqual([]);
+  expect(pixEnviado()).toEqual([]);
+});
+test('pedido e contradição sem marcador ("é a outra casa"): o contrato pedido não sai; a pergunta é de endereço', async () => {
+  const { alvo, contexto } = turno(['manda o pix da Rua de Teste', 'é a outra casa']);
+  expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+  expect(await executeTool('gerar_pix', { contratoId: 301 }, contexto)).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
+  expect(pixEnviado()).toEqual([]);
+});
+
 test('dois contratos na mesma rua, sem número: nada sai, a dúvida de qual é gravada, e a pergunta é de endereço (sem pedir documento)', async () => {
   const { alvo, contexto } = turno(['manda o pix da Rua de Teste'], { contratos: [RUA, RUA_500] });
   expect(alvo.gravar).toBe('criar');

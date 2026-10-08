@@ -1118,6 +1118,32 @@ describe('ai-worker — triagem', () => {
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ origemDoAlvoNoTurno: 'm-59' }));
         });
 
+        // Rodada 9 (N4-C): o turno recebe as entradas que aplicou (as do lote e a do job) e o limite de tempo da leitura — a
+        // reserva da entrega recusa se houver mensagem do cliente fora delas ainda esperando.
+        test('o turno recebe as entradas que aplicou e o limite da leitura', async () => {
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
+            { id: 'm-0', direction: 'inbound', messageType: 'text', content: 'manda o pix da Rua de Teste', createdAt: new Date() },
+            { id: 'm-1', direction: 'inbound', messageType: 'text', content: 'obrigado', createdAt: new Date() },
+          ]);
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'obrigado' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ entradasDoTurno: ['m-0', 'm-1'], desdeDaLeitura: expect.any(Date) }));
+          // N4-C: o agradecimento depois do pedido mantém exatamente o contrato pedido.
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ contratoEscolhido: '301', contratosEscolhidos: ['301'] }));
+        });
+        test('a leitura das entradas falhou: o turno não leva entradas (nada a conferir na reserva)', async () => {
+          const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+          getThirdPartyScope.mockResolvedValue(null);
+          resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
+          listarFalasSemAlvoConfirmado.mockRejectedValueOnce(new Error('banco fora'));
+          findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o pix da Rua de Teste' });
+          await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ entradasDoTurno: null }));
+          errorSpy.mockRestore();
+        });
+
         test('dúvida de endereço gravada + "pode mandar": continua, sem gravar nada e sem liberar', async () => {
           getThirdPartyScope.mockResolvedValue(DUVIDA_GRAVADA);
           resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
@@ -1431,7 +1457,8 @@ describe('ai-worker — triagem', () => {
           expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: 'endereco_ambiguo', contratoEscolhido: null }));
         });
 
-        test('a entrada do job, fora da lista e sem texto (imagem), também desfaz a escolha de contrato', async () => {
+        // Rodada 9 (N4-C, opção C autorizada): a entrada sem texto não desfaz mais a escolha — antes liberava os outros contratos.
+        test('a entrada do job, fora da lista e sem texto (imagem), mantém exatamente o contrato pedido', async () => {
           getThirdPartyScope.mockResolvedValue(null);
           resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
           listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
@@ -1439,10 +1466,10 @@ describe('ai-worker — triagem', () => {
           ]);
           findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'image', content: null });
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false, contratoEscolhido: null }));
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false, contratoEscolhido: '302', contratosEscolhidos: ['302'] }));
         });
 
-        test('entrada sem texto depois do pedido pela rua (imagem): desfaz a escolha de contrato', async () => {
+        test('entrada sem texto depois do pedido pela rua (imagem): mantém exatamente o contrato pedido', async () => {
           getThirdPartyScope.mockResolvedValue(null);
           resolverIdentidade.mockResolvedValue(DOIS_CONTRATOS);
           listarFalasSemAlvoConfirmado.mockResolvedValueOnce([
@@ -1451,7 +1478,7 @@ describe('ai-worker — triagem', () => {
           ]);
           findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'image', content: null });
           await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false, contratoEscolhido: null }));
+          expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ alvoAmbiguo: false, contratoEscolhido: '302', contratosEscolhidos: ['302'] }));
         });
 
         test('gravar a dúvida falhou: o turno segue travado e registra', async () => {

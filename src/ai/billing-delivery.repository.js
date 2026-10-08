@@ -8,6 +8,24 @@ const CONDICAO_DO_ALVO = `(($7::boolean AND c.ai_triage_third_party IS NULL)
           OR (c.ai_triage_third_party ->> 'marca') = ANY($8::text[])
           OR c.ai_triage_third_party = ANY($9::jsonb[]))`;
 
+// Rodada 9 (N4-C; opção C autorizada pelo proprietário): "há mensagem do cliente que o turno ainda não considerou" — uma entrada sem a marca
+// alvoProcessado, fora das que o turno aplicou (ids), na MESMA janela da leitura das entradas (listarFalasSemAlvoConfirmado):
+// depois de `desde`, ou sem nenhuma confirmada, ou depois da última confirmada. A detecção é pelo id e pela marca; a hora do
+// provedor só delimita a janela, como na leitura. Os placeholders vêm de quem monta a consulta.
+const entradaNaoConsiderada = (desde, ids) => `SELECT 1 FROM messages m
+            WHERE m.conversation_id = c.id AND m.direction = 'inbound'
+              AND COALESCE(m.metadata->>'alvoProcessado', 'false') <> 'true'
+              AND NOT (m.id = ANY(${ids}::uuid[]))
+              AND (m.created_at > ${desde}::timestamptz
+                OR NOT EXISTS (
+                  SELECT 1 FROM messages q
+                   WHERE q.conversation_id = c.id AND q.direction = 'inbound' AND q.metadata->>'alvoProcessado' = 'true')
+                OR (m.created_at, m.id) > (
+                  SELECT p.created_at, p.id FROM messages p
+                   WHERE p.conversation_id = c.id AND p.direction = 'inbound' AND p.metadata->>'alvoProcessado' = 'true'
+                   ORDER BY p.created_at DESC, p.id DESC
+                   LIMIT 1))`;
+
 // A entrega de uma fatura é reivindicada ANTES de qualquer efeito externo, e a
 // reivindicação é atômica: `INSERT ... ON CONFLICT DO NOTHING RETURNING`. Duas
 // execuções simultâneas do mesmo envio disputam a mesma linha e só uma recebe
@@ -59,7 +77,7 @@ function paraRegistro(linha) {
  * `registro` pode vir null no caso raro de a linha concorrente ainda não estar
  * visível; quem chama trata isso como o caso incerto (falha fechado).
  */
-async function claimDelivery({ conversationId, tool, contractId, invoiceId, messageId, isResend, condicaoDoAlvo = null }) {
+async function claimDelivery({ conversationId, tool, contractId, invoiceId, messageId, isResend, condicaoDoAlvo = null, semEntradaNova = null }) {
   const alvo = [conversationId, tool, contractId, String(invoiceId), String(messageId)];
   // `ON CONFLICT DO NOTHING` NU, sem alvo nomeado: com duas restrições não dá
   // para nomear uma só, e nomear uma deixaria a outra estourar como erro 23505
@@ -80,25 +98,36 @@ async function claimDelivery({ conversationId, tool, contractId, invoiceId, mess
     // reavaliada sobre o valor novo; a mudança que chega depois da reserva espera por ela e fica ordenada depois
     // da entrega. Não há leitura separada seguida de envio.
     const { aceitaNulo, marcas, legados } = parametrosDaCondicaoDoEscopo(condicaoDoAlvo);
+    // Rodada 9 (N4-C): `semEntradaNova: { ids, desde }` — a mesma instrução também exige que nenhuma mensagem do cliente fora das
+    // que o turno aplicou ainda espere ser considerada.
     inserido = await getPool().query(
       `WITH autorizado AS (
          SELECT c.id FROM conversations c
           WHERE c.id = $1::uuid AND ${CONDICAO_DO_ALVO}
+            AND (NOT $10::boolean OR NOT EXISTS (${entradaNaoConsiderada('$11', '$12')}))
           FOR SHARE
        )
        INSERT INTO ai_billing_deliveries (conversation_id, tool, contract_id, invoice_id, message_id, is_resend)
        SELECT $1::uuid, $2::text, $3::integer, $4::text, $5::text, $6::boolean FROM autorizado
        ON CONFLICT DO NOTHING
        RETURNING ${COLUNAS}`,
-      [...alvo, Boolean(isResend), aceitaNulo, marcas, legados]
+      [...alvo, Boolean(isResend), aceitaNulo, marcas, legados,
+        Boolean(semEntradaNova), semEntradaNova ? semEntradaNova.desde : null, semEntradaNova ? semEntradaNova.ids : []]
     );
     if (inserido.rowCount === 0) {
-      // Só para escolher a resposta (a autorização já foi decidida acima): o alvo mudou, ou é duplicata.
+      // Só para escolher a resposta (a autorização já foi decidida acima): o alvo mudou, há mensagem nova, ou é duplicata.
       const vale = await getPool().query(
         `SELECT EXISTS (SELECT 1 FROM conversations c WHERE c.id = $1::uuid AND ${CONDICAO_DO_ALVO.split('$7').join('$2').split('$8').join('$3').split('$9').join('$4')}) AS vale`,
         [conversationId, aceitaNulo, marcas, legados]
       );
       if (!vale.rows[0].vale) return { obtido: false, registro: null, alvoMudou: true };
+      if (semEntradaNova) {
+        const nova = await getPool().query(
+          `SELECT EXISTS (SELECT 1 FROM conversations c WHERE c.id = $1::uuid AND EXISTS (${entradaNaoConsiderada('$2', '$3')})) AS nova`,
+          [conversationId, semEntradaNova.desde || null, semEntradaNova.ids || []]
+        );
+        if (nova.rows[0].nova) return { obtido: false, registro: null, mensagemNova: true };
+      }
     }
   }
   if (inserido.rowCount === 1) return { obtido: true, registro: paraRegistro(inserido.rows[0]) };

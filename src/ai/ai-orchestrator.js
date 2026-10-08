@@ -390,7 +390,7 @@ function ferramentasDaTriagem(triagem, config) {
 // Rodada 8 (N3): a frase do pedido de documento da resposta curta do worker, conferida pela mesma guarda do documento.
 const PEDIDO_DO_DOCUMENTO_DO_TITULAR = 'Se for de outra pessoa, me mande o CPF ou CNPJ do titular.';
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false, falasNovasDoCliente = null, alvoVoltouAoTitular = false, origemDoAlvoNoTurno = null, idsDasFalasNovas = null, falasNovasLidas = true }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false, falasNovasDoCliente = null, alvoVoltouAoTitular = false, origemDoAlvoNoTurno = null, idsDasFalasNovas = null, falasNovasLidas = true, entradasDoTurno = null, desdeDaLeitura = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -475,6 +475,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       origemDoAlvoNoTurno: typeof origemDoAlvoNoTurno === 'string' ? origemDoAlvoNoTurno : null,
       idsDasFalasNovas: Array.isArray(idsDasFalasNovas) ? idsDasFalasNovas.slice() : null,
       falasNovasLidas: falasNovasLidas !== false,
+      // Rodada 9 (N4-C): ver a reserva da entrega (tool-registry.js).
+      entradasDoTurno: Array.isArray(entradasDoTurno) ? entradasDoTurno.slice() : null,
+      desdeDaLeitura: desdeDaLeitura || null,
       // Conclusão do atendimento: o encaminhamento tentado e não concluído em turno anterior, e as ferramentas pedidas
       // neste turno (concluir_triagem decide a nova tentativa por elas).
       encaminhamentoNaoConcluido,

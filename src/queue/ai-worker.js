@@ -578,8 +578,8 @@ async function handleTriageTurn({ conversation, config, messageId }) {
       for (const m of validas) {
         if (m.id !== messageId && m.metadata && m.metadata.autorrespostaProvavel === true) continue;
         const texto = (m.id === messageId ? textoDoCliente : (m.messageType === 'audio' ? m.transcription : m.content)) || '';
-        // Entrada sem texto (imagem, áudio sem transcrição) entra vazia: não muda o alvo, mas desfaz a escolha de contrato
-        // pela rua de uma fala anterior (pedido por endereço, 06/10/2026).
+        // Entrada sem texto (imagem, áudio sem transcrição) entra vazia: não muda o alvo nem a escolha de contrato pela rua de
+        // uma fala anterior (rodada 9, N4-C: antes desfazia a escolha e liberava os outros contratos).
         lidasComTexto.push(texto);
         idsLidos.push(m.id);
         documentosLidos.push(m.id === messageId || !texto ? null : documentosDaEntrada(texto));
@@ -706,6 +706,10 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     idsDasFalasNovas: Array.isArray(falas) ? idsDasFalas.slice() : [],
     // Revisão do incremento (achado D): sem as falas lidas, a origem efetiva do documento é desconhecida.
     falasNovasLidas: Array.isArray(falas),
+    // Rodada 9 (N4-C): as entradas que este turno aplicou e o limite de tempo da leitura — a reserva da entrega recusa se houver
+    // mensagem do cliente fora delas ainda esperando ser considerada.
+    entradasDoTurno: Array.isArray(falas) ? aMarcar.slice() : null,
+    desdeDaLeitura,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

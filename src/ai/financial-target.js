@@ -268,6 +268,22 @@ function lerPrefixoDeCorrecao(palavras) {
 }
 const prefixoDeCorrecao = (palavras) => lerPrefixoDeCorrecao(palavras).k;
 const ehCorrecao = (texto) => lerPrefixoDeCorrecao(palavrasDe(texto)).forte;
+// Rodada 9 (N4-C; opção C autorizada): depois do pedido pela rua, a fala sem nova escolha nunca libera os outros contratos.
+// DESISTÊNCIA (lista FECHADA de sequências inteiras, em qualquer ponto da fala): nenhuma autorização para entregar no turno. O
+// falso positivo ("deixa eu ver") só trava: a cobrança espera ele pedir de novo. CONTRADIÇÃO sem marcador ("é a outra casa",
+// "não é essa", "errado"): o contrato pedido não fica como destino — vira a dúvida de endereço, como a correção sem contrato. O
+// resto (a fala neutra, a não classificada, a entrada sem texto) mantém exatamente o contrato pedido.
+const DESISTENCIAS = [
+  ['deixa'], ['deixe'], ['esquece'], ['esqueca'], ['cancela'], ['cancele'], ['cancelar'], ['desisti'], ['desisto'],
+  ['nao', 'precisa'], ['nao', 'quero'], ['nao', 'manda'], ['nao', 'mande'], ['nao', 'envia'], ['nao', 'envie'],
+  ['depois', 'eu', 'vejo'], ['depois', 'vejo'],
+];
+const ehDesistencia = (texto) => {
+  const q = palavrasDe(texto).map((x) => x.p);
+  return DESISTENCIAS.some((d) => q.some((_, i) => d.every((w, j) => q[i + j] === w)));
+};
+const CONTRADICOES = new Set(['nao', 'outra', 'outro', 'errado', 'errada', 'trocado', 'trocada', 'diferente']);
+const contradiz = (texto) => palavrasDe(texto).some((x) => CONTRADICOES.has(x.p));
 // Revisão do incremento (achado A): QUALQUER marcador, forte ou de duplo sentido, seguido de outra rua dele corrige — "desculpa,
 // é o da Avenida" substitui o contrato escolhido antes. (Sem o acento, "é o da" e "e o da" são a mesma leitura: "opa, e o da
 // Avenida" também substitui — uma pergunta a mais, nunca uma cobrança a mais.)
@@ -492,6 +508,8 @@ const AMBIGUIDADE = {
   // ou o alvo esclarecido.
   ENDERECO_AMBIGUO: 'endereco_ambiguo',
   ENDERECO_DESCONHECIDO: 'endereco_desconhecido',
+  // Rodada 9 (N4-C): ele desistiu do pedido no lote. Só do turno (não se grava): nenhuma cobrança sai até ele pedir de novo.
+  DESISTENCIA: 'desistencia',
 };
 const DUVIDAS_DE_ENDERECO = new Set([AMBIGUIDADE.ENDERECO_AMBIGUO, AMBIGUIDADE.ENDERECO_DESCONHECIDO]);
 // Dúvidas que só um documento consultado ou a volta explícita ao próprio resolvem (o prazo não resolve:
@@ -600,6 +618,8 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   // contratos diferentes valem as duas (nenhuma substitui a outra: a cobrança fica limitada aos dois); uma entrada sem
   // escolha depois ("pode mandar", "ops, é a outra casa", um áudio sem transcrição) desfaz a escolha.
   let escolha = null;
+  // Rodada 9 (N4-C): ele desistiu do pedido neste lote (vale até um pedido novo pela rua).
+  let desistiu = false;
   // Revisão do v4 (07/10/2026). A1: uma entrada deste lote citou um endereço que deu dúvida de endereço — o resto do lote não
   // a encerra. A2: a dúvida gravada foi respondida com o contrato — o resto do lote não desfaz essa limitação (só soma
   // outro pedido simples, ou volta a uma dúvida).
@@ -632,7 +652,9 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       criado = true;
       alvoAmbiguo = false;
     }
-    if (!texto) { if (!respondida) escolha = null; continue; }
+    // Rodada 9 (N4-C): a entrada sem texto (imagem, áudio sem transcrição) não muda o alvo nem a escolha — antes desfazia a
+    // escolha e liberava os outros contratos.
+    if (!texto) continue;
     const eraDuvidaDeEndereco = Boolean(atual) && DUVIDAS_DE_ENDERECO.has(atual.alvoPendente) && (atual.contratos || []).length === 0;
     const leitura = {};
     const r = resolverAlvoDoTurno({ terceiro: atual, texto, empresa, enderecos, duvidaDoLote, leitura });
@@ -658,8 +680,15 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
     // Rodada 8 (N2): a correção que não identifica outro contrato dele, depois de uma escolha neste lote (a da dúvida respondida
     // volta pela regra acima), não deixa o contrato desdito como destino — nem a cobrança livre: vira a dúvida de endereço, que
     // a fala seguinte dele, no mesmo lote, ainda pode responder.
+    // Rodada 9 (N4-C): a desistência (sem nova escolha) tira a autorização do turno, até um pedido novo pela rua.
+    if (!r.contratoEscolhido && !r.alvoPendente && !r.voltarAoTitular && ehDesistencia(texto)) {
+      desistiu = true;
+      escolha = null;
+      alvoAmbiguo = r.alvoAmbiguo;
+      continue;
+    }
     const correcao = ehCorrecao(texto);
-    if (correcao && escolha && !respondida && !r.contratoEscolhido && !r.alvoPendente && !r.alvoAmbiguo && !r.voltarAoTitular) {
+    if ((correcao || contradiz(texto)) && escolha && !respondida && !r.contratoEscolhido && !r.alvoPendente && !r.alvoAmbiguo && !r.voltarAoTitular) {
       atual = { nome: null, contratos: [], pendente: true, alvoPendente: AMBIGUIDADE.ENDERECO_DESCONHECIDO };
       criado = true;
       alvoAmbiguo = AMBIGUIDADE.ENDERECO_DESCONHECIDO;
@@ -668,9 +697,12 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
     }
     alvoAmbiguo = r.alvoAmbiguo;
     // A correção que escolhe outro contrato SUBSTITUI o desdito; sem correção, duas falas com contratos diferentes valem as duas.
+    // Rodada 9 (N4-C): sem nova escolha, a fala que não leva a dúvida, pendência ou volta ao titular mantém a escolha (antes,
+    // só depois da dúvida respondida).
+    if (r.contratoEscolhido) desistiu = false;
     escolha = r.contratoEscolhido
       ? (temMarcadorDeCorrecao(texto) ? [r.contratoEscolhido] : [...new Set([...(escolha || []), r.contratoEscolhido])])
-      : (respondida && !r.alvoAmbiguo ? escolha : null);
+      : (!r.alvoAmbiguo && !r.alvoPendente && !r.voltarAoTitular ? escolha : null);
     if (r.voltarAoTitular) {
       // A volta ao titular com a dúvida de endereço: o titular, com a dúvida gravada (escopo pendente sem contrato).
       atual = r.alvoPendente ? { nome: null, contratos: [], pendente: true, alvoPendente: r.alvoPendente } : null;
@@ -687,6 +719,8 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       criado = true;
     }
   }
+  // Rodada 9 (N4-C): a desistência vale como dúvida do turno (trava a cobrança), salvo outra dúvida, que já trava.
+  if (desistiu && !alvoAmbiguo) alvoAmbiguo = AMBIGUIDADE.DESISTENCIA;
   let gravar = null;
   if (criado) gravar = 'criar';
   else if (terceiro && !atual) gravar = 'limpar';

@@ -762,16 +762,19 @@ describe('pedido por endereço do próprio cliente', () => {
       .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
   });
 
-  test('duas falas com contratos diferentes: os dois valem, nenhum substitui o outro; fala neutra no meio desfaz a primeira', () => {
+  // Rodada 9 (N4-C, opção C autorizada): a fala neutra (ou não classificada, ou sem texto) depois do pedido não desfaz mais a
+  // escolha — antes, liberava os dois contratos. "pode mandar" no meio mantém o 301, e o pedido seguinte soma.
+  test('duas falas com contratos diferentes: os dois valem, nenhum substitui o outro; fala neutra no meio mantém a primeira', () => {
     expect(mensagens(['manda o pix da Rua de Teste', 'e o da Avenida de Teste']))
       .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null, contratosEscolhidos: ['301', '302'] });
     expect(mensagens(['manda o pix da Rua de Teste', 'manda o pix da Rua de Teste']))
       .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null, contratoEscolhido: '301', contratosEscolhidos: ['301'] });
     expect(mensagens(['manda o pix da Rua de Teste', 'pode mandar', 'e o da Avenida de Teste']))
-      .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null, contratoEscolhido: '302', contratosEscolhidos: ['302'] });
-    expect(mensagens(['manda o pix da Rua de Teste', 'pode mandar'])).toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null });
-    expect(mensagens(['manda o pix da Rua de Teste', ''])).toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null });
-    expect(mensagens(['manda o pix da Rua de Teste', null])).toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null });
+      .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null, contratosEscolhidos: ['301', '302'] });
+    const so301 = { terceiro: null, alvoAmbiguo: false, gravar: null, contratoEscolhido: '301', contratosEscolhidos: ['301'] };
+    expect(mensagens(['manda o pix da Rua de Teste', 'pode mandar'])).toEqual(so301);
+    expect(mensagens(['manda o pix da Rua de Teste', ''])).toEqual(so301);
+    expect(mensagens(['manda o pix da Rua de Teste', null])).toEqual(so301);
   });
 
   // ------------------------------------------------------------------------------------------------------------------------
@@ -961,6 +964,42 @@ describe('pedido por endereço do próprio cliente', () => {
 
     test('dois pedidos sem correção continuam valendo os dois', () => {
       expect(mensagens(['manda o pix da Rua de Teste', 'e o da Avenida de Teste'])).toEqual(so(['301', '302']));
+    });
+  });
+
+  // Rodada 9 (N4-C, opção C autorizada): o pedido relido com a mensagem nova (a reserva recusada) ou no mesmo lote. A fala sem
+  // nova escolha nunca libera os outros contratos: a neutra e a não classificada mantêm exatamente o contrato pedido; a
+  // desistência não deixa autorização nenhuma no turno; a contradição sem marcador vira a dúvida de endereço.
+  describe('a fala depois do pedido pela rua (rodada 9, N4-C)', () => {
+    const so = (contratos) => ({ terceiro: null, alvoAmbiguo: false, gravar: null, contratosEscolhidos: contratos, ...(contratos.length === 1 ? { contratoEscolhido: contratos[0] } : {}) });
+    const DESISTIU = { terceiro: null, alvoAmbiguo: 'desistencia', gravar: null };
+    test.each([['obrigado'], ['Obrigado!'], ['ok'], ['beleza, pode mandar'], ['valeu 👍'], ['sim'], ['pode ser'], [''], [null], ['e como faço pra pagar?'], ['manda logo por favor']])(
+      '%j depois do pedido: mantém exatamente o contrato pedido', (fala) => {
+        expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(so(['301']));
+      },
+    );
+    test('dois pedidos e um agradecimento: mantém os dois', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'e o da Avenida de Teste', 'obrigado'])).toEqual(so(['301', '302']));
+    });
+    test.each([['deixa, não precisa mais'], ['esquece'], ['Esquece, obrigado'], ['cancela'], ['não quero mais'], ['depois eu vejo'], ['Deixa pra lá']])(
+      '%j depois do pedido: nenhuma autorização para entregar no turno, sem dúvida gravada', (fala) => {
+        expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(DESISTIU);
+      },
+    );
+    test('a desistência continua valendo depois de um agradecimento; um pedido novo pela rua a substitui', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'deixa, não precisa', 'obrigado'])).toEqual(DESISTIU);
+      expect(mensagens(['manda o pix da Rua de Teste', 'deixa', 'manda o da Avenida de Teste'])).toEqual(so(['302']));
+    });
+    test('desistência sem pedido pela rua antes (um contrato só): também não deixa autorização', () => {
+      expect(mensagens(['manda o pix', 'esquece'], { enderecos: [ENDERECOS[0]] })).toEqual(DESISTIU);
+    });
+    test.each([['é a outra casa'], ['a outra'], ['não é essa'], ['não, a outra'], ['errado']])(
+      '%j depois do pedido: o contrato pedido não fica como destino — dúvida de endereço gravada', (fala) => {
+        expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+      },
+    );
+    test('sem pedido pela rua antes, a fala não classificada não cria nada', () => {
+      expect(mensagens(['é a outra casa'])).toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null });
     });
   });
 });

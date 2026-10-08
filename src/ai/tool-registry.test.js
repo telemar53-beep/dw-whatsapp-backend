@@ -5180,7 +5180,8 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
     await pix({ contratoId: 17402 }, ctx());
     for (const [pedido] of claimDelivery.mock.calls) {
       // Segurança final da F2 (03/10/2026): a condição do alvo também vai à reserva — só marcas, nunca valores.
-      expect(Object.keys(pedido).sort()).toEqual(['condicaoDoAlvo', 'contractId', 'conversationId', 'invoiceId', 'isResend', 'messageId', 'tool']);
+      // Rodada 9 (N4-C): e a condição da mensagem nova (semEntradaNova) — ids das mensagens e o limite de tempo, nunca valores.
+      expect(Object.keys(pedido).sort()).toEqual(['condicaoDoAlvo', 'contractId', 'conversationId', 'invoiceId', 'isResend', 'messageId', 'semEntradaNova', 'tool']);
       const serializado = JSON.stringify(pedido);
       expect(serializado).not.toContain('836100000012');
       expect(serializado).not.toContain('000201-pix-emv');

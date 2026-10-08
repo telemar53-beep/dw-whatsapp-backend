@@ -188,17 +188,29 @@ function meioCitadoDepoisDaEntrega(historico, textoDe) {
   lista.forEach((m, i) => {
     if (m.direction === 'outbound' && m.sentBy === 'ai' && (m.messageType === 'pix' || m.messageType === 'document')) corte = i;
   });
-  const citados = new Set();
+  let citados = new Set();
   for (const m of lista.slice(corte + 1)) {
     if (m.direction !== 'inbound') continue;
     for (const oracao of norm(textoDe(m)).split(/[,.;:!?\n]|\be\b|\bmas\b/)) {
-      for (const meio of MEIOS) {
-        const achado = MEIO[meio].exec(oracao);
-        if (achado && !/\bnao\b/.test(oracao.slice(0, achado.index))) citados.add(meio);
-      }
+      // Revisão da rodada 10 (A4-1): a oração de desistência ("esquece o pix", "não precisa mais", "manda o pix não") não cita
+      // meio e apaga o citado antes; outra oração com "não" também não cita.
+      if (DESISTE.test(oracao)) { citados = new Set(); continue; }
+      if (/\bnao\b/.test(oracao)) continue;
+      for (const meio of MEIOS) if (MEIO[meio].test(oracao)) citados.add(meio);
     }
   }
-  return citados.size === 1 ? [...citados][0] : null;
+  const meio = citados.size === 1 ? [...citados][0] : null;
+  // Revisão da rodada 10 (A4-2): o meio que a 2ª via desta conversa mostrou inexistente (o estado gravado na resposta da IA mais
+  // recente que o traz) não vira fato — o prompt manda não oferecê-lo.
+  return meio && !inexistente(meiosDoHistorico(lista), meio) ? meio : null;
+}
+const DESISTE = /\b(?:esquece|esqueca|cancela|cancele|cancelar|deixa|deixe|desisti|desisto|nem)\b|\bdepois (?:eu )?vejo\b|\b(?:para|pare|parar|chega) de\b|\bnao (?:precisa|quero|manda|mande|envia|envie)\b|\b(?:manda|mande|envia|envie|mandar|enviar)\b.*\bnao\b/;
+function meiosDoHistorico(lista) {
+  for (let i = lista.length - 1; i >= 0; i -= 1) {
+    const m = lista[i];
+    if (m.direction === 'outbound' && m.sentBy === 'ai' && m.metadata && Array.isArray(m.metadata.meiosDaFatura)) return m.metadata.meiosDaFatura;
+  }
+  return [];
 }
 
 module.exports = { meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada, meioCitadoDepoisDaEntrega };

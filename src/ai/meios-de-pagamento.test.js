@@ -216,3 +216,25 @@ describe('meioCitadoDepoisDaEntrega (rodada 10, S5)', () => {
     expect(meioCitadoDepoisDaEntrega([], texto)).toBe(null);
   });
 });
+
+// Revisão da rodada 10 (A4-1 e A4-2, verificados por script).
+describe('meioCitadoDepoisDaEntrega: correções da revisão da rodada 10', () => {
+  const texto = (m) => m.content;
+  const cli = (content) => ({ direction: 'inbound', messageType: 'text', content });
+  const ia = (content, meiosDaFatura) => ({ direction: 'outbound', sentBy: 'ai', messageType: 'text', content, metadata: { meiosDaFatura } });
+  test('A4-1: a desistência não cita meio e apaga o citado antes', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), cli('esquece o pix')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('cancela o boleto')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), cli('esquece')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('não precisa mais o boleto')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix não')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('esquece o pix, manda o boleto')], texto)).toBe('boleto');
+    expect(meioCitadoDepoisDaEntrega([cli('não quero boleto, manda o pix')], texto)).toBe('pix');
+    // A oração com "não" que não é desistência também não cita ("o boleto não chegou" não é pedido de boleto).
+    expect(meioCitadoDepoisDaEntrega([cli('o boleto não chegou')], texto)).toBe(null);
+  });
+  test('A4-2: o meio que a 2ª via desta conversa mostrou inexistente não vira fato', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), ia('Essa fatura não tem PIX agora.', [{ contratoId: '301', faturaId: '9', pix: false, boleto: true }])], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), ia('Você prefere boleto ou PIX?', [{ contratoId: '301', faturaId: '9', pix: true, boleto: true }])], texto)).toBe('pix');
+  });
+});

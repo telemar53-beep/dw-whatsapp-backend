@@ -20,6 +20,7 @@ const MODULOS = [
   require('./fluxos/contencoes'),
   require('./fluxos/documento-pendente'),
   require('./fluxos/duvida-endereco'),
+  require('./fluxos/alvo-financeiro'),
   require('./fluxos/acoes-pendentes'),
   require('./fluxos/limite-perguntas'),
   require('./formato'),

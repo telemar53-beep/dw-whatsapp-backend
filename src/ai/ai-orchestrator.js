@@ -2,6 +2,7 @@ const { createChatCompletion } = require('./openai-client');
 const { executeTool } = require('./tool-executor');
 const { toOpenAiTools } = require('./tool-registry');
 const { montarContexto } = require('./prompt/montar');
+const { fatosDoAlvoFinanceiro } = require('./prompt/fluxos/alvo-financeiro');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
 const { recordAiInteraction, listAiInteractionsByConversation } = require('./ai-interaction.repository');
 const { promessasSemEvidencia, respostaSemPromessas } = require('./promessas-sem-evidencia');
@@ -28,6 +29,7 @@ const {
 } = require('./contencoes-operacionais');
 const {
   estadoDoDocumento, violacoesDoDocumento, correcaoDoDocumento, respostaSemRepetirDocumento, pedeDocumento, alvoDoPedido,
+  pendenteAgora,
 } = require('./documento-pendente');
 
 // A auditoria (ai_interactions.tools_requested) grava os argumentos como o
@@ -390,6 +392,14 @@ function ferramentasDaTriagem(triagem, config) {
 // Rodada 8 (N3): a frase do pedido de documento da resposta curta do worker, conferida pela mesma guarda do documento.
 const PEDIDO_DO_DOCUMENTO_DO_TITULAR = 'Se for de outra pessoa, me mande o CPF ou CNPJ do titular.';
 
+// Rodada 9 (N5): os fatos do alvo do turno (fluxos/alvo-financeiro.js); o pedido do documento do titular, conferido pela mesma
+// guarda do documento — os fatos não mandam pedir o que a guarda barraria.
+function fatosDoAlvo(contexto) {
+  return fatosDoAlvoFinanceiro(contexto, {
+    pedidoDeDocumentoPermitido: violacoesDoDocumento(PEDIDO_DO_DOCUMENTO_DO_TITULAR, contexto).length === 0,
+  });
+}
+
 async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, contratoEscolhido = null, contratosEscolhidos = null, messageId = null, terceiroLocalizadoEm = null, reativacao = null, esperadosDoAlvo = null, duvidaDeEnderecoRespondida = false, falasNovasDoCliente = null, alvoVoltouAoTitular = false, origemDoAlvoNoTurno = null, idsDasFalasNovas = null, falasNovasLidas = true }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
@@ -425,7 +435,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     const contencoes = sinaisOperacionais(historico);
     // Documento pendente: o CPF/CNPJ já pedido (marcado na mensagem do pedido) e ainda não
     // informado. O documento de quem fala é o que NÃO responde a um pedido de terceiro.
-    const documento = estadoDoDocumento(historico, {
+    let documento = estadoDoDocumento(historico, {
       identidade: identidadeEfetiva,
       documentoDeQuemFala: (contact && contact.sgpDocument) || (identidadeEfetiva.client && identidadeEfetiva.client.document) || null,
       // Fato do sistema: quando o terceiro foi localizado, lido pelo worker do escopo persistido.
@@ -516,6 +526,13 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     };
     // Setores e motivos em paralelo: são duas consultas independentes e o
     // turno inteiro espera por elas antes da primeira chamada à OpenAI.
+    // Rodada 9 (N5; avaliação real r2, S5): o pedido do documento da OUTRA pessoa só é o pedido de agora enquanto há uma outra
+    // pessoa no alvo — um terceiro no escopo, ou uma dúvida. Com o alvo confirmado em quem fala (a volta à própria cobrança
+    // limpou o escopo, sem dúvida nenhuma), o prompt mandava esperar o documento dela; a guarda lê o mesmo estado.
+    if (documento && documento.alvo === 'terceiro' && !contexto.terceiro && typeof contexto.alvoAmbiguo !== 'string') {
+      documento = null;
+      contexto.documento = null;
+    }
     const [setores, motivos] = await Promise.all([listSectors(), listActiveReasons()]);
     // montarContexto é SÍNCRONA — todo o I/O do prompt acontece aqui em cima,
     // no estado que ela recebe pronto.
@@ -539,6 +556,8 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       acoesPendentes: encaminhamentoNaoConcluido ? { encaminhamento: encaminhamentoNaoConcluido } : null,
       // Comportamento da IA (06/10/2026; A6/A7): os meios que a 2ª via desta conversa comprovou (fatos.js).
       meiosDaFatura: meiosDaJanela(contexto.mensagensDaJanela),
+      // Rodada 9 (N5): os fatos do alvo financeiro que o código já decidiu (fluxos/alvo-financeiro.js), do contexto do turno.
+      alvoFinanceiro: fatosDoAlvo(contexto),
       agora: new Date(),
     };
     systemContent = montarContexto(estadoDoPrompt);
@@ -907,6 +926,19 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       if (estadoDoPrompt && contexto.reativacao && !estadoDoPrompt.reativacao) {
         estadoDoPrompt.reativacao = contexto.reativacao;
         recompor = true;
+      }
+      // Rodada 9 (N5): o estado confirmado do alvo mudou nesta volta (a consulta localizou a outra pessoa, a cobrança travou,
+      // a identificação mudou): a próxima chamada recebe os fatos novos — e sem o pedido de documento que a consulta encerrou.
+      if (estadoDoPrompt && estadoDoPrompt.alvoFinanceiro) {
+        const fatos = fatosDoAlvo(contexto);
+        if (JSON.stringify(fatos) !== JSON.stringify(estadoDoPrompt.alvoFinanceiro)) {
+          estadoDoPrompt.alvoFinanceiro = fatos;
+          recompor = true;
+        }
+        if (estadoDoPrompt.documento && !pendenteAgora(contexto)) {
+          estadoDoPrompt.documento = null;
+          recompor = true;
+        }
       }
       if (recompor) messages[0] = { role: 'system', content: montarContexto(estadoDoPrompt) };
     }

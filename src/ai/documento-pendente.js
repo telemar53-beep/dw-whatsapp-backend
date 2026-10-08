@@ -378,5 +378,5 @@ function respostaSemRepetirDocumento(texto, violacoes, contexto) {
 
 module.exports = {
   pedeDocumento, alvoDoPedido, documentosNoTexto, estadoDoDocumento, violacoesDoDocumento, correcaoDoDocumento,
-  respostaSemRepetirDocumento, documentoConfirmadoNoTurno, localizacaoDoTerceiro, recuperacaoComprovada,
+  respostaSemRepetirDocumento, documentoConfirmadoNoTurno, localizacaoDoTerceiro, recuperacaoComprovada, pendenteAgora,
 };

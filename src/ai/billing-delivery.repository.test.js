@@ -475,3 +475,111 @@ describe('reserva condicionada ao alvo da conversa', () => {
     }
   });
 });
+
+// Rodada 9 (N4-C; opção C autorizada): a reserva também é recusada quando há mensagem do cliente que o turno ainda não
+// considerou — fora das entradas que ele aplicou, sem a marca alvoProcessado, na mesma janela da leitura das entradas.
+describe('reserva recusada com mensagem nova do cliente que o turno não considerou (rodada 9, N4-C)', () => {
+  const { createMessage, marcarFalasComAlvoProcessado } = require('../conversations/message.repository');
+  let conversaId;
+  let canalId;
+  let contatoId;
+  let n = 0;
+  const msg = (content, { direction = 'inbound', sentAt } = {}) => {
+    n += 1;
+    return createMessage({ conversationId: conversaId, direction, content, whatsappMessageId: `wamid.n4.${n}.${Date.now()}`, status: direction === 'inbound' ? 'received' : 'sent', sentAt });
+  };
+  const ha = (minutos) => new Date(Date.now() - minutos * 60 * 1000);
+  const reservar = (semEntradaNova) => claimDelivery(pedido({ conversationId: conversaId, condicaoDoAlvo: { esperados: [{ nulo: true }] }, semEntradaNova }));
+
+  beforeAll(async () => {
+    canalId = (await createChannel({ type: 'meta_cloud', name: 'Canal do N4', phoneNumber: `+55008${Date.now() % 1000000}`, config: {} })).id;
+    contatoId = (await findOrCreateContactByPhoneNumber(`+55118${Date.now() % 10000000}`, null)).id;
+  });
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE ai_billing_deliveries');
+    await getPool().query("UPDATE conversations SET status = 'closed' WHERE contact_id = $1", [contatoId]);
+    conversaId = (await createConversation(contatoId, canalId)).id;
+  });
+  afterAll(async () => {
+    await getPool().query('TRUNCATE ai_billing_deliveries');
+    await closePool();
+  });
+
+  test('só as entradas que o turno aplicou: reserva', async () => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    const r = await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) });
+    expect(r.obtido).toBe(true);
+  });
+
+  test('a correção chegou durante o turno e ele não a leu: nada é reservado, e a resposta diz que há mensagem nova', async () => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    await msg('ops, me enganei, é o da Avenida de Teste');
+    const r = await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) });
+    expect(r).toEqual({ obtido: false, registro: null, mensagemNova: true });
+    expect(await linhas()).toEqual([]);
+  });
+
+  test('a mensagem nova já aplicada por outro processamento (marcada): reserva (quem barra então é a marca do alvo)', async () => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    const nova = await msg('obrigado');
+    await marcarFalasComAlvoProcessado([nova.id]);
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).obtido).toBe(true);
+  });
+
+  test('mensagem de saída (da IA ou da atendente) não conta', async () => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    await msg('Um instante.', { direction: 'outbound' });
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).obtido).toBe(true);
+  });
+
+  test('entrada não confirmada anterior ao limite e à última confirmada (fora da leitura): não conta', async () => {
+    await msg('oi', { sentAt: ha(60) });
+    const confirmada = await msg('bom dia', { sentAt: ha(50) });
+    await marcarFalasComAlvoProcessado([confirmada.id]);
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).obtido).toBe(true);
+  });
+
+  test('a entrega atrasada (hora do provedor anterior ao limite), depois da última confirmada: conta', async () => {
+    const confirmada = await msg('bom dia', { sentAt: ha(180) });
+    await marcarFalasComAlvoProcessado([confirmada.id]);
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    await msg('ops, é a outra casa', { sentAt: ha(40) });
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).mensagemNova).toBe(true);
+  });
+
+  // Revisão da rodada 9 (achado 3): só conta a mensagem que gera o processamento da IA (o mesmo filtro que o worker usa para
+  // "a mais recente"): figurinha, vídeo, localização, autorresposta e áudio com transcrição que falhou não geram — contá-los
+  // travaria a entrega sem retomada.
+  test.each([
+    ['figurinha', { messageType: 'sticker', content: null }],
+    ['vídeo', { messageType: 'video', content: null }],
+    ['localização', { messageType: 'location', content: null }],
+    ['autorresposta', { messageType: 'text', content: 'Estou ausente no momento.', metadata: { autorrespostaProvavel: true } }],
+    ['áudio com transcrição que falhou', { messageType: 'audio', content: null, transcricao: 'failed' }],
+    ['áudio com formato não suportado', { messageType: 'audio', content: null, transcricao: 'skipped' }],
+    ['texto vazio', { messageType: 'text', content: null }],
+  ])('%s durante o turno: não conta (reserva)', async (_, m) => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    const nova = await createMessage({ conversationId: conversaId, direction: 'inbound', content: m.content, messageType: m.messageType, metadata: m.metadata, whatsappMessageId: `wamid.n4c.tipo.${Date.now()}.${Math.random()}`, status: 'received' });
+    if (m.transcricao) await getPool().query('UPDATE messages SET transcription_status = $2 WHERE id = $1', [nova.id, m.transcricao]);
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).obtido).toBe(true);
+  });
+  test.each([
+    ['imagem', { messageType: 'image', content: null }],
+    ['áudio aguardando a transcrição', { messageType: 'audio', content: null, transcricao: 'pending' }],
+    ['áudio transcrito', { messageType: 'audio', content: null, transcricao: 'completed' }],
+  ])('%s durante o turno: conta (nada é reservado)', async (_, m) => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    const nova = await createMessage({ conversationId: conversaId, direction: 'inbound', content: m.content, messageType: m.messageType, whatsappMessageId: `wamid.n4c.tipo.${Date.now()}.${Math.random()}`, status: 'received' });
+    if (m.transcricao) await getPool().query('UPDATE messages SET transcription_status = $2 WHERE id = $1', [nova.id, m.transcricao]);
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).mensagemNova).toBe(true);
+  });
+
+  test('sem a condição (chamador antigo): reserva como antes', async () => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    await msg('ops, me enganei');
+    expect((await reservar(null)).obtido).toBe(true);
+    expect(pedidoDoCliente.id).toBeTruthy();
+  });
+});

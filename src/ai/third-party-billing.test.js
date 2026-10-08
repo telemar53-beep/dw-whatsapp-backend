@@ -1091,6 +1091,32 @@ describe('persistência do alvo: gravação condicional nas ferramentas (03/10/2
     await nadaSai(t);
   });
 
+  // Rodada 9 (N4-C): a reserva também leva as entradas que o turno aplicou e o limite da leitura; com mensagem nova do cliente
+  // ainda não considerada, nada sai, o turno trava (as falas não são marcadas) e a instrução não promete envio nem retomada.
+  test('mensagem nova do cliente ainda não considerada: nada sai, o turno trava e a instrução não promete retomada', async () => {
+    escopoPersistido = montarEscopo('Beltrana', [{ id: N }]);
+    const t = turnoComEstado('pode mandar');
+    t.entradasDoTurno = ['m-1'];
+    t.desdeDaLeitura = new Date('2026-10-07T12:00:00.000Z');
+    claimDelivery.mockImplementationOnce(async () => ({ obtido: false, registro: null, mensagemNova: true }));
+    const r = await executeTool('gerar_pix', { contratoId: N }, t);
+    expect(claimDelivery.mock.calls[0][0].semEntradaNova).toEqual({ ids: ['m-1'], desde: new Date('2026-10-07T12:00:00.000Z') });
+    expect(r.ok).toBe(true);
+    expect(r.resultado.enviado).toBe(false);
+    expect(r.resultado.instrucao).toMatch(/NÃO foi enviado/);
+    expect(r.resultado.instrucao).not.toMatch(/próxima resposta|vai enviar|em seguida|garant/i);
+    expect(pixEnviado()).toEqual([]);
+    expect(t.alvoMudouNaEntrega).toBe(true);
+    await nadaSai(t);
+  });
+  test('sem as entradas do turno (leitura não feita): a reserva vai sem a condição da mensagem nova', async () => {
+    escopoPersistido = montarEscopo('Beltrana', [{ id: N }]);
+    const t = turnoComEstado('pode mandar');
+    delete t.entradasDoTurno;
+    await executeTool('gerar_pix', { contratoId: N }, t);
+    expect(claimDelivery.mock.calls[0][0].semEntradaNova).toBeNull();
+  });
+
   test('falha fechado por construção: na triagem sem estados conhecidos, a reserva leva a condição vazia (recusa)', async () => {
     const t = novoTurno('pode mandar');
     delete t.esperadosDoAlvo;

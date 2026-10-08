@@ -25,10 +25,13 @@ const COBRANCA = /\b(?:pix|boletos?|faturas?|segunda via|2a via|codigo|qr ?code|
 // do PIX", "em seguida me envie o comprovante" são do cliente), e a cobrança tem de estar na MESMA oração da forma.
 const FUTURA = [
   /\b(?:vou|irei|vamos|iremos)\s+(?:(?:te|lhe|ja|agora|so|entao|logo)\s+)*([a-z]+)/,
-  /\b(?:estou|to|estamos)\s+(?:[a-z]+\s+)?(?:enviando|mandando|gerando|preparando|providenciando|emitindo|separando|verificando|conferindo|buscando|puxando)\b/,
+  /\b(?:estou|to|estamos)\s+(?:[a-z]+\s+)?(?:enviando|reenviando|mandando|gerando|preparando|providenciando|emitindo|separando|verificando|conferindo|buscando|puxando)\b/,
   /\bja\s+(?:te\s+|lhe\s+)?(?:envio|mando|gero|passo|reenvio|emito|providencio)\b/,
   /\b(?:em instantes|ja ja)\b/,
   /\b(?:sera|serao|vai ser|vao ser)\s+(?:enviad|gerad|mandad|reenviad|emitid|providenciad)/,
+  // Revisão do incremento (R2): "daqui a pouco o boleto chega", "o boleto está sendo gerado".
+  /\bdaqui a pouco\b[^.!?;:]*\b(?:chega|recebe|sai|envio|mando|vai)\b/,
+  /\b(?:esta|estao)\s+sendo\s+(?:enviad|gerad|mandad|reenviad|emitid|providenciad|preparad)/,
 ];
 // A necessidade de algo dele não é trabalho da IA ("vou precisar que você escolha"), nem a explicação ("vou te explicar como…").
 const VERBOS_QUE_PEDEM = new Set(['precisar', 'pedir', 'perguntar', 'explicar', 'dizer', 'falar', 'mostrar', 'orientar', 'contar']);
@@ -55,7 +58,8 @@ function negacaoColada(prefixo) {
   const p = String(prefixo || '');
   let corte = -1;
   for (let k = p.length - 1; k >= 0; k -= 1) if (FIM_DE_ORACAO.test(p[k])) { corte = k; break; }
-  return /(?:^|\s)n(?:ã|a)o\s+(?:[^\s]+\s+){0,2}$/i.test(p.slice(corte + 1));
+  // Revisão do incremento (R3): entre o "não" e a forma, só palavras auxiliares ("não se preocupe vou enviar" não é negação).
+  return /(?:^|\s)n(?:ã|a)o\s+(?:(?:vou|vamos|irei|iremos|ainda|te|lhe|me|conseguir|consegui|consigo|posso|pude|foi|foram|est(?:á|a)|est(?:ã|a)o|j(?:á|a)|mais|vai|ser(?:á|a))\s+){0,3}$/i.test(p.slice(corte + 1));
 }
 // A oração em volta de um índice (entre os sinais de fim de oração).
 function oracaoEm(f, i) {
@@ -65,15 +69,24 @@ function oracaoEm(f, i) {
   for (let k = i; k < f.length; k += 1) if (FIM_DE_ORACAO.test(f[k])) { fim = k + 1; break; }
   return f.slice(ini, fim);
 }
-// A primeira forma que casa com a cobrança na mesma oração — ou, com verbo de entrega, na frase (ou null).
-function primeiraForma(f, formas, aceita = () => true) {
-  let melhor = null;
+// Alguma ocorrência de alguma forma — TODAS são conferidas (revisão do incremento, R3: "Não vou mandar o PIX, vou mandar o boleto")
+// — com a cobrança na mesma oração (ou, com verbo de entrega, na frase), sem negação colada e, para a entrega feita, fora da
+// oração que pergunta.
+function algumaForma(f, formas, { aceita = () => true, foraDaPergunta = false } = {}) {
   for (const r of formas) {
-    const m = r.exec(f);
-    const naFrase = Boolean(m) && (!m[1] || VERBOS_DE_ENTREGA.test(m[1]));
-    if (m && aceita(m) && (naFrase || COBRANCA.test(oracaoEm(f, m.index))) && (!melhor || m.index < melhor.index)) melhor = m;
+    const g = new RegExp(r.source, 'g');
+    let m;
+    while ((m = g.exec(f))) {
+      if (!m[0]) { g.lastIndex += 1; continue; }
+      if (!aceita(m)) continue;
+      const naFrase = !m[1] || VERBOS_DE_ENTREGA.test(m[1]);
+      if (!naFrase && !COBRANCA.test(oracaoEm(f, m.index))) continue;
+      if (foraDaPergunta && /\?\s*$/.test(oracaoEm(f, m.index))) continue;
+      if (negacaoColada(f.slice(0, m.index))) continue;
+      return true;
+    }
   }
-  return melhor;
+  return false;
 }
 
 /** Os motivos pelos quais UMA frase não pode sair, dado o estado da ação. */
@@ -84,12 +97,8 @@ function motivosDaFrase(frase, { entregaNoTurno = false, entregaAnterior = false
   const motivos = [];
   // A pergunta isenta o anúncio ("Posso enviar o boleto?"); a afirmação de entrega feita, só se a própria oração for a pergunta
   // (revisão da rodada 10, A3-4: "Enviei o boleto acima, conseguiu abrir?" continua afirmação).
-  const futura = /\?\s*$/.test(f) ? null : primeiraForma(f, FUTURA, (m) => !(m[1] && VERBOS_QUE_PEDEM.has(m[1])));
-  if (futura && !negacaoColada(f.slice(0, futura.index))) motivos.push('entrega_futura');
-  if (!entregaAnterior) {
-    const concluida = primeiraForma(f, CONCLUIDA);
-    if (concluida && !/\?\s*$/.test(oracaoEm(f, concluida.index)) && !negacaoColada(f.slice(0, concluida.index))) motivos.push('entrega_concluida');
-  }
+  if (!/\?\s*$/.test(f) && algumaForma(f, FUTURA, { aceita: (m) => !(m[1] && VERBOS_QUE_PEDEM.has(m[1])) })) motivos.push('entrega_futura');
+  if (!entregaAnterior && algumaForma(f, CONCLUIDA, { foraDaPergunta: true })) motivos.push('entrega_concluida');
   return motivos;
 }
 

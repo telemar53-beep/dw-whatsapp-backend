@@ -3602,3 +3602,11 @@ describe('P2-1: contrato ativo lido no turno', () => {
     expect(r.texto).toBe('O contrato consta ativo no sistema, mas ainda preciso verificar o status da conexão.');
   });
 });
+
+// Revisão do incremento da rodada 10 (R3): a guarda antiga confere todas as ocorrências, não só a primeira.
+test('afirmaEnvio: a segunda ocorrência sem negação também é anúncio', () => {
+  const { afirmaEnvio } = require('./ai-orchestrator');
+  expect(afirmaEnvio('Não vou mandar o PIX, vou mandar o boleto agora.')).toBe(true);
+  expect(afirmaEnvio('Não se preocupe vou enviar o boleto agora.')).toBe(true);
+  expect(afirmaEnvio('Ainda não enviei o PIX. Quer que eu envie?')).toBe(false);
+});

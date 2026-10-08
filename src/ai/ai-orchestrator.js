@@ -154,14 +154,18 @@ function respostaSemEncaminhamentoNaoConfirmado(texto) {
 // olhava o futuro ("vou enviar"). Agora "enviei/mandei/segue ... boleto/PIX/
 // PDF/linha digitável" também conta: dizer que já foi só vale com a entrega
 // feita neste turno.
-const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b|\b(enviei|mandei|gerei|segue|seguem)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo|pdf|linha digit[áa]vel)\b/i;
+// Revisão do incremento da rodada 10 (R3): o trecho entre o verbo e a cobrança é o MENOR ({0,60}?), para cada ocorrência ser vista.
+const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}?\b(pix|boleto|fatura|segunda via|c[óo]digo)\b|\b(enviei|mandei|gerei|segue|seguem)\b[^.!?\n]{0,60}?\b(pix|boleto|fatura|segunda via|c[óo]digo|pdf|linha digit[áa]vel)\b/i;
 // Rodada 10 (G1): por frase, e a frase negada antes do verbo não é anúncio ("Ainda não enviei o PIX.", "Não vou mandar o
 // boleto sem o seu pedido.") — a explicação honesta não obriga a ferramenta de entrega.
 function afirmaEnvio(texto) {
   return String(texto || '').split(/(?<=[.!?])\s+|\n+/).some((frase) => {
-    const m = AFIRMA_ENVIO.exec(frase);
     // Revisão da rodada 10 (A3-1): só a negação da MESMA oração, colada ao verbo ("Não se preocupe, vou enviar…" é anúncio).
-    return Boolean(m) && !negacaoColada(frase.slice(0, m.index));
+    // Revisão do incremento (R3): TODAS as ocorrências ("Não vou mandar o PIX, vou mandar o boleto agora" é anúncio).
+    const g = new RegExp(AFIRMA_ENVIO.source, 'gi');
+    let m;
+    while ((m = g.exec(frase))) if (!negacaoColada(frase.slice(0, m.index))) return true;
+    return false;
   });
 }
 

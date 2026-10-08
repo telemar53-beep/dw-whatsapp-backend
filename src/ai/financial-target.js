@@ -333,16 +333,29 @@ const oracoesDe = (texto) => {
 };
 // "não" antes, na mesma oração (sem "e" no meio): "não manda", "não me manda", "não quero que mande". Revisão da rodada 10
 // (A1-1): também "nem" ("nem precisa mandar") e "para de"/"chega de" ("para de mandar boleto").
+// Revisão do incremento (R1): só perto do verbo, com palavras auxiliares no meio ("não chegou, manda de novo" sem vírgula e
+// "nem recebi o boleto manda de novo" continuam pedido).
+const ENTRE_NEGACAO_E_VERBO = new Set(['me', 'te', 'lhe', 'nos', 'precisa', 'precisar', 'pode', 'quero', 'queria', 'que', 'vai', 'mais', 'se']);
 const negadoAntes = (q, i) => {
-  for (let k = i - 1; k >= 0; k -= 1) {
-    if (q[k] === 'e') return false;
-    if (q[k] === 'nao' || q[k] === 'nem' || (PARAR.has(q[k]) && q[k + 1] === 'de')) return true;
+  for (let k = i - 1; k >= 0 && k >= i - 4; k -= 1) {
+    if (q[k] === 'nao' || q[k] === 'nem') return true;
+    if (q[k] === 'de' && PARAR.has(q[k - 1])) return true;
+    if (!ENTRE_NEGACAO_E_VERBO.has(q[k])) return false;
   }
   return false;
 };
 // Revisão da rodada 10 (A1-1): a negação POSPOSTA, na mesma oração ("manda não", "precisa mandar não", "manda mais não", "de
 // novo não") — o "não" depois do verbo, sem cobrança depois dele ("manda o boleto não o pix" continua pedido do boleto).
-const negadoDepois = (q, i) => q.some((w, j) => j > i && w === 'nao' && !q.slice(j + 1).some((x) => COBRANCAS.has(x)));
+// Revisão do incremento (R1): o "não" de uma oração subordinada ("manda de novo que não chegou", "porque o boleto não abre") não
+// nega o envio.
+const SUBORDINANTES = new Set(['que', 'porque', 'pois', 'como', 'se', 'quando']);
+const negadoDepois = (q, i) => {
+  for (let j = i + 1; j < q.length; j += 1) {
+    if (SUBORDINANTES.has(q[j])) return false;
+    if (q[j] === 'nao') return !q.slice(j + 1).some((x) => COBRANCAS.has(x));
+  }
+  return false;
+};
 const repeticaoEm = (q, i) => REPETICAO.some((r) => r.every((w, j) => q[i + j] === w));
 // A desistência que a oração traz (o marcador e o que ele cancela).
 function desisteNaOracao(q) {
@@ -374,10 +387,17 @@ function pedeNaOracao(q) {
 }
 // O meio que a oração cita (para a desistência de OUTRO meio não desfazer o pedido da mesma mensagem).
 const meioDaOracao = (q) => (q.includes('pix') ? 'pix' : (q.some((w) => w === 'boleto' || w === 'boletos') ? 'boleto' : null));
-// A fala da IA pergunta sobre a cobrança ou o envio: uma frase com "?" que cita a cobrança ou um verbo de envio.
+// A fala da IA pergunta sobre a cobrança ou o envio: uma frase com "?" que cita a cobrança ou um verbo de envio. Revisão do
+// incremento: e que OFERECE ("Quer que eu reenvie?", "Você prefere boleto ou PIX?", "Posso enviar?") — "Você recebeu o boleto?"
+// não oferece, e o "sim"/"ainda não" dele não é pedido nem desistência.
+const OFERTA = new Set(['quer', 'queria', 'quiser', 'deseja', 'posso', 'pode', 'prefere', 'gostaria', 'devo', 'mando', 'envio', 'reenvio', 'gero',
+  'mandar', 'enviar', 'reenviar', 'gerar', 'emitir', 'envie', 'mande', 'reenvie', 'gere']);
 function perguntaSobreACobranca(falaDaIa) {
-  return String(falaDaIa || '').split(/(?<=[.!?])\s+|\n+/).some((frase) => /\?\s*$/.test(frase.trim())
-    && palavrasDe(frase).some((x) => COBRANCAS.has(x.p) || /^(envi|reenvi|mand|ger[ae]|emit)/.test(x.p)));
+  return String(falaDaIa || '').split(/(?<=[.!?])\s+|\n+/).some((frase) => {
+    if (!/\?\s*$/.test(frase.trim())) return false;
+    const q = palavrasDe(frase).map((x) => x.p);
+    return q.some((w) => COBRANCAS.has(w) || /^(envi|reenvi|mand|ger[ae]|emit)/.test(w)) && q.some((w) => OFERTA.has(w));
+  });
 }
 /**
  * O pedido de ação de UMA fala do cliente: 'pedido' (pede a cobrança ou o envio), 'desistencia' (desiste dela, sem pedir outra

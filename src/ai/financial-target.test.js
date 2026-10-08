@@ -1115,3 +1115,25 @@ describe('pedido de ação: correções da revisão da rodada 10', () => {
     expect(classificarPedido('agora não')).toBe(null);
   });
 });
+
+// Revisão do incremento da rodada 10 (R1, verificado por script): o "não" de uma oração subordinada ("que não chegou", "porque o
+// boleto não abre") e o "não"/"nem" longe do verbo não negam o pedido; e só a pergunta da IA que OFERECE conta para o "sim"/"não".
+describe('pedido de ação: ressalvas da revisão do incremento', () => {
+  test.each([
+    ['manda de novo que não chegou'], ['manda o boleto que eu não recebi'], ['me manda o pix porque o boleto não abre'],
+    ['nem recebi o boleto manda de novo'], ['não chegou manda de novo'],
+  ])('R1: %j é pedido', (fala) => {
+    expect(classificarPedido(fala)).toBe('pedido');
+  });
+  test.each([['manda não'], ['não manda o pix'], ['não me manda o boleto'], ['não precisa mandar'], ['não quero que mande'], ['nem manda'], ['para de mandar boleto']])(
+    'R1 (preservado): %j continua desistência', (fala) => {
+      expect(classificarPedido(fala)).toBe('desistencia');
+    },
+  );
+  test('a pergunta que não oferece ("Você recebeu o boleto?") não faz do "sim" um pedido nem do "ainda não" uma desistência', () => {
+    expect(classificarPedido('sim', { falaDaIa: 'Você recebeu o boleto?' })).toBe(null);
+    expect(classificarPedido('ainda não', { falaDaIa: 'Você recebeu o boleto?' })).toBe(null);
+    expect(classificarPedido('sim', { falaDaIa: 'Você prefere boleto ou PIX?' })).toBe('pedido');
+    expect(classificarPedido('não', { falaDaIa: 'Quer que eu reenvie o boleto?' })).toBe('desistencia');
+  });
+});

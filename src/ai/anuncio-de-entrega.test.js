@@ -117,3 +117,20 @@ test('G1: "estou vendo" é explicação; "estou gerando" e "vou te enviar de nov
   expect(violacoesDaEntrega('Já estou gerando o seu PIX.', SEM_NADA)).toContain('entrega_futura');
   expect(violacoesDaEntrega('Poxa, como o boleto não chegou, vou te enviar de novo.', SEM_NADA)).toContain('entrega_futura');
 });
+
+// Revisão do incremento da rodada 10 (R2 e R3, verificados por script): todas as ocorrências de cada forma são conferidas, e a
+// negação colada só aceita palavras auxiliares entre o "não" e o verbo.
+describe('G1: ressalvas da revisão do incremento', () => {
+  test.each([
+    ['Não vou mandar o PIX, vou mandar o boleto agora.'], ['Não se preocupe vou enviar o boleto agora.'],
+    ['Vou falar com o financeiro e já vou te enviar o boleto.'], ['Daqui a pouco o boleto chega no seu WhatsApp.'],
+    ['Estou reenviando o boleto agora.'], ['Aguarde, o boleto está sendo gerado.'],
+  ])('%j apresenta a entrega que não saiu como trabalho em andamento', (texto) => {
+    expect(violacoesDaEntrega(texto, SEM_NADA)).toContain('entrega_futura');
+  });
+  test.each([['Eu não vou conseguir enviar o PIX agora.'], ['Ainda não enviei a cobrança.'], ['Não te mandei o boleto ainda.'], ['O boleto ainda não foi gerado.']])(
+    'a negação com auxiliares continua negando — %j', (texto) => {
+      expect(violacoesDaEntrega(texto, SEM_NADA)).toEqual([]);
+    },
+  );
+});

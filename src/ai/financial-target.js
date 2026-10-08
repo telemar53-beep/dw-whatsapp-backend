@@ -268,6 +268,10 @@ function lerPrefixoDeCorrecao(palavras) {
 }
 const prefixoDeCorrecao = (palavras) => lerPrefixoDeCorrecao(palavras).k;
 const ehCorrecao = (texto) => lerPrefixoDeCorrecao(palavrasDe(texto)).forte;
+// Revisão do incremento (achado A): QUALQUER marcador, forte ou de duplo sentido, seguido de outra rua dele corrige — "desculpa,
+// é o da Avenida" substitui o contrato escolhido antes. (Sem o acento, "é o da" e "e o da" são a mesma leitura: "opa, e o da
+// Avenida" também substitui — uma pergunta a mais, nunca uma cobrança a mais.)
+const temMarcadorDeCorrecao = (texto) => prefixoDeCorrecao(palavrasDe(texto)) > 0;
 
 /** As ruas dos contratos confirmados: a rua (antes da vírgula; sem vírgula, antes de " - "), com duas palavras ou mais, se tem o tipo do logradouro, e o número. */
 function ruasDosContratos(enderecos) {
@@ -665,7 +669,7 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
     alvoAmbiguo = r.alvoAmbiguo;
     // A correção que escolhe outro contrato SUBSTITUI o desdito; sem correção, duas falas com contratos diferentes valem as duas.
     escolha = r.contratoEscolhido
-      ? (correcao ? [r.contratoEscolhido] : [...new Set([...(escolha || []), r.contratoEscolhido])])
+      ? (temMarcadorDeCorrecao(texto) ? [r.contratoEscolhido] : [...new Set([...(escolha || []), r.contratoEscolhido])])
       : (respondida && !r.alvoAmbiguo ? escolha : null);
     if (r.voltarAoTitular) {
       // A volta ao titular com a dúvida de endereço: o titular, com a dúvida gravada (escopo pendente sem contrato).

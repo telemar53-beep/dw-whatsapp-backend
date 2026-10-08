@@ -586,3 +586,16 @@ describe('esclarecimento limitado (F1)', () => {
     });
   });
 });
+
+// Rodada 10 (08/10/2026; S5 r3 #3): a correção do N6 dizia só "siga com o que ele pediu" — o modelo respondeu "Vou usar a fatura
+// do endereço…" sem entregar nem perguntar. A correção devolve o pedido dele com o alvo, o contrato e o meio do bloco.
+describe('correção do documento a quem já está identificado (rodada 10, S5)', () => {
+  test('devolve o pedido dele com o bloco ALVO FINANCEIRO AGORA, sem anúncio e sem pedir que ele repita', () => {
+    const t = correcaoDoDocumento(['documento_ja_identificado'], {});
+    expect(t).toMatch(/JÁ está identificado: NÃO peça o CPF ou CNPJ dele/);
+    expect(t).toMatch(/ALVO FINANCEIRO AGORA/);
+    expect(t).toMatch(/sem meio definido lá, pergunte só se ele quer boleto ou PIX/);
+    expect(t).toMatch(/Não anuncie o que vai fazer/);
+    expect(t).toMatch(/não peça que ele repita o pedido/);
+  });
+});

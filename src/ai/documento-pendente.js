@@ -320,7 +320,9 @@ function correcaoDoDocumento(violacoes, contexto) {
     partes.push('O atendimento já foi encaminhado: NÃO peça documento nenhum. Responda em uma frase.');
   }
   if (violacoes.includes('documento_ja_identificado')) {
-    partes.push('Quem está falando JÁ está identificado: NÃO peça o CPF ou CNPJ dele. Siga com o que ele pediu usando o cadastro que você já tem.');
+    // Rodada 10 (S5 r3 #3): só "siga com o que ele pediu" e o modelo respondeu "Vou usar a fatura do endereço…" sem entregar nem
+    // perguntar. A correção devolve o pedido dele com o bloco do alvo (contrato e meio).
+    partes.push('Quem está falando JÁ está identificado: NÃO peça o CPF ou CNPJ dele. Siga com o que ele pediu usando o cadastro que você já tem — não peça que ele repita o pedido. Se ele pediu uma cobrança, ela está em ALVO FINANCEIRO AGORA: com o contrato e o meio definidos lá, entregue por esse meio (enviar_boleto ou gerar_pix); sem contrato definido, pergunte só de qual endereço é; sem meio definido lá, pergunte só se ele quer boleto ou PIX. Não anuncie o que vai fazer: faça, ou pergunte só o que falta.');
   }
   if (violacoes.includes('documento_terceiro_localizado')) {
     partes.push('O cadastro da outra pessoa JÁ foi localizado com o documento informado: NÃO peça o documento dela de novo. Siga com o que ele pediu.');

@@ -968,6 +968,31 @@ describe('perfil de triagem', () => {
       const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
       expect(r.texto).toBe('Certo! Ainda não enviei a cobrança.');
     });
+    // Rodada 10 (S5 r3 #2 e #3): o meio que a trava do meio aceita (pedido depois da última entrega) vai ao bloco do alvo.
+    test('S5: o boleto pedido depois da última entrega aparece no bloco ALVO FINANCEIRO AGORA', async () => {
+      listRecentMessagesByConversation.mockResolvedValue([
+        { direction: 'inbound', content: 'manda o boleto da minha vizinha', messageType: 'text' },
+        { direction: 'outbound', sentBy: 'ai', content: null, messageType: 'document' },
+        { direction: 'inbound', content: 'agora manda o boleto da rua do João', messageType: 'text' },
+        { direction: 'outbound', sentBy: 'ai', content: 'De quem é a cobrança?', messageType: 'text' },
+        { direction: 'inbound', content: 'agora a minha fatura', messageType: 'text' },
+      ]);
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Você prefere boleto ou PIX?' }, usage: {} });
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      const sistema = createChatCompletion.mock.calls[0][0].messages[0].content;
+      expect(sistema).toMatch(/ALVO FINANCEIRO AGORA/);
+      expect(sistema).toMatch(/- Meio de pagamento: boleto — ele pediu o boleto nesta conversa depois da última cobrança entregue/);
+    });
+    test('S5: sem meio pedido depois da última entrega, o bloco não afirma meio', async () => {
+      listRecentMessagesByConversation.mockResolvedValue([
+        { direction: 'inbound', content: 'manda o boleto', messageType: 'text' },
+        { direction: 'outbound', sentBy: 'ai', content: null, messageType: 'document' },
+        { direction: 'inbound', content: 'agora a minha fatura', messageType: 'text' },
+      ]);
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Você prefere boleto ou PIX?' }, usage: {} });
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion.mock.calls[0][0].messages[0].content).not.toMatch(/Meio de pagamento/);
+    });
 
     test('texto sem anúncio de envio não dá volta nenhuma', async () => {
       createChatCompletion.mockResolvedValueOnce({ message: { content: 'Claro, João! De qual endereço você precisa?' }, usage: {} });

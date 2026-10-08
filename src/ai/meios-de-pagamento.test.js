@@ -1,4 +1,4 @@
-const { meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada } = require('./meios-de-pagamento');
+const { meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada, meioCitadoDepoisDaEntrega } = require('./meios-de-pagamento');
 
 // Comportamento da IA (06/10/2026; A6/A7): o estado dos meios que a 2ª via desta conversa comprovou e as duas guardas da
 // resposta restritas a ele — sem ampliar o validador de promessas.
@@ -183,5 +183,58 @@ describe('mais de um contrato na conversa', () => {
       .toBe('O PIX desta fatura não está disponível agora.');
     expect(respostaSemIndisponibilidadeNaoConfirmada('O PIX não está disponível agora.', [{ ...RUA_SEM_PIX, pix: null }], { contratos: [{ id: 301 }] }).texto)
       .toBe('Não consegui confirmar agora se o PIX está disponível para esta fatura.');
+  });
+});
+
+// Rodada 10 (08/10/2026; ordem, item 2; avaliação real S5 r3, #2 e #3): a trava do meio aceitava o boleto do 301 na fala 4 (o
+// cliente pediu "boleto" depois da última entrega), e o prompt não dizia isso — a regra "o meio de outra fatura não conta" fazia
+// o modelo achar que faltava o meio. O fato do meio vem do histórico do turno, com a mesma régua da trava.
+describe('meioCitadoDepoisDaEntrega (rodada 10, S5)', () => {
+  const texto = (m) => m.content;
+  const cli = (content) => ({ direction: 'inbound', messageType: 'text', content });
+  const ia = (content, messageType = 'text') => ({ direction: 'outbound', sentBy: 'ai', messageType, content });
+  test('S5: o boleto pedido depois da última entrega (o PDF do boleto da vizinha) é o meio da cobrança atual', () => {
+    expect(meioCitadoDepoisDaEntrega([
+      cli('Oi, manda o boleto da internet da minha vizinha Fulana.'), ia(null, 'document'), ia('Prontinho!'),
+      cli('Agora manda o boleto da rua do João.'), ia('De quem é?'), cli('O dele.'), ia('Preciso do CPF.'), cli('Agora a minha fatura da Rua de Teste.'),
+    ], texto)).toBe('boleto');
+  });
+  test('o meio citado só ANTES da última entrega não vale', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('manda o boleto'), ia(null, 'document'), cli('agora a da outra casa')], texto)).toBe(null);
+  });
+  test('o cartão PIX também é entrega', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), ia('PIX-DE-TESTE', 'pix'), cli('e o boleto da outra?')], texto)).toBe('boleto');
+  });
+  test('sem entrega no histórico, vale o meio citado em qualquer fala dele', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('quero pagar por pix'), ia('De qual endereço?'), cli('da Rua de Teste')], texto)).toBe('pix');
+  });
+  test('os dois meios, só a negação, ou só a fala da IA: nenhum', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('boleto ou pix, tanto faz')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('não quero boleto')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('não quero boleto, manda o pix')], texto)).toBe('pix');
+    expect(meioCitadoDepoisDaEntrega([ia('Você prefere boleto ou PIX?'), cli('o primeiro')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([], texto)).toBe(null);
+  });
+});
+
+// Revisão da rodada 10 (A4-1 e A4-2, verificados por script).
+describe('meioCitadoDepoisDaEntrega: correções da revisão da rodada 10', () => {
+  const texto = (m) => m.content;
+  const cli = (content) => ({ direction: 'inbound', messageType: 'text', content });
+  const ia = (content, meiosDaFatura) => ({ direction: 'outbound', sentBy: 'ai', messageType: 'text', content, metadata: { meiosDaFatura } });
+  test('A4-1: a desistência não cita meio e apaga o citado antes', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), cli('esquece o pix')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('cancela o boleto')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), cli('esquece')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('não precisa mais o boleto')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix não')], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('esquece o pix, manda o boleto')], texto)).toBe('boleto');
+    expect(meioCitadoDepoisDaEntrega([cli('não quero boleto, manda o pix')], texto)).toBe('pix');
+    // A oração com "não" que não é desistência também não cita ("o boleto não chegou" não é pedido de boleto).
+    expect(meioCitadoDepoisDaEntrega([cli('o boleto não chegou')], texto)).toBe(null);
+  });
+  test('A4-2: o meio que a 2ª via desta conversa mostrou inexistente não vira fato', () => {
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), ia('Essa fatura não tem PIX agora.', [{ contratoId: '301', faturaId: '9', pix: false, boleto: true }])], texto)).toBe(null);
+    expect(meioCitadoDepoisDaEntrega([cli('manda o pix'), ia('Você prefere boleto ou PIX?', [{ contratoId: '301', faturaId: '9', pix: true, boleto: true }])], texto)).toBe('pix');
   });
 });

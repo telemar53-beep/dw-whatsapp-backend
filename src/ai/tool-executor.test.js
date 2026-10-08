@@ -1165,6 +1165,18 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
       const r = await executeTool('buscar_cliente', { cpf: '11144477735' }, base({ terceiro: null, alvoAmbiguo: false, alvoVoltouAoTitular: true, falasNovasDoCliente: ['agora a minha fatura da Rua de Teste'] }));
       expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
       expect(r.instrucao).toMatch(/a cobrança é dele/);
+      // Rodada 10 (S5 r3 #2): a recusa não devolve a ação ao cliente — o pedido dele continua valendo, com o alvo, o contrato e o
+      // meio do bloco; sem meio definido, só a pergunta do meio. Sem ferramenta obrigatória.
+      expect(r.instrucao).toMatch(/O pedido dele continua valendo/);
+      expect(r.instrucao).toMatch(/não peça que ele repita o pedido/);
+      expect(r.instrucao).toMatch(/ALVO FINANCEIRO AGORA/);
+      expect(r.instrucao).toMatch(/sem meio definido lá, pergunte só se ele quer boleto ou PIX/);
+      expect(executar).not.toHaveBeenCalled();
+    });
+    test('rodada 10: a volta à própria cobrança de quem NÃO está identificado não diz que ele está identificado', async () => {
+      const executar = buscar();
+      const r = await executeTool('buscar_cliente', { cpf: '11144477735' }, base({ identidade: null, terceiro: null, alvoAmbiguo: false, alvoVoltouAoTitular: true, falasNovasDoCliente: ['agora a minha fatura da Rua de Teste'] }));
+      if (r.motivo === 'document_before_doubt') expect(r.instrucao).not.toMatch(/já está identificado|ALVO FINANCEIRO AGORA/);
       expect(executar).not.toHaveBeenCalled();
     });
     // A origem efetiva: o documento numa fala a partir da que originou a dúvida (o pedido de terceiro com o CPF na mesma

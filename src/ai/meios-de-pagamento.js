@@ -172,4 +172,45 @@ function respostaSemIndisponibilidadeNaoConfirmada(texto, meios, { cobrancaComRe
   return alterado ? { texto: saida.join(' ').trim(), alterado } : { texto, alterado: false };
 }
 
-module.exports = { meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada };
+/**
+ * Rodada 10 (08/10/2026; ordem, item 2; avaliação real S5 r3, #2 e #3): o meio que o CLIENTE citou depois da última cobrança
+ * entregue nesta conversa (o cartão PIX ou o PDF do boleto que a IA mandou, no histórico do turno) — ou, sem entrega no
+ * histórico, em qualquer fala dele no histórico. É a régua com que a trava do meio (tool-registry.js) aceita entregar sem
+ * perguntar: na fala 4 do S5 ela aceitava o boleto do 301, e o prompt não dizia — a regra "o meio usado em outra fatura não
+ * conta" fazia o modelo achar que faltava o meio, e ele devolveu a ação ao cliente ou anunciou sem entregar. Só um meio citado
+ * (sem "não" antes, na mesma oração) vira fato; os dois, nenhum ou só a negação: null — o prompt não afirma meio nenhum e as
+ * regras de sempre valem (continuidade da mesma fatura, ou perguntar). Mais estrita que a trava (que conta também a negação):
+ * quando o fato aparece, a trava aceita. `textoDe(m)`: o texto da mensagem como o modelo vê. Puro.
+ */
+function meioCitadoDepoisDaEntrega(historico, textoDe) {
+  const lista = Array.isArray(historico) ? historico.filter(Boolean) : [];
+  let corte = -1;
+  lista.forEach((m, i) => {
+    if (m.direction === 'outbound' && m.sentBy === 'ai' && (m.messageType === 'pix' || m.messageType === 'document')) corte = i;
+  });
+  let citados = new Set();
+  for (const m of lista.slice(corte + 1)) {
+    if (m.direction !== 'inbound') continue;
+    for (const oracao of norm(textoDe(m)).split(/[,.;:!?\n]|\be\b|\bmas\b/)) {
+      // Revisão da rodada 10 (A4-1): a oração de desistência ("esquece o pix", "não precisa mais", "manda o pix não") não cita
+      // meio e apaga o citado antes; outra oração com "não" também não cita.
+      if (DESISTE.test(oracao)) { citados = new Set(); continue; }
+      if (/\bnao\b/.test(oracao)) continue;
+      for (const meio of MEIOS) if (MEIO[meio].test(oracao)) citados.add(meio);
+    }
+  }
+  const meio = citados.size === 1 ? [...citados][0] : null;
+  // Revisão da rodada 10 (A4-2): o meio que a 2ª via desta conversa mostrou inexistente (o estado gravado na resposta da IA mais
+  // recente que o traz) não vira fato — o prompt manda não oferecê-lo.
+  return meio && !inexistente(meiosDoHistorico(lista), meio) ? meio : null;
+}
+const DESISTE = /\b(?:esquece|esqueca|cancela|cancele|cancelar|deixa|deixe|desisti|desisto|nem)\b|\bdepois (?:eu )?vejo\b|\b(?:para|pare|parar|chega) de\b|\bnao (?:precisa|quero|manda|mande|envia|envie)\b|\b(?:manda|mande|envia|envie|mandar|enviar)\b.*\bnao\b/;
+function meiosDoHistorico(lista) {
+  for (let i = lista.length - 1; i >= 0; i -= 1) {
+    const m = lista[i];
+    if (m.direction === 'outbound' && m.sentBy === 'ai' && m.metadata && Array.isArray(m.metadata.meiosDaFatura)) return m.metadata.meiosDaFatura;
+  }
+  return [];
+}
+
+module.exports = { meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada, meioCitadoDepoisDaEntrega };

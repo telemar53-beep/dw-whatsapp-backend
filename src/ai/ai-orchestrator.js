@@ -8,6 +8,7 @@ const { recordAiInteraction, listAiInteractionsByConversation } = require('./ai-
 const { promessasSemEvidencia, respostaSemPromessas } = require('./promessas-sem-evidencia');
 const {
   meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada,
+  meioCitadoDepoisDaEntrega,
 } = require('./meios-de-pagamento');
 const { listRecentMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { resumoParaModelo, encontrarDisparoRelacionado, fatoDoDisparo } = require('../conversations/automatic-message');
@@ -515,6 +516,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           meiosDaFatura: (m.metadata && Array.isArray(m.metadata.meiosDaFatura)) ? m.metadata.meiosDaFatura : null,
         })),
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
+      // Rodada 10 (S5 r3 #2 e #3): o meio que ele pediu depois da última entrega, do histórico que o modelo vê — a régua com que
+      // a trava do meio aceita entregar; vai ao bloco ALVO FINANCEIRO AGORA (o prompt não afirmava o que o código já aceitava).
+      meioDoPedido: meioCitadoDepoisDaEntrega(historico, (m) => conteudoParaModelo(m, perfil)),
       // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
       // gravam aqui (buscar_cliente pode descobri-lo no meio do turno).
       avisoCidade,

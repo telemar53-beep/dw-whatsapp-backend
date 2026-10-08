@@ -46,6 +46,8 @@ function fatosDoAlvoFinanceiro(contexto, { pedidoDeDocumentoPermitido = true } =
     quantosContratos: contratos.length,
     duvida,
     pedidoDeDocumentoPermitido: pedidoDeDocumentoPermitido !== false,
+    // Rodada 10 (S5): o meio que ele pediu depois da última entrega (meios-de-pagamento.js, meioCitadoDepoisDaEntrega).
+    meio: c.meioDoPedido === 'boleto' || c.meioDoPedido === 'pix' ? c.meioDoPedido : null,
   };
 }
 
@@ -75,6 +77,13 @@ function linhaDoContrato(f) {
   if (f.quantosContratos === 1) return '- Contrato escolhido: o único contrato dele.';
   if (f.quantosContratos > 1) return '- Contrato escolhido: nenhum ainda.';
   return null;
+}
+
+// Rodada 10 (S5): só com a cobrança liberada (dele ou da outra pessoa já localizada) e sem dúvida.
+function linhaDoMeio(f) {
+  if (!f.meio || f.duvida || (f.alvo !== 'titular' && f.alvo !== 'terceiro')) return null;
+  const nome = f.meio === 'pix' ? 'PIX' : 'boleto';
+  return `- Meio de pagamento: ${nome} — ele pediu o ${nome} nesta conversa depois da última cobrança entregue, e o sistema aceita esse meio para a cobrança atual. Não pergunte o meio de novo, salvo se a fala atual pedir outro.`;
 }
 
 function linhaDaDuvida(f) {
@@ -122,6 +131,7 @@ module.exports = {
       linhaDeQuemFala(f),
       linhaDoAlvo(f),
       linhaDoContrato(f),
+      linhaDoMeio(f),
       linhaDaDuvida(f),
       linhaDoQueFalta(f),
     ].filter((l) => l !== null);

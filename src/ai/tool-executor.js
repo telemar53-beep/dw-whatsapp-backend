@@ -262,6 +262,12 @@ const DUVIDAS_DE_ENDERECO = new Set(['endereco_ambiguo', 'endereco_desconhecido'
 const PEDIDO_DO_DOCUMENTO_DO_TITULAR = 'Se for de outra pessoa, me mande o CPF ou CNPJ do titular.';
 function instrucaoDoDocumentoDoHistorico(restricao, contexto) {
   if (restricao === 'titular') {
+    // Rodada 10 (S5 r3 #2): a recusa dizia só "siga com a cobrança dele" — o modelo devolveu a ação ao cliente ("me peça para
+    // enviar o boleto ou o PIX"). Com ele identificado, a recusa devolve o pedido dele com o bloco do alvo (contrato e meio).
+    const identidade = contexto && contexto.identidade;
+    if (identidade && identidade.nivel === 'forte' && !identidade.contestado) {
+      return 'NADA foi consultado, e não precisa: ele acabou de dizer que a cobrança é dele, e ele já está identificado. O CPF ou CNPJ de outra pessoa que já estava na conversa não vale agora. O pedido dele continua valendo — não peça que ele repita o pedido nem documento: siga com a cobrança dele como está em ALVO FINANCEIRO AGORA. Com o contrato e o meio definidos lá, entregue por esse meio (enviar_boleto ou gerar_pix); sem contrato definido, pergunte só de qual endereço é; sem meio definido lá, pergunte só se ele quer boleto ou PIX.';
+    }
     return 'NADA foi consultado: ele acabou de dizer que a cobrança é dele. O CPF ou CNPJ de outra pessoa que já estava na conversa não vale agora: siga com a cobrança dele, pelo cadastro que você já tem.';
   }
   const motivo = (contexto.terceiro && contexto.terceiro.alvoPendente) || contexto.alvoAmbiguo;

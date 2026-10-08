@@ -101,3 +101,20 @@ describe('fatos do alvo financeiro (N5)', () => {
     expect(alvoFinanceiro.entra(estadoBase({ alvoFinanceiro: fatosDoAlvoFinanceiro(contexto({ identidade: { nivel: 'none' }, contracts: [] })) }))).toBe(false);
   });
 });
+
+// Rodada 10 (S5): o meio que ele pediu depois da última entrega — o mesmo fato com que a trava do meio aceita entregar — entra
+// no bloco; sem ele, nenhuma linha de meio (as regras de sempre valem: continuidade da mesma fatura, ou perguntar).
+describe('o meio do pedido no bloco (rodada 10, S5)', () => {
+  test('a volta à própria cobrança com o boleto pedido depois da última entrega', () => {
+    const t = linhas(contexto({ alvoVoltouAoTitular: true, alvoVoltouDeTerceiro: true, contratoEscolhido: '301', contratosEscolhidos: ['301'], meioDoPedido: 'boleto' }));
+    expect(t).toMatch(/- Meio de pagamento: boleto — ele pediu o boleto nesta conversa depois da última cobrança entregue, e o sistema aceita esse meio para a cobrança atual. Não pergunte o meio de novo, salvo se a fala atual pedir outro./);
+  });
+  test('PIX', () => {
+    expect(linhas(contexto({ contratoEscolhido: '301', contratosEscolhidos: ['301'], meioDoPedido: 'pix' }))).toMatch(/- Meio de pagamento: PIX — ele pediu o PIX/);
+  });
+  test('sem o fato, ou com dúvida do alvo, ou com a cobrança travada: nenhuma linha de meio', () => {
+    expect(linhas(contexto({ contratoEscolhido: '301', contratosEscolhidos: ['301'] }))).not.toMatch(/Meio de pagamento/);
+    expect(linhas(contexto({ alvoAmbiguo: 'endereco_desconhecido', meioDoPedido: 'boleto' }))).not.toMatch(/Meio de pagamento/);
+    expect(linhas(contexto({ terceiro: { nome: null, contratos: [], pendente: true }, meioDoPedido: 'boleto' }))).not.toMatch(/Meio de pagamento/);
+  });
+});

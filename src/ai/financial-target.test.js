@@ -892,4 +892,75 @@ describe('pedido por endereço do próprio cliente', () => {
     expect(turno('o pix da Rua Projetada', { enderecos: PROJETADA })).toEqual(trava(null, 'endereco_ambiguo'));
     expect(turno('o pix da Rua Projetada 2, 15', { enderecos: PROJETADA })).toEqual({ ...titular, contratoEscolhido: '426' });
   });
+
+  // Rodada 8 (N2, avaliação real do endereço): a correção do cliente ("Ops, me enganei, é o da …") não cria terceiro. Um prefixo
+  // de correção de uma lista fechada sai da frente e o resto é lido como sempre: a rua de um contrato dele escolhe o contrato e
+  // SUBSTITUI o que foi desdito no lote; a correção sem contrato identificado vira dúvida de endereço (o desdito não fica como
+  // destino). A interjeição não autoriza nada: com terceiro ou dúvida forte, vale a leitura de sempre.
+  describe('a correção do cliente (rodada 8, N2)', () => {
+    const COM_500 = [...ENDERECOS, { id: 305, address: 'Rua de Teste, 500 - Bairro de Teste' }];
+    const so = (contratos) => ({ terceiro: null, alvoAmbiguo: false, gravar: null, contratosEscolhidos: contratos, ...(contratos.length === 1 ? { contratoEscolhido: contratos[0] } : {}) });
+    test.each([
+      [['manda o pix da Rua de Teste', 'Ops, me enganei, é o da Avenida de Teste.']],
+      [['Ops, é o da Avenida de Teste.']],
+      [['Na verdade é a da Avenida de Teste.']],
+      [['manda o pix da Rua de Teste', 'Errei, manda o da Avenida de Teste.']],
+      [['manda o pix da Rua de Teste', 'Desculpa, me enganei, é o pix da Avenida de Teste, por favor.']],
+      [['manda o pix da Rua de Teste', 'Ops, me enganei.', 'É o da Avenida de Teste.']],
+      // Revisão do incremento (achado A): o marcador de duplo sentido seguido de OUTRA rua dele também corrige — substitui.
+      [['manda o pix da Rua de Teste', 'Opa, desculpa, é o pix da Avenida de Teste, por favor.']],
+      [['manda o pix da Rua de Teste', 'desculpa, é o da Avenida de Teste']],
+      [['manda o pix da Rua de Teste', 'foi mal, é o da Avenida de Teste']],
+      [['manda o pix da Rua de Teste', 'pera, é o da Avenida de Teste']],
+      [['manda o pix da Rua de Teste', 'epa, o da Avenida de Teste']],
+      [['manda o pix da Rua de Teste', 'opa, e o da Avenida de Teste']],
+    ])('%j: só o 302 (a correção substitui o desdito)', (falas) => {
+      expect(mensagens(falas)).toEqual(so(['302']));
+    });
+    test.each([
+      [['manda o pix da Rua de Teste', 'Ops, me enganei.']],
+      [['manda o pix da Rua de Teste', 'ops, é a outra casa']],
+      [['manda o pix da Rua de Teste', 'Ops, é o da Rua Nova.']],
+    ])('%j: desdisse sem identificar outro dele: dúvida de endereço gravada, nenhum contrato escolhido', (falas) => {
+      expect(mensagens(falas)).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+    });
+    test('correção para uma rua com dois contratos dele: dúvida de qual', () => {
+      expect(mensagens(['manda o pix da Avenida de Teste', 'Ops, me enganei, é o da Rua de Teste.'], { enderecos: COM_500 }))
+        .toEqual({ terceiro: DUVIDA('endereco_ambiguo'), alvoAmbiguo: 'endereco_ambiguo', gravar: 'criar' });
+    });
+    test('a referência explícita a terceiro na correção continua outra pessoa', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'Ops, é o da minha mãe.'])).toEqual({ terceiro: FORTE, alvoAmbiguo: 'outra_pessoa_sem_documento', gravar: 'criar' });
+    });
+    test('a negação sem vírgula ("não é o da …") não é correção: continua como antes', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'não é o da Avenida de Teste'])).toEqual({ terceiro: null, alvoAmbiguo: 'referencia_incompleta', gravar: null });
+    });
+    test('a interjeição não volta ao titular: com terceiro, a rua dele vale como sem ela (dúvida fraca); com dúvida forte, a dúvida fica', () => {
+      const comTerceiro = mensagens(['Ops, me enganei, é o da Avenida de Teste.'], { terceiro: FULANA });
+      expect(comTerceiro).toEqual(mensagens(['é o da Avenida de Teste.'], { terceiro: FULANA }));
+      expect(comTerceiro).toMatchObject({ alvoAmbiguo: 'proprio_nao_afirmado', gravar: 'pendencia' });
+      expect(mensagens(['Ops, me enganei, é o da Avenida de Teste.'], { terceiro: FORTE })).toEqual({ terceiro: FORTE, alvoAmbiguo: 'outra_pessoa_sem_documento', gravar: null });
+    });
+    test('com a dúvida gravada: a resposta e a correção para a outra rua deixam só a outra; a resposta desdita sem rua devolve a dúvida', () => {
+      expect(mensagens(['É a da Rua de Teste.', 'Ops, me enganei, é a da Avenida de Teste.'], { terceiro: DUVIDA('endereco_desconhecido') }))
+        .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: 'limpar', contratosEscolhidos: ['302'], contratoEscolhido: '302' });
+      expect(mensagens(['É a da Rua de Teste.', 'Ops, me enganei.'], { terceiro: DUVIDA('endereco_desconhecido') }))
+        .toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'pendencia' });
+      // Revisão do incremento (achado A): também com o marcador de duplo sentido seguido da outra rua.
+      expect(mensagens(['É a da Rua de Teste.', 'desculpa, é o da Avenida de Teste'], { terceiro: DUVIDA('endereco_desconhecido') }))
+        .toEqual({ terceiro: null, alvoAmbiguo: false, gravar: 'limpar', contratosEscolhidos: ['302'], contratoEscolhido: '302' });
+    });
+    // Revisão da rodada 8 (achado 9): prefixos de duplo sentido ("opa", "desculpa", "pera", "foi mal") SEM outra rua não
+    // substituem o contrato nem criam a dúvida — "opa, obrigado" e "desculpa a demora" seguem como na produção. Com outra rua
+    // dele, substituem (achado A, acima).
+    test('prefixo de duplo sentido sem outra rua não é correção: não substitui nem cria dúvida, e ainda deixa ler a rua', () => {
+      for (const fala of ['opa, obrigado', 'desculpa a demora', 'pera, pode mandar']) {
+        expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(mensagens(['manda o pix da Rua de Teste', 'obrigado']));
+      }
+      expect(mensagens(['Opa, é o da Avenida de Teste.'])).toEqual(so(['302']));
+    });
+
+    test('dois pedidos sem correção continuam valendo os dois', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'e o da Avenida de Teste'])).toEqual(so(['301', '302']));
+    });
+  });
 });

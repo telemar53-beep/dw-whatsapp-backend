@@ -1,5 +1,5 @@
 const { findTool, perfilTriagem, temEfeitoReal, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
-const { documentosNoTexto } = require('./documento-pendente');
+const { documentosNoTexto, violacoesDoDocumento } = require('./documento-pendente');
 const { FERRAMENTAS_DE_COBRANCA, alvoFinanceiro, AMBIGUIDADE, documentosValidos } = require('./financial-target');
 const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
@@ -226,11 +226,16 @@ function restricaoDoHistorico(contexto) {
 function origemDaRestricao(contexto, restricao) {
   if (restricao === 'titular') return contexto.origemDoAlvoNoTurno || null;
   const gravada = contexto.terceiro && contexto.terceiro.alvoPendente;
-  return (gravada ? contexto.terceiro.duvidaDesde : contexto.origemDoAlvoNoTurno) || null;
+  // Revisão do incremento (achado C): a origem do lote deste turno, quando há, é sempre posterior à gravada — vale ela (a mesma
+  // dúvida desfeita e refeita no lote não deixa a janela antiga valendo).
+  return (gravada ? (contexto.origemDoAlvoNoTurno || contexto.terceiro.duvidaDesde) : contexto.origemDoAlvoNoTurno) || null;
 }
 function documentoSoDoHistorico(documento, contexto) {
   const restricao = restricaoDoHistorico(contexto);
   if (!restricao || !documento || documento === documentoDoTitularDaConversa(contexto)) return null;
+  // Revisão do incremento (achado D): as falas do lote não foram lidas — a origem efetiva é desconhecida, e nenhum documento de
+  // outra pessoa esclarece a dúvida neste turno (o seguinte relê o lote).
+  if (contexto.falasNovasLidas === false) return restricao;
   const desde = origemDaRestricao(contexto, restricao);
   const janela = Array.isArray(contexto.mensagensDaJanela) ? contexto.mensagensDaJanela : [];
   const i = desde ? janela.findIndex((m) => m && m.id === desde) : -1;
@@ -250,6 +255,8 @@ function documentosDasFalasNovas(contexto, janela) {
 // dúvida que pede documento manda pedi-lo de novo; com a dúvida fraca ou de endereço, pedir documento seria barrado.
 const DUVIDAS_QUE_PEDEM_DOCUMENTO = new Set(['terceiro_nao_vinculado', 'outra_pessoa_sem_documento', 'terceiro_expirado']);
 const DUVIDAS_DE_ENDERECO = new Set(['endereco_ambiguo', 'endereco_desconhecido']);
+// A frase do pedido que a instrução manda fazer, conferida pela guarda do documento antes de mandar pedir.
+const PEDIDO_DO_DOCUMENTO_DO_TITULAR = 'Se for de outra pessoa, me mande o CPF ou CNPJ do titular.';
 function instrucaoDoDocumentoDoHistorico(restricao, contexto) {
   if (restricao === 'titular') {
     return 'NADA foi consultado: ele acabou de dizer que a cobrança é dele. O CPF ou CNPJ de outra pessoa que já estava na conversa não vale agora: siga com a cobrança dele, pelo cadastro que você já tem.';
@@ -259,6 +266,11 @@ function instrucaoDoDocumentoDoHistorico(restricao, contexto) {
   // conversa"), e pode ser dele mesmo, se ele ainda não está identificado — a instrução não diz de quem é.
   const inicio = 'NADA foi consultado: este CPF ou CNPJ não veio numa mensagem dele depois da dúvida de agora, e consultá-lo assim não esclarece a cobrança. Não envie nada de ninguém.';
   if (DUVIDAS_QUE_PEDEM_DOCUMENTO.has(motivo)) {
+    // Revisão do incremento (achado B): a guarda do documento barraria o pedido (ele se irritou, ou a cadeia de pedidos se
+    // esgotou) — sem a contradição "peça de novo" × "NÃO peça de novo": não pede, e oferece o atendente.
+    if (violacoesDoDocumento(PEDIDO_DO_DOCUMENTO_DO_TITULAR, contexto).length > 0) {
+      return `${inicio} NÃO peça o CPF ou CNPJ de novo, nem com outras palavras: o pedido já foi feito. Diga, curto e sem repreender, que por aqui não dá para confirmar de quem é a conta, e pergunte se ele prefere seguir com um atendente; só diga que encaminhou depois de chamar concluir_triagem.`;
+    }
     return `${inicio} Pergunte, curto, de quem é a cobrança e peça que ele mande de novo, nesta conversa, o CPF ou CNPJ do titular da conta, mesmo que seja o mesmo de antes.`;
   }
   if (DUVIDAS_DE_ENDERECO.has(motivo)) {

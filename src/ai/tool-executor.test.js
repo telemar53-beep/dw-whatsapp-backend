@@ -1140,6 +1140,20 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
       expect(r.instrucao).not.toMatch(/\bdela\b/);
       expect(executar).not.toHaveBeenCalled();
     });
+    // Revisão do incremento (achado B): a guarda do documento barraria o pedido (ele se irritou, ou a cadeia de pedidos já se
+    // esgotou) — a instrução não manda pedir de novo (sem a contradição "peça de novo" × "NÃO peça de novo"): encaminha.
+    test.each([
+      ['irritado', { alvo: 'terceiro', irritado: true, mudancaRelevante: false, esclarecimentoDisponivel: false, pedidosNaCadeia: 1 }],
+      ['cadeia esgotada', { alvo: 'terceiro', irritado: false, mudancaRelevante: false, esclarecimentoDisponivel: false, pedidosNaCadeia: 2 }],
+    ])('dúvida forte e a guarda barraria o pedido (%s): a instrução não pede o documento de novo', async (_, documento) => {
+      const executar = buscar();
+      const r = await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, base({ terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: 'terceiro_nao_vinculado', documento }));
+      expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
+      expect(r.instrucao).not.toMatch(/mande de novo/);
+      expect(r.instrucao).toMatch(/NÃO peça o CPF ou CNPJ de novo/);
+      expect(r.instrucao).toMatch(/concluir_triagem/);
+      expect(executar).not.toHaveBeenCalled();
+    });
     test('a dúvida gravada no escopo vale mesmo que o turno não a repita (alvoAmbiguo vazio)', async () => {
       const executar = buscar();
       const r = await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, base({ terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado' }, alvoAmbiguo: false }));
@@ -1218,6 +1232,34 @@ describe('tool-executor — buscar_cliente na triagem: o documento precisa de or
       const r = await executeTool('buscar_cliente', { cpf: '52998224725' }, ctx);
       expect(r).toMatchObject({ ok: false, motivo: 'document_before_doubt' });
       expect(r.instrucao).not.toMatch(/\bdela\b/);
+      expect(executar).not.toHaveBeenCalled();
+    });
+
+    // Revisão do incremento (achado C): com a dúvida gravada (duvidaDesde m-1) e a origem do lote deste turno na m-6, o CPF da
+    // m-3 (entre as duas) não vale — o mesmo que com as falas em turnos separados.
+    test('dúvida gravada e origem do lote deste turno mais nova: vale a do lote', async () => {
+      const executar = buscar();
+      const janela = [
+        { id: 'm-1', de: 'cliente', texto: 'manda o boleto da Rua de Teste' },
+        { id: 'm-3', de: 'cliente', texto: '111.444.777-35' },
+        { id: 'm-5', de: 'cliente', texto: 'o dela' },
+        { id: 'm-6', de: 'cliente', texto: 'pera, manda o da Rua de Teste' },
+      ];
+      const ctx = base({ terceiro: { ...LOCALIZADA, alvoPendente: 'proprio_nao_afirmado', duvidaDesde: 'm-1' }, alvoAmbiguo: 'proprio_nao_afirmado', origemDoAlvoNoTurno: 'm-6', mensagensDaJanela: janela, falasNovasDoCliente: ['o dela', 'pera, manda o da Rua de Teste'], idsDasFalasNovas: ['m-5', 'm-6'] });
+      expect(await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, ctx)).toMatchObject({ motivo: 'document_before_doubt' });
+      expect(executar).not.toHaveBeenCalled();
+    });
+    // Revisão do incremento (achado D): sem as falas do lote lidas, a origem efetiva é desconhecida — nenhum documento de outra
+    // pessoa é consultado com a restrição, nem o que está na janela desde a dúvida gravada.
+    test('sem as falas do lote lidas: o documento na janela desde a dúvida gravada não é consultado', async () => {
+      const executar = buscar();
+      const janela = [
+        { id: 'm-3', de: 'cliente', texto: 'agora manda o boleto da rua do João' },
+        { id: 'm-5', de: 'cliente', texto: 'manda o boleto dela, o cpf é 111.444.777-35' },
+        { id: 'm-6', de: 'cliente', texto: 'não, espera, é o da rua do João' },
+      ];
+      const ctx = base({ terceiro: { ...LOCALIZADA, alvoPendente: 'terceiro_nao_vinculado', duvidaDesde: 'm-3' }, alvoAmbiguo: 'escopo_nao_lido', mensagensDaJanela: janela, falasNovasDoCliente: [], idsDasFalasNovas: [], falasNovasLidas: false });
+      expect(await executeTool('buscar_cliente', { cpf: '11144477735', titularEOutraPessoa: true }, ctx)).toMatchObject({ motivo: 'document_before_doubt' });
       expect(executar).not.toHaveBeenCalled();
     });
 

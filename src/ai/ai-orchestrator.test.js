@@ -529,6 +529,22 @@ describe('perfil de triagem', () => {
     expect(FERRAMENTAS_TRIAGEM).not.toContain('gerar_segunda_via');
   });
 
+  // Rodada 8 (N1) e revisão do incremento (achado D): o que o worker sabe das falas do lote chega ao contexto das ferramentas.
+  test.each([
+    ['lidas', { falasNovasDoCliente: ['o cpf é 111.444.777-35'], idsDasFalasNovas: ['m-3'], origemDoAlvoNoTurno: 'm-3', alvoVoltouAoTitular: true }, { falasNovasDoCliente: ['o cpf é 111.444.777-35'], idsDasFalasNovas: ['m-3'], origemDoAlvoNoTurno: 'm-3', alvoVoltouAoTitular: true, falasNovasLidas: true }],
+    ['não lidas', { falasNovasDoCliente: [], idsDasFalasNovas: [], falasNovasLidas: false }, { falasNovasDoCliente: [], idsDasFalasNovas: [], origemDoAlvoNoTurno: null, falasNovasLidas: false }],
+  ])('as falas do lote %s chegam ao contexto das ferramentas', async (_, entrada, esperado) => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'buscar_cliente', arguments: '{"cpf":"11144477735"}' } }] },
+        usage: { promptTokens: 100, completionTokens: 20 },
+      })
+      .mockResolvedValueOnce({ message: { content: 'Certo.' }, usage: { promptTokens: 150, completionTokens: 12 } });
+    executeTool.mockResolvedValue({ ok: false, motivo: 'document_before_doubt', instrucao: 'NADA foi consultado.' });
+    await contexto(entrada);
+    expect(executeTool).toHaveBeenCalledWith('buscar_cliente', { cpf: '11144477735' }, expect.objectContaining(esperado));
+  });
+
   describe('perfil noturno', () => {
     const NOTURNO = { ...TRIAGEM, maxQuestions: 4, noturno: { ativo: true, retornoAs: '08:00' } };
 

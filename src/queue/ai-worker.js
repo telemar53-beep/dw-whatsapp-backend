@@ -274,9 +274,18 @@ async function repeteRespostaRecenteDaIa(conversationId, texto) {
 // Revisão da rodada 8 (achado 2): a entrada que deixou o alvo financeiro como ficou no fim do lote — a última cuja aplicação mudou o
 // estado (a dúvida, ou a volta ao titular). Reaplica a regra pura sobre os prefixos do lote (poucas entradas; sem banco). É a
 // origem efetiva usada para o documento: o que veio antes dela, mesmo no lote, não esclarece a dúvida (tool-executor.js).
+// Revisão do incremento (achado B): SEM terceiro localizado antes do turno não há autorização anterior a restaurar — se o lote
+// mudou o alvo, a origem é o começo dele, como na produção (o CPF mandado na mesma rajada, antes do pedido, vale). A última
+// mudança só vale COM terceiro localizado, que é o caso da reconsulta (achado 2). Achado F: acima de LOTE_MAXIMO_DA_ORIGEM
+// falas, a regra não é reaplicada a cada prefixo (custo quadrático no processo do servidor) — a origem é a última fala, a mais
+// restritiva.
+const LOTE_MAXIMO_DA_ORIGEM = 50;
 function indiceDaOrigemDoAlvo({ terceiro, textos, documentos, empresa, enderecos }) {
   const estado = (r) => JSON.stringify([r.alvoAmbiguo || false, (r.terceiro && r.terceiro.alvoPendente) || null, Boolean(r.terceiro)]);
   let anterior = estado(resolverAlvoDasMensagens({ terceiro, textos: [], empresa, documentos: [], enderecos }));
+  const havia = Boolean(terceiro && Array.isArray(terceiro.contratos) && terceiro.contratos.length > 0);
+  if (!havia) return estado(resolverAlvoDasMensagens({ terceiro, textos, empresa, documentos, enderecos })) !== anterior ? 0 : null;
+  if (textos.length > LOTE_MAXIMO_DA_ORIGEM) return textos.length - 1;
   let origem = null;
   for (let k = 1; k <= textos.length; k += 1) {
     const agora = estado(resolverAlvoDasMensagens({ terceiro, textos: textos.slice(0, k), empresa, documentos: documentos.slice(0, k), enderecos }));
@@ -634,6 +643,8 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     alvoVoltouAoTitular,
     origemDoAlvoNoTurno,
     idsDasFalasNovas: Array.isArray(falas) ? idsDasFalas.slice() : [],
+    // Revisão do incremento (achado D): sem as falas lidas, a origem efetiva do documento é desconhecida.
+    falasNovasLidas: Array.isArray(falas),
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

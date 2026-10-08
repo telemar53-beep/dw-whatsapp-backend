@@ -6,6 +6,7 @@ const { fatosDoAlvoFinanceiro } = require('./prompt/fluxos/alvo-financeiro');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
 const { recordAiInteraction, listAiInteractionsByConversation } = require('./ai-interaction.repository');
 const { promessasSemEvidencia, respostaSemPromessas } = require('./promessas-sem-evidencia');
+const { violacoesDaEntrega, respostaSemEntregaSemFato } = require('./anuncio-de-entrega');
 const {
   meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada,
 } = require('./meios-de-pagamento');
@@ -154,7 +155,23 @@ function respostaSemEncaminhamentoNaoConfirmado(texto) {
 // PDF/linha digitável" também conta: dizer que já foi só vale com a entrega
 // feita neste turno.
 const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b|\b(enviei|mandei|gerei|segue|seguem)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo|pdf|linha digit[áa]vel)\b/i;
-function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
+// Rodada 10 (G1): por frase, e a frase negada antes do verbo não é anúncio ("Ainda não enviei o PIX.", "Não vou mandar o
+// boleto sem o seu pedido.") — a explicação honesta não obriga a ferramenta de entrega.
+function afirmaEnvio(texto) {
+  return String(texto || '').split(/(?<=[.!?])\s+|\n+/).some((frase) => {
+    const m = AFIRMA_ENVIO.exec(frase);
+    return Boolean(m) && !/\bn[ãa]o\b/i.test(frase.slice(0, m.index));
+  });
+}
+
+// Rodada 10 (08/10/2026; ordem, item 3, G1; avaliação real S5 r3 #3): "Vou usar a fatura do endereço…" sem a entrega. A guarda
+// acima obriga a ferramenta só para a sua lista de verbos; esta não obriga nada: pelo ESTADO da ação (houve entrega neste turno?
+// alguma vez nesta conversa?), a resposta que apresenta a cobrança como feita ou como trabalho que continuará sozinho é corrigida
+// uma vez e, se o modelo insistir, a frase sai (anuncio-de-entrega.js).
+const CORRECAO_DA_ENTREGA = 'NADA foi enviado ao cliente neste turno. A resposta não pode dizer que a cobrança foi enviada, nem que você vai enviá-la, usá-la, gerá-la ou verificá-la depois: nada continua sozinho depois desta mensagem. Responda de novo, sem anunciar: se o pedido dele já pode ser atendido, atenda agora pelas ferramentas (elas conferem tudo de novo); se falta alguma coisa, pergunte só o que falta; se não dá para enviar, diga com honestidade que não enviou e por quê.';
+// A entrega anterior que o histórico do turno mostra: o cartão PIX ou o PDF do boleto que a IA mandou.
+const entregaNoHistorico = (historico) => (historico || []).some((m) => m && m.direction === 'outbound' && m.sentBy === 'ai'
+  && (m.messageType === 'pix' || m.messageType === 'document'));
 
 // Teste real 2026-09-15 (produção, gpt-5.4-mini): "Boa noite, [nome]! كيف
 // posso ajudar você hoje?". O prompt-base já pede português; quando o texto
@@ -627,6 +644,10 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   // Pagamento/liberação/conexão sem fato (regra 0/1/2+): UMA correção por turno; a troca final
   // (depois do laço) tira a frase se o modelo insistir.
   let corrigiuPagamento = false;
+  // G1 (rodada 10): o estado da ação — a entrega deste turno (contexto.resolvidoPelaIa, que só a entrega confirmada marca na
+  // triagem) e a anterior, no histórico.
+  let corrigiuEntrega = false;
+  const entregaAnterior = entregaNoHistorico(historico);
   let proximoToolChoice;
 
   try {
@@ -768,6 +789,17 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           corrigiuDocumento = true;
           messages.push({ role: 'assistant', content: conteudo });
           messages.push({ role: 'system', content: correcaoDoDocumento(violacoesDoc, contexto) });
+          continue;
+        }
+        // G1 (rodada 10): sem a entrega, nem concluída nem por vir — uma correção, sem ferramenta obrigatória (e nenhuma se a
+        // guarda acima já exigiu a entrega neste turno: aí só a troca final).
+        const violacoesEntrega = perfil === 'triagem' && conteudo && !corrigiuEntrega && !exigiuEntregaPorAnuncio
+          ? violacoesDaEntrega(conteudo, { entregaNoTurno: Boolean(contexto.resolvidoPelaIa), entregaAnterior })
+          : [];
+        if (violacoesEntrega.length > 0) {
+          corrigiuEntrega = true;
+          messages.push({ role: 'assistant', content: conteudo });
+          messages.push({ role: 'system', content: CORRECAO_DA_ENTREGA });
           continue;
         }
         if (
@@ -1067,6 +1099,17 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         ...opcoesPromessas,
         seNadaSobrar: tentouConcluir && !contexto.triagemConcluida ? ENCAMINHAMENTO_NAO_CONFIRMADO : undefined,
       });
+    }
+  }
+
+  // G1 (rodada 10): o modelo insistiu depois da correção (ou a resposta veio de um caminho sem correção, como o fim por limite de
+  // ferramentas) — sai a frase que apresenta a entrega sem o fato; se nada que pergunte algo sobrar, a frase honesta.
+  if (perfil === 'triagem' && texto) {
+    const estadoDaEntrega = { entregaNoTurno: Boolean(contexto && contexto.resolvidoPelaIa), entregaAnterior };
+    const violacoesEntregaFinais = violacoesDaEntrega(texto, estadoDaEntrega);
+    if (violacoesEntregaFinais.length > 0) {
+      console.warn(`Resposta da IA apresentava entrega sem o fato (${violacoesEntregaFinais.join(', ')}) na conversa ${conversation.id}; frase retirada`);
+      texto = respostaSemEntregaSemFato(texto, estadoDaEntrega);
     }
   }
 

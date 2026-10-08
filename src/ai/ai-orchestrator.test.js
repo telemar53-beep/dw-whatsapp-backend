@@ -895,8 +895,74 @@ describe('perfil de triagem', () => {
       expect(afirmaEnvio('Mandei o código PIX aqui em cima.')).toBe(true);
       expect(afirmaEnvio('Segue o boleto em PDF com a linha digitável.')).toBe(true);
       expect(afirmaEnvio('Claro, João! De qual endereço você precisa?')).toBe(false);
+      // Rodada 10 (G1): a frase negada é explicação, não anúncio.
+      expect(afirmaEnvio('Ainda não enviei o PIX. Quer que eu envie?')).toBe(false);
+      expect(afirmaEnvio('Não vou mandar o boleto sem o seu pedido.')).toBe(false);
+      expect(afirmaEnvio('O boleto não foi gerado. Vou gerar o boleto agora.')).toBe(true);
       expect(afirmaEnvio('Encaminhei seu atendimento para o Financeiro.')).toBe(false);
       expect(afirmaEnvio('Enviei seu pedido para a equipe conferir.')).toBe(false);
+    });
+
+    // Rodada 10 (08/10/2026; ordem, item 3, G1; avaliação real S5 r3 #3): "Vou usar a fatura do endereço…" sem a entrega. A
+    // proteção depende do estado da ação: sem entrega no turno, a resposta é corrigida UMA vez, sem ferramenta obrigatória; se o
+    // modelo insistir, a frase sai do texto final.
+    test('G1: "Vou usar a fatura…" sem entrega no turno — uma correção, sem ferramenta obrigatória', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Posso sim, João. Vou usar a fatura do endereço da Rua X.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Você prefere boleto ou PIX?' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.toolChoice).toBeUndefined();
+      expect(segunda.tools.length).toBeGreaterThan(0);
+      expect(segunda.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'system', content: expect.stringMatching(/^NADA foi enviado ao cliente neste turno/) })]));
+      expect(r.texto).toBe('Você prefere boleto ou PIX?');
+    });
+    test('G1: o modelo insiste depois da correção — a frase sai do texto final', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Posso sim, João. Vou usar a fatura do endereço da Rua X.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Certo, João. Vou usar a fatura da Rua X.' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      expect(r.texto).toBe('Certo, João. Ainda não enviei a cobrança.');
+    });
+    test('G1: "O PIX já foi enviado" sem entrega nenhuma na conversa é corrigido; com o cartão PIX no histórico, fica', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'O PIX já foi enviado acima.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Ainda não enviei o PIX. Quer que eu envie?' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      expect(r.texto).toBe('Ainda não enviei o PIX. Quer que eu envie?');
+
+      jest.clearAllMocks();
+      recordAiInteraction.mockResolvedValue({ id: 'i-1' });
+      listRecentMessagesByConversation.mockResolvedValue([
+        { direction: 'inbound', content: 'manda o pix', messageType: 'text' },
+        { direction: 'outbound', sentBy: 'ai', content: 'PIX-DE-TESTE', messageType: 'pix' },
+        { direction: 'inbound', content: 'cadê o pix?', messageType: 'text' },
+      ]);
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'O PIX já foi enviado acima.' }, usage: {} });
+      const r2 = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+      expect(r2.texto).toBe('O PIX já foi enviado acima.');
+    });
+    test('G1: com a entrega feita neste turno, nada muda', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'gerar_pix', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Prontinho! Enviei acima o PIX. Vou te mandar também as instruções do boleto, se precisar.' }, usage: {} });
+      // Como a ferramenta real: a entrega confirmada marca o turno (resolvidoPelaIa).
+      executeTool.mockImplementation(async (nome, args, ctx) => { ctx.resolvidoPelaIa = true; return { ok: true, resultado: { enviado: true } }; });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      expect(r.texto).toBe('Prontinho! Enviei acima o PIX. Vou te mandar também as instruções do boleto, se precisar.');
+    });
+    test('G1: a ferramenta de entrega que NÃO enviou não conta como entrega', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Certo! Vou usar a segunda via da Rua X.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Certo! Vou usar a segunda via da Rua X.' }, usage: {} });
+      executeTool.mockImplementation(async () => ({ ok: true, resultado: { enviado: false, meioNaoEscolhido: true, instrucao: 'Pergunte o meio.' } }));
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(r.texto).toBe('Certo! Ainda não enviei a cobrança.');
     });
 
     test('texto sem anúncio de envio não dá volta nenhuma', async () => {

@@ -47,7 +47,7 @@ const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findEnqueuedDeliveryOfInvoice, findLatestEnqueuedDeliveryOfOtherInvoice,
-  findLatestEnqueuedDelivery,
+  findLatestEnqueuedDelivery, findLatestDeliveryOfContract,
 } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { listarPlanosDisponiveis } = require('../plans/plan.repository');
@@ -151,6 +151,16 @@ beforeEach(() => {
     for (const { porFatura, registro } of entregas.values()) {
       const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
       if (conversa === conversationId && registro.enqueuedAt && (!ultima || registro.enqueuedAt >= ultima.enqueuedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
+    }
+    return ultima;
+  });
+  // Rodada 10 (08/10/2026): a última TENTATIVA desta ferramenta para este contrato (confirmada ou não), do mesmo armazenamento.
+  findLatestDeliveryOfContract.mockImplementation(async ({ conversationId, tool, contractId }) => {
+    let ultima = null;
+    for (const { porFatura, registro } of entregas.values()) {
+      const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
+      if (conversa === conversationId && ferramenta === tool && (contractId == null || Number(contrato) === Number(contractId))
+        && (!ultima || registro.claimedAt >= ultima.claimedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
     }
     return ultima;
   });
@@ -4151,6 +4161,19 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       expect(segunda.instrucao).toMatch(/Enviado não quer dizer que ele encontrou/);
       expect(documentos()).toHaveLength(1);
       expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2']);
+    });
+
+    // Revisão da rodada 10 (A1-5): a entrega anterior foi registrada em OUTRO contrato (troca de contrato da busca). Com o
+    // pedido dele depois dela, o reenvio passa como reenvio; sem pedido, é recusado — sem laço.
+    test('rodada 10: entrega anterior em outro contrato — o reenvio pedido por ele passa; sem pedido, recusa', async () => {
+      const anterior = await claimDelivery({ conversationId: 'c-idem', tool: 'enviar_boleto', contractId: 999, invoiceId: '9', messageId: 'msg-1', isResend: false });
+      await markDeliveryEnqueued(anterior.registro.id);
+      const janela = (texto) => [{ id: 'msg-1', de: 'cliente', texto: 'manda o boleto' }, { id: 'a-1', de: 'ia', texto: 'Enviei acima o boleto.' }, { id: 'msg-3', de: 'cliente', texto }];
+      const semPedido = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-3', mensagensDaJanela: janela('obrigado') }));
+      expect(semPedido).toMatchObject({ enviado: false, reenvioSemPedido: true });
+      const comPedido = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-3', mensagensDaJanela: janela('não chegou, manda de novo') }));
+      expect(comPedido.enviado).toBe(true);
+      expect(identidadesPedidas()).toContain('msg-3+reenvio');
     });
 
     test('5. mensagem nova com reenviar: true passa uma vez', async () => {

@@ -234,7 +234,25 @@ async function findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId, invoic
   return paraRegistro(resultado.rows[0]);
 }
 
+/**
+ * Rodada 10 (08/10/2026; ordem, item 1): a última TENTATIVA de entrega desta ferramenta para este contrato nesta conversa —
+ * confirmada ou não (a incerta também foi tentada) —, com a mensagem do cliente que a pediu (message_id). A trava do reenvio lê
+ * isto ANTES de qualquer geração no SGP: o `reenviar` do modelo só vale com pedido do cliente depois dessa mensagem. Só leitura;
+ * null quando não há. Revisão da rodada 10 (A1-5): sem contrato (null), a última tentativa da ferramenta em qualquer contrato da
+ * conversa — a entrega pode ter sido registrada no contrato que a busca achou (troca de contrato).
+ */
+async function findLatestDeliveryOfContract({ conversationId, tool, contractId }) {
+  const resultado = await getPool().query(
+    `SELECT ${COLUNAS} FROM ai_billing_deliveries
+      WHERE conversation_id = $1 AND tool = $2 AND ($3::int IS NULL OR contract_id = $3)
+      ORDER BY claimed_at DESC
+      LIMIT 1`,
+    [conversationId, tool, contractId == null ? null : Number(contractId)]
+  );
+  return paraRegistro(resultado.rows[0]);
+}
+
 module.exports = {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery, findEnqueuedDeliveryOfInvoice,
-  findLatestEnqueuedDeliveryOfOtherInvoice,
+  findLatestEnqueuedDeliveryOfOtherInvoice, findLatestDeliveryOfContract,
 };

@@ -1,7 +1,7 @@
 const { getPool, closePool } = require('../db/pool');
 const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery,
-  findLatestEnqueuedDeliveryOfOtherInvoice,
+  findLatestEnqueuedDeliveryOfOtherInvoice, findLatestDeliveryOfContract,
 } = require('./billing-delivery.repository');
 
 const { createChannel } = require('../channels/channel.repository');
@@ -371,6 +371,29 @@ describe('billing delivery repository', () => {
     // As entregas pedidas pela mensagem do turno atual não contam.
     expect(await findLatestEnqueuedDeliveryOfOtherInvoice({ conversationId: CONVERSA, invoiceId: '102', exceptoMensagem: 'msg-2' }))
       .toMatchObject({ invoiceId: '101', messageId: 'msg-1' });
+  });
+
+  // Rodada 10 (08/10/2026; ordem, item 1): o reenvio só com pedido do cliente depois da entrega anterior. A trava lê, ANTES da
+  // geração no SGP, a última tentativa desta ferramenta para este contrato — confirmada ou não (a incerta também é anterior).
+  test('findLatestDeliveryOfContract devolve a última tentativa da ferramenta para o contrato, com a mensagem que a pediu', async () => {
+    expect(await findLatestDeliveryOfContract({ conversationId: CONVERSA, tool: 'enviar_boleto', contractId: 17402 })).toBeNull();
+    const antiga = await claimDelivery(pedido({ invoiceId: '101', messageId: 'msg-1' }));
+    await markDeliveryEnqueued(antiga.registro.id);
+    await getPool().query("UPDATE ai_billing_deliveries SET claimed_at = now() - interval '1 hour' WHERE id = $1", [antiga.registro.id]);
+    // A mais recente nunca foi confirmada: conta (é tentativa anterior).
+    await claimDelivery(pedido({ invoiceId: '101', messageId: 'msg-2', isResend: true }));
+    // Outra ferramenta, outro contrato e outra conversa não contam.
+    await claimDelivery(pedido({ tool: 'gerar_pix', invoiceId: '101', messageId: 'msg-3' }));
+    await claimDelivery(pedido({ contractId: 17403, invoiceId: '201', messageId: 'msg-4' }));
+    await claimDelivery(pedido({ conversationId: OUTRA_CONVERSA, invoiceId: '999', messageId: 'msg-9' }));
+    expect(await findLatestDeliveryOfContract({ conversationId: CONVERSA, tool: 'enviar_boleto', contractId: 17402 }))
+      .toMatchObject({ messageId: 'msg-2', invoiceId: '101', isResend: true });
+    // O contrato chega como número ou texto.
+    expect(await findLatestDeliveryOfContract({ conversationId: CONVERSA, tool: 'enviar_boleto', contractId: '17403' }))
+      .toMatchObject({ messageId: 'msg-4' });
+    // Revisão da rodada 10 (A1-5): sem contrato, a última tentativa da ferramenta em qualquer contrato da conversa.
+    expect(await findLatestDeliveryOfContract({ conversationId: CONVERSA, tool: 'enviar_boleto', contractId: null }))
+      .toMatchObject({ messageId: 'msg-4' });
   });
 
   // MINIMIZAÇÃO (Fase 3): a tabela guarda só ids. Nenhum valor, nenhuma linha

@@ -272,19 +272,163 @@ const prefixoDeCorrecao = (palavras) => lerPrefixoDeCorrecao(palavras).k;
 const ehCorrecao = (texto) => lerPrefixoDeCorrecao(palavrasDe(texto)).forte;
 // Rodada 9 (N4-C; opção C autorizada; revisão da rodada 9, achados 1, 2 e 6): depois do pedido pela rua, a fala sem nova
 // escolha nunca libera os outros contratos nem força o pedido antigo. Só a fala NEUTRA (ou sem texto) mantém exatamente o
-// contrato pedido. DESISTÊNCIA (lista FECHADA de sequências inteiras): só numa fala SEM pedido de cobrança ("não quero boleto,
-// quero pix" é pedido) e depois de um pedido de cobrança no mesmo lote — nenhuma autorização para entregar no turno. O resto, que
-// o código não classifica com segurança (inclusive outra rua dele fora da forma estrita: "troca pra Avenida…"), vira a dúvida de
-// endereço SÓ DO TURNO (não se grava). Com um contrato só não há o que ampliar: mantém.
+// contrato pedido. DESISTÊNCIA: depois de um pedido de cobrança no mesmo lote — nenhuma autorização para entregar no turno. O
+// resto, que o código não classifica com segurança (inclusive outra rua dele fora da forma estrita: "troca pra Avenida…"), vira
+// a dúvida de endereço (rodada 10: gravada). Com um contrato só não há o que ampliar: mantém.
+//
+// Rodada 10 (08/10/2026; ordem, item 1): o PEDIDO DE AÇÃO é lido à parte da identidade e do alvo. A desistência é lida pela
+// FORMA — o marcador (lista fechada) e o que ele cancela na mesma oração —, não pela ausência de palavra de cobrança: "esquece o
+// PIX" e "cancela o boleto" desistem (antes, a palavra "pix" fazia deles pedido e, com um contrato só, a cobrança cancelada
+// continuava autorizada). Não é desistência o marcador seguido de outro verbo no infinitivo, sem cobrança na oração ("não
+// precisa ter pressa", "não quero ficar sem internet"), nem "deixa eu …" ("deixa eu ver"). O pedido de envio fora do marcador
+// ("esquece o pix, manda o boleto"; "não quero boleto, quero pix") faz da fala um pedido.
 const DESISTENCIAS = [
   ['deixa'], ['deixe'], ['esquece'], ['esqueca'], ['cancela'], ['cancele'], ['cancelar'], ['desisti'], ['desisto'],
   ['nao', 'precisa'], ['nao', 'quero'], ['nao', 'manda'], ['nao', 'mande'], ['nao', 'envia'], ['nao', 'envie'],
   ['depois', 'eu', 'vejo'], ['depois', 'vejo'],
 ];
-const ehDesistencia = (texto) => {
-  const q = palavrasDe(texto).map((x) => x.p);
-  return DESISTENCIAS.some((d) => q.some((_, i) => d.every((w, j) => q[i + j] === w)));
+// Os marcadores que pedem complemento: "não precisa" e "não quero" só desistem do que vem depois deles.
+const DESISTENCIAS_COM_COMPLEMENTO = new Set(['nao precisa', 'nao quero']);
+const VERBOS_DE_ENVIO = new Set([
+  'manda', 'mande', 'mandar', 'envia', 'envie', 'enviar', 'reenvia', 'reenvie', 'reenviar', 'gera', 'gere', 'gerar', 'emite', 'emita',
+  'emitir', 'passa', 'passe', 'passar',
+]);
+// Os verbos cujo objeto é a própria cobrança: depois de "não precisa"/"não quero", mantêm a desistência ("não quero pagar agora").
+const VERBOS_DA_COBRANCA = new Set([...VERBOS_DE_ENVIO, 'pagar', 'quitar', 'receber', 'fazer', 'tirar']);
+const VERBOS_DE_DESEJO = new Set(['quero', 'queria', 'preciso', 'precisava', 'gostaria']);
+const PRONOMES_OBLIQUOS = new Set(['se', 'me', 'te', 'lhe', 'nos']);
+// A forma de infinitivo (terminação -ar/-er/-ir/-or); "por" e "favor" ficam de fora ("não precisa, por favor").
+const ehInfinitivo = (p) => /(ar|er|ir|or)$/.test(p) && p.length >= 3 && p !== 'por' && p !== 'favor';
+// Só gramática e confirmação: sobra a cobrança ("o boleto", "e o pix?").
+const SO_A_COBRANCA = new Set([...FALA_NEUTRA, 'so', 'tambem', 'entao', 'ai', 'mais']);
+const AFIRMATIVOS = new Set(['sim', 's', 'ss', 'quero', 'pode', 'claro', 'isso', 'ok', 'okay', 'blz', 'beleza', 'certo', 'uhum', 'aham', 'ser', 'manda', 'mande']);
+const REPETICAO = [['de', 'novo'], ['novamente'], ['outra', 'vez']];
+// Revisão da rodada 10 (A1-1): "para de mandar", "chega de mandar".
+const PARAR = new Set(['para', 'pare', 'parar', 'chega']);
+// Revisão da rodada 10 (A1-6): a recusa curta à pergunta da IA sobre a cobrança ("não, obrigado", "agora não").
+const NEGATIVOS = new Set(['nao', 'n', 'agora', 'ainda', 'precisa', 'mais', 'nada', 'obrigado', 'obrigada', 'obg', 'valeu', 'vlw', 'por', 'favor']);
+
+const oracoesDe = (texto) => {
+  const porOracao = [];
+  for (const x of palavrasDe(texto)) {
+    // "… e manda o boleto": o "e" seguido de verbo de envio ou de desejo abre outra oração.
+    const ultima = porOracao.length ? porOracao[porOracao.length - 1] : null;
+    if (!ultima || ultima.oracao !== x.oracao) porOracao.push({ oracao: x.oracao, p: [] });
+    porOracao[porOracao.length - 1].p.push(x.p);
+  }
+  const saida = [];
+  for (const { p } of porOracao) {
+    let atual = [];
+    p.forEach((w, i) => {
+      if (w === 'e' && (VERBOS_DE_ENVIO.has(p[i + 1]) || VERBOS_DE_DESEJO.has(p[i + 1])) && atual.length) {
+        saida.push(atual);
+        atual = [];
+        return;
+      }
+      atual.push(w);
+    });
+    if (atual.length) saida.push(atual);
+  }
+  return saida;
 };
+// "não" antes, na mesma oração (sem "e" no meio): "não manda", "não me manda", "não quero que mande". Revisão da rodada 10
+// (A1-1): também "nem" ("nem precisa mandar") e "para de"/"chega de" ("para de mandar boleto").
+// Revisão do incremento (R1): só perto do verbo, com palavras auxiliares no meio ("não chegou, manda de novo" sem vírgula e
+// "nem recebi o boleto manda de novo" continuam pedido).
+// Checagem própria depois das ressalvas: o pronome de tratamento também ("não quero mais que você mande").
+const ENTRE_NEGACAO_E_VERBO = new Set(['me', 'te', 'lhe', 'nos', 'precisa', 'precisar', 'pode', 'quero', 'queria', 'que', 'vai', 'mais', 'se',
+  'voce', 'vc', 'voces', 'vcs', 'o', 'a', 'senhor', 'senhora']);
+const negadoAntes = (q, i) => {
+  for (let k = i - 1; k >= 0 && k >= i - 6; k -= 1) {
+    if (q[k] === 'nao' || q[k] === 'nem') return true;
+    if (q[k] === 'de' && PARAR.has(q[k - 1])) return true;
+    if (!ENTRE_NEGACAO_E_VERBO.has(q[k])) return false;
+  }
+  return false;
+};
+// Revisão da rodada 10 (A1-1): a negação POSPOSTA, na mesma oração ("manda não", "precisa mandar não", "manda mais não", "de
+// novo não") — o "não" depois do verbo, sem cobrança depois dele ("manda o boleto não o pix" continua pedido do boleto).
+// Revisão do incremento (R1): o "não" de uma oração subordinada ("manda de novo que não chegou", "porque o boleto não abre") não
+// nega o envio.
+const SUBORDINANTES = new Set(['que', 'porque', 'pois', 'como', 'se', 'quando']);
+const negadoDepois = (q, i) => {
+  for (let j = i + 1; j < q.length; j += 1) {
+    if (SUBORDINANTES.has(q[j])) return false;
+    if (q[j] === 'nao') return !q.slice(j + 1).some((x) => COBRANCAS.has(x));
+  }
+  return false;
+};
+const repeticaoEm = (q, i) => REPETICAO.some((r) => r.every((w, j) => q[i + j] === w));
+// A desistência que a oração traz (o marcador e o que ele cancela).
+function desisteNaOracao(q) {
+  // Revisão da rodada 10 (A1-1): o envio ou a repetição negados (antes ou depois) também desistem.
+  if (q.some((w, i) => (VERBOS_DE_ENVIO.has(w) || repeticaoEm(q, i)) && (negadoDepois(q, i) || (negadoAntes(q, i) && q[i - 1] !== 'quero')))) return true;
+  for (let i = 0; i < q.length; i += 1) {
+    const d = DESISTENCIAS.find((m) => m.every((w, j) => q[i + j] === w));
+    if (!d) continue;
+    const fim = i + d.length;
+    if ((d[0] === 'deixa' || d[0] === 'deixe') && d.length === 1 && (q[fim] === 'eu' || q[fim] === 'me')) continue;
+    if (DESISTENCIAS_COM_COMPLEMENTO.has(d.join(' '))) {
+      const resto = q.slice(fim);
+      const k = PRONOMES_OBLIQUOS.has(resto[0]) ? 1 : 0;
+      const proximo = resto[k];
+      if (proximo && !resto.some((w) => COBRANCAS.has(w)) && ehInfinitivo(proximo) && !VERBOS_DA_COBRANCA.has(proximo)) continue;
+    }
+    return true;
+  }
+  return false;
+}
+// O pedido de envio que a oração traz: verbo de envio não negado; desejo não negado com a cobrança ("quero o pix", "quero pagar");
+// repetição não negada ("de novo"); ou só a cobrança ("o boleto").
+function pedeNaOracao(q) {
+  const negado = (i) => negadoAntes(q, i) || negadoDepois(q, i);
+  if (q.some((w, i) => VERBOS_DE_ENVIO.has(w) && !negado(i))) return true;
+  if (q.some((w, i) => VERBOS_DE_DESEJO.has(w) && !negado(i) && q.slice(i + 1).some((x) => COBRANCAS.has(x) || x === 'pagar' || x === 'quitar'))) return true;
+  if (q.some((_, i) => repeticaoEm(q, i) && !negado(i))) return true;
+  return q.some((w) => COBRANCAS.has(w)) && q.every((w) => SO_A_COBRANCA.has(w));
+}
+// O meio que a oração cita (para a desistência de OUTRO meio não desfazer o pedido da mesma mensagem).
+const meioDaOracao = (q) => (q.includes('pix') ? 'pix' : (q.some((w) => w === 'boleto' || w === 'boletos') ? 'boleto' : null));
+// A fala da IA pergunta sobre a cobrança ou o envio: uma frase com "?" que cita a cobrança ou um verbo de envio. Revisão do
+// incremento: e que OFERECE ("Quer que eu reenvie?", "Você prefere boleto ou PIX?", "Posso enviar?") — "Você recebeu o boleto?"
+// não oferece, e o "sim"/"ainda não" dele não é pedido nem desistência.
+const OFERTA = new Set(['quer', 'queria', 'quiser', 'deseja', 'posso', 'pode', 'prefere', 'gostaria', 'devo', 'mando', 'envio', 'reenvio', 'gero',
+  'mandar', 'enviar', 'reenviar', 'gerar', 'emitir', 'envie', 'mande', 'reenvie', 'gere']);
+function perguntaSobreACobranca(falaDaIa) {
+  return String(falaDaIa || '').split(/(?<=[.!?])\s+|\n+/).some((frase) => {
+    if (!/\?\s*$/.test(frase.trim())) return false;
+    const q = palavrasDe(frase).map((x) => x.p);
+    return q.some((w) => COBRANCAS.has(w) || /^(envi|reenvi|mand|ger[ae]|emit)/.test(w)) && q.some((w) => OFERTA.has(w));
+  });
+}
+/**
+ * O pedido de ação de UMA fala do cliente: 'pedido' (pede a cobrança ou o envio), 'desistencia' (desiste dela, sem pedir outra
+ * coisa) ou null (nenhum dos dois: "ok", "obrigado", "não chegou"). `falaDaIa`: a resposta da IA antes desta fala — a resposta
+ * afirmativa curta ("sim", "quero", "pode") só é pedido depois de uma pergunta dela sobre a cobrança. Pura.
+ */
+//
+// Revisão da rodada 10 (A1-2): dentro da MESMA mensagem também vale o último ato ("manda o boleto. Ah não, esquece, já paguei" é
+// desistência), salvo a desistência de OUTRO meio depois do pedido ("me manda o pix, depois eu vejo o boleto" continua pedido do
+// PIX). (A1-6): a recusa curta ("não, obrigado", "agora não") depois de uma pergunta da IA sobre a cobrança é desistência.
+function classificarPedido(texto, { falaDaIa = null } = {}) {
+  let ato = null;
+  const meiosPedidos = new Set();
+  for (const q of oracoesDe(texto)) {
+    if (pedeNaOracao(q)) {
+      ato = 'pedido';
+      const meio = meioDaOracao(q);
+      if (meio) meiosPedidos.add(meio);
+    } else if (desisteNaOracao(q)) {
+      const meio = meioDaOracao(q);
+      if (!(ato === 'pedido' && meio && meiosPedidos.size > 0 && !meiosPedidos.has(meio))) ato = 'desistencia';
+    }
+  }
+  if (ato) return ato;
+  const q = palavrasDe(texto).map((x) => x.p);
+  if (q.length && q.some((w) => AFIRMATIVOS.has(w)) && q.every((w) => AFIRMATIVOS.has(w) || CORTESIA.has(w)) && perguntaSobreACobranca(falaDaIa)) return 'pedido';
+  if (q.length && q.some((w) => w === 'nao' || w === 'n') && q.every((w) => NEGATIVOS.has(w) || CORTESIA.has(w)) && perguntaSobreACobranca(falaDaIa)) return 'desistencia';
+  return null;
+}
 const temPedidoDeCobranca = (texto) => palavrasDe(texto).some((x) => COBRANCAS.has(x.p) || VERBOS_DE_PAGAR.has(x.p));
 // O marcador de duplo sentido seguido de fala neutra ("opa, obrigado", "pera, pode mandar") também é neutro (decisão do N2).
 const falaNeutraDepoisDoPrefixo = (texto) => {
@@ -630,7 +774,6 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   // fala não classificada depois do pedido pela rua deixou a dúvida de endereço do turno (até uma nova escolha).
   let desistiu = false;
   let pedidoNoLote = false;
-  let duvidaDoTurno = false;
   const variosContratos = Array.isArray(enderecos) && enderecos.length > 1;
   // Revisão do v4 (07/10/2026). A1: uma entrada deste lote citou um endereço que deu dúvida de endereço — o resto do lote não
   // a encerra. A2: a dúvida gravada foi respondida com o contrato — o resto do lote não desfaz essa limitação (só soma
@@ -696,7 +839,7 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
     // autorização do turno, até um pedido novo pela rua.
     const pedidoAntes = pedidoNoLote;
     pedidoNoLote = pedidoNoLote || temPedidoDeCobranca(texto) || Boolean(r.contratoEscolhido);
-    if (pedidoAntes && !r.contratoEscolhido && !r.alvoPendente && !r.voltarAoTitular && !temPedidoDeCobranca(texto) && ehDesistencia(texto)) {
+    if (pedidoAntes && !r.contratoEscolhido && !r.alvoPendente && !r.voltarAoTitular && classificarPedido(texto) === 'desistencia') {
       desistiu = true;
       escolha = null;
       alvoAmbiguo = r.alvoAmbiguo;
@@ -711,19 +854,21 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
       continue;
     }
     // Revisão da rodada 9 (achados 1 e 6): depois do pedido pela rua, com mais de um contrato, a fala que não é neutra nem traz
-    // nova escolha vira a dúvida de endereço só do turno — nem o contrato pedido fica forçado (a fala pode ser a troca para outra
-    // rua dele), nem os outros liberados.
+    // nova escolha vira a dúvida de endereço — nem o contrato pedido fica forçado (a fala pode ser a troca para outra rua dele),
+    // nem os outros liberados. Rodada 10 (ordem, item 1): a dúvida é GRAVADA, pelo mesmo mecanismo da correção (N2): só na
+    // memória do turno, o "pode mandar" seguinte (ou o reprocessamento) deixava o contrato desdito passar sem esclarecimento.
     if (variosContratos && escolha && !respondida && !r.contratoEscolhido && !r.alvoPendente && !r.alvoAmbiguo && !r.voltarAoTitular && !falaNeutraDepoisDoPrefixo(texto)) {
-      duvidaDoTurno = true;
+      atual = { nome: null, contratos: [], pendente: true, alvoPendente: AMBIGUIDADE.ENDERECO_DESCONHECIDO };
+      criado = true;
+      alvoAmbiguo = AMBIGUIDADE.ENDERECO_DESCONHECIDO;
       escolha = null;
-      alvoAmbiguo = false;
       continue;
     }
     alvoAmbiguo = r.alvoAmbiguo;
     // A correção que escolhe outro contrato SUBSTITUI o desdito; sem correção, duas falas com contratos diferentes valem as duas.
     // Rodada 9 (N4-C): sem nova escolha, a fala que não leva a dúvida, pendência ou volta ao titular mantém a escolha (antes,
     // só depois da dúvida respondida).
-    if (r.contratoEscolhido) { desistiu = false; duvidaDoTurno = false; }
+    if (r.contratoEscolhido) desistiu = false;
     escolha = r.contratoEscolhido
       ? (temMarcadorDeCorrecao(texto) ? [r.contratoEscolhido] : [...new Set([...(escolha || []), r.contratoEscolhido])])
       : (!r.alvoAmbiguo && !r.alvoPendente && !r.voltarAoTitular ? escolha : null);
@@ -745,7 +890,6 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   }
   // Rodada 9 (N4-C): a desistência vale como dúvida do turno (trava a cobrança), salvo outra dúvida, que já trava.
   if (desistiu && !alvoAmbiguo) alvoAmbiguo = AMBIGUIDADE.DESISTENCIA;
-  if (duvidaDoTurno && !alvoAmbiguo) alvoAmbiguo = AMBIGUIDADE.ENDERECO_DESCONHECIDO;
   let gravar = null;
   if (criado) gravar = 'criar';
   else if (terceiro && !atual) gravar = 'limpar';
@@ -793,5 +937,5 @@ function documentosValidos(texto) {
 
 module.exports = {
   FERRAMENTAS_DE_COBRANCA, alvoFinanceiro, ehAlvoTerceiro, contratoNoAlvo, fixarAlvoTerceiro, liberarAlvoTerceiro,
-  intencaoDeAlvo, resolverAlvoDoTurno, resolverAlvoDasMensagens, AMBIGUIDADE, documentosValidos,
+  intencaoDeAlvo, resolverAlvoDoTurno, resolverAlvoDasMensagens, AMBIGUIDADE, documentosValidos, classificarPedido,
 };

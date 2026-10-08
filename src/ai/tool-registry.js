@@ -33,8 +33,9 @@ const { analisarComprovante } = require('./receipt-analysis');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const {
   claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestEnqueuedDelivery, findEnqueuedDeliveryOfInvoice,
-  findLatestEnqueuedDeliveryOfOtherInvoice,
+  findLatestEnqueuedDeliveryOfOtherInvoice, findLatestDeliveryOfContract,
 } = require('./billing-delivery.repository');
+const { estadoDoPedido, pedidoDepoisDe } = require('./pedido-de-acao');
 const {
   hojeEmSaoPaulo, analisarSituacaoFinanceiraContrato, decidirCobranca, pagamentoConfirmadoDoTitulo, descreverReativacao,
 } = require('./situacao-financeira');
@@ -1021,6 +1022,49 @@ function registrarMeiosDaFatura(contexto, contratoId, fatura) {
 }
 
 const FERRAMENTA_DO_MEIO = { pix: 'gerar_pix', boleto: 'enviar_boleto' };
+
+/**
+ * Rodada 10 (08/10/2026; ordem, item 1): o PEDIDO DE AÇÃO (pedido-de-acao.js), antes de qualquer consulta ao SGP, só na triagem.
+ * Identidade e alvo não bastam: (1) depois do último pedido de cobrança ele desistiu e não pediu de novo — nada é consultado,
+ * gerado, reservado nem enviado, mesmo com o contrato identificado; (2) o `reenviar` do modelo só vale com uma tentativa anterior
+ * desta ferramenta para este contrato E um pedido dele depois da mensagem que a pediu. Sem tentativa anterior, o campo não vale
+ * nada (segue como envio inicial). Falha ao ler a tentativa anterior: fecha. Lê as mensagens gravadas da janela — sobrevive ao
+ * reinício e ao reprocessamento. Devolve `{ args }` (talvez sem o reenviar) ou `{ recusa }`.
+ */
+async function pedidoDeAcao({ tool, item, contexto, args }) {
+  if (!perfilTriagem(contexto) || !Array.isArray(contexto.mensagensDaJanela)) return { args };
+  const janela = contexto.mensagensDaJanela;
+  if (estadoDoPedido(janela) === 'desistencia') {
+    return {
+      recusa: {
+        enviado: false, desistenciaDoPedido: true, geracaoEvitada: true,
+        motivo: 'Ele desistiu da cobrança e não pediu de novo; nada foi pedido ao sistema.',
+        instrucao: 'NADA foi pedido ao sistema nem enviado: depois do último pedido de cobrança, ele desistiu dela e não pediu de novo. Não envie, não diga que enviou nem que vai enviar. Se não estiver claro, pergunte, curto, se ele ainda quer a cobrança.',
+      },
+    };
+  }
+  if (!args || args.reenviar !== true) return { args };
+  const recusaDoReenvio = (motivo, instrucao) => ({ recusa: { enviado: false, reenvioSemPedido: true, geracaoEvitada: true, motivo, instrucao } });
+  if (args.contratoId == null) {
+    return recusaDoReenvio('Reenvio sem contrato.', `NADA foi reenviado: o contrato não veio. Não diga que reenviou o ${item}.`);
+  }
+  let anterior;
+  try {
+    // Revisão da rodada 10 (A1-5): sem tentativa neste contrato, a da ferramenta em qualquer contrato da conversa (a entrega pode
+    // ter ficado no contrato que a busca achou) — sem isto, o reenvio pedido depois de uma troca de contrato entrava em laço.
+    anterior = await findLatestDeliveryOfContract({ conversationId: contexto.conversationId, tool, contractId: args.contratoId })
+      || await findLatestDeliveryOfContract({ conversationId: contexto.conversationId, tool, contractId: null });
+  } catch (err) {
+    console.error(`${tool}: entrega anterior do contrato não lida na conversa ${contexto.conversationId}; reenvio recusado: ${mensagemSegura(err)}`);
+    return recusaDoReenvio('A entrega anterior não pôde ser conferida.', `NADA foi reenviado: não deu para conferir agora o envio anterior do ${item}. Não diga que reenviou; se ele pediu o reenvio, diga que não conseguiu agora.`);
+  }
+  if (!anterior) return { args: { ...args, reenviar: false } };
+  if (pedidoDepoisDe(janela, anterior.messageId)) return { args };
+  return recusaDoReenvio(
+    'Ele não pediu o reenvio depois da última entrega.',
+    `NADA foi reenviado: depois do último envio do ${item} desta conversa, ele não pediu para mandar de novo. Não reenvie por conta própria nem diga que reenviou. Se ele disse que não encontrou, diga onde está (a mensagem acima) ou pergunte, curto, se quer que você reenvie.`,
+  );
+}
 
 /**
  * Comportamento da IA (06/10/2026; A6/A7, autorizado pelo proprietário): a escolha do meio conferida ANTES da 2ª via, na
@@ -2072,6 +2116,10 @@ const TOOLS = [
     },
     validar: validarEntregaDeFatura,
     async executar(args, contexto) {
+      // Rodada 10 (ordem, item 1): o pedido de ação — a desistência dele e o reenvio sem pedido — antes de qualquer consulta ao SGP.
+      const acao = await pedidoDeAcao({ tool: 'gerar_pix', item: 'PIX', contexto, args });
+      if (acao.recusa) return { sucesso: false, ...acao.recusa };
+      args = acao.args;
       // Vale para os DOIS ramos (triagem e assistente): o atendente humano
       // também pedia o PIX do contrato errado e ouvia "não há fatura".
       // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
@@ -2749,6 +2797,10 @@ const TOOLS = [
       // humano-no-comando. perfilTriagem (não só contexto.identidade) para
       // não reabrir com um identidade: null bugado.
       if (!perfilTriagem(contexto)) return erro('enviar_boleto is only available during AI triage');
+      // Rodada 10 (ordem, item 1): o pedido de ação — a desistência dele e o reenvio sem pedido — antes de qualquer consulta ao SGP.
+      const acao = await pedidoDeAcao({ tool: 'enviar_boleto', item: 'boleto', contexto, args });
+      if (acao.recusa) return acao.recusa;
+      args = acao.args;
       // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
       // Comportamento da IA (06/10/2026; A6/A7): a escolha do meio também, na parte que não depende da 2ª via.
       const decidida = await decisaoSemGeracao(args.contratoId, contexto);

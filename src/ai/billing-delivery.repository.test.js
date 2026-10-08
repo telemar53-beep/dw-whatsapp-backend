@@ -476,9 +476,9 @@ describe('reserva condicionada ao alvo da conversa', () => {
   });
 });
 
-// N4 (rodada 8; protótipo para decisão, não publicado): a reserva também é recusada quando há mensagem do cliente que o turno
-// ainda não considerou — fora das entradas que ele aplicou, sem a marca alvoProcessado, na mesma janela da leitura das entradas.
-describe('reserva recusada com mensagem nova do cliente que o turno não considerou (N4, protótipo)', () => {
+// Rodada 9 (N4-C; opção C autorizada): a reserva também é recusada quando há mensagem do cliente que o turno ainda não
+// considerou — fora das entradas que ele aplicou, sem a marca alvoProcessado, na mesma janela da leitura das entradas.
+describe('reserva recusada com mensagem nova do cliente que o turno não considerou (rodada 9, N4-C)', () => {
   const { createMessage, marcarFalasComAlvoProcessado } = require('../conversations/message.repository');
   let conversaId;
   let canalId;
@@ -545,6 +545,34 @@ describe('reserva recusada com mensagem nova do cliente que o turno não conside
     await marcarFalasComAlvoProcessado([confirmada.id]);
     const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
     await msg('ops, é a outra casa', { sentAt: ha(40) });
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).mensagemNova).toBe(true);
+  });
+
+  // Revisão da rodada 9 (achado 3): só conta a mensagem que gera o processamento da IA (o mesmo filtro que o worker usa para
+  // "a mais recente"): figurinha, vídeo, localização, autorresposta e áudio com transcrição que falhou não geram — contá-los
+  // travaria a entrega sem retomada.
+  test.each([
+    ['figurinha', { messageType: 'sticker', content: null }],
+    ['vídeo', { messageType: 'video', content: null }],
+    ['localização', { messageType: 'location', content: null }],
+    ['autorresposta', { messageType: 'text', content: 'Estou ausente no momento.', metadata: { autorrespostaProvavel: true } }],
+    ['áudio com transcrição que falhou', { messageType: 'audio', content: null, transcricao: 'failed' }],
+    ['áudio com formato não suportado', { messageType: 'audio', content: null, transcricao: 'skipped' }],
+    ['texto vazio', { messageType: 'text', content: null }],
+  ])('%s durante o turno: não conta (reserva)', async (_, m) => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    const nova = await createMessage({ conversationId: conversaId, direction: 'inbound', content: m.content, messageType: m.messageType, metadata: m.metadata, whatsappMessageId: `wamid.n4c.tipo.${Date.now()}.${Math.random()}`, status: 'received' });
+    if (m.transcricao) await getPool().query('UPDATE messages SET transcription_status = $2 WHERE id = $1', [nova.id, m.transcricao]);
+    expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).obtido).toBe(true);
+  });
+  test.each([
+    ['imagem', { messageType: 'image', content: null }],
+    ['áudio aguardando a transcrição', { messageType: 'audio', content: null, transcricao: 'pending' }],
+    ['áudio transcrito', { messageType: 'audio', content: null, transcricao: 'completed' }],
+  ])('%s durante o turno: conta (nada é reservado)', async (_, m) => {
+    const pedidoDoCliente = await msg('manda o pix da Rua de Teste');
+    const nova = await createMessage({ conversationId: conversaId, direction: 'inbound', content: m.content, messageType: m.messageType, whatsappMessageId: `wamid.n4c.tipo.${Date.now()}.${Math.random()}`, status: 'received' });
+    if (m.transcricao) await getPool().query('UPDATE messages SET transcription_status = $2 WHERE id = $1', [nova.id, m.transcricao]);
     expect((await reservar({ ids: [pedidoDoCliente.id], desde: ha(30) })).mensagemNova).toBe(true);
   });
 

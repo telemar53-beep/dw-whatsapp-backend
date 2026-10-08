@@ -228,6 +228,8 @@ const ANTES_DA_RESPOSTA = new Set([...ANTES_DA_RUA, ...PREPOSICOES_DE_POSSE, 'e'
 const CONFIRMACAO = new Set([
   'e', 'eh', 'ok', 'okay', 'blz', 'beleza', 'sim', 'isso', 'certo', 'certinho', 'valeu', 'vlw', 'perfeito', 'show', 'ta', 'combinado',
   'entendi', 'aguardo', 'aguardando', 'fico', 'no', 'tudo', 'bem', 'essa', 'esse', 'esta', 'este', 'mesmo', 'mesma', 'pronto', 'otimo',
+  // Rodada 9 (N4-C): "pode ser" é confirmação.
+  'ser',
 ]);
 // "segunda" só é neutra em "segunda via" (revisão da v4.2, achado C1): sozinha, pode ser a escolha do segundo endereço.
 const FALA_NEUTRA = new Set([...ANTES_DA_RUA, ...CONFIRMACAO].filter((w) => w !== 'segunda'));
@@ -268,11 +270,12 @@ function lerPrefixoDeCorrecao(palavras) {
 }
 const prefixoDeCorrecao = (palavras) => lerPrefixoDeCorrecao(palavras).k;
 const ehCorrecao = (texto) => lerPrefixoDeCorrecao(palavrasDe(texto)).forte;
-// Rodada 9 (N4-C; opção C autorizada): depois do pedido pela rua, a fala sem nova escolha nunca libera os outros contratos.
-// DESISTÊNCIA (lista FECHADA de sequências inteiras, em qualquer ponto da fala): nenhuma autorização para entregar no turno. O
-// falso positivo ("deixa eu ver") só trava: a cobrança espera ele pedir de novo. CONTRADIÇÃO sem marcador ("é a outra casa",
-// "não é essa", "errado"): o contrato pedido não fica como destino — vira a dúvida de endereço, como a correção sem contrato. O
-// resto (a fala neutra, a não classificada, a entrada sem texto) mantém exatamente o contrato pedido.
+// Rodada 9 (N4-C; opção C autorizada; revisão da rodada 9, achados 1, 2 e 6): depois do pedido pela rua, a fala sem nova
+// escolha nunca libera os outros contratos nem força o pedido antigo. Só a fala NEUTRA (ou sem texto) mantém exatamente o
+// contrato pedido. DESISTÊNCIA (lista FECHADA de sequências inteiras): só numa fala SEM pedido de cobrança ("não quero boleto,
+// quero pix" é pedido) e depois de um pedido de cobrança no mesmo lote — nenhuma autorização para entregar no turno. O resto, que
+// o código não classifica com segurança (inclusive outra rua dele fora da forma estrita: "troca pra Avenida…"), vira a dúvida de
+// endereço SÓ DO TURNO (não se grava). Com um contrato só não há o que ampliar: mantém.
 const DESISTENCIAS = [
   ['deixa'], ['deixe'], ['esquece'], ['esqueca'], ['cancela'], ['cancele'], ['cancelar'], ['desisti'], ['desisto'],
   ['nao', 'precisa'], ['nao', 'quero'], ['nao', 'manda'], ['nao', 'mande'], ['nao', 'envia'], ['nao', 'envie'],
@@ -282,8 +285,13 @@ const ehDesistencia = (texto) => {
   const q = palavrasDe(texto).map((x) => x.p);
   return DESISTENCIAS.some((d) => q.some((_, i) => d.every((w, j) => q[i + j] === w)));
 };
-const CONTRADICOES = new Set(['nao', 'outra', 'outro', 'errado', 'errada', 'trocado', 'trocada', 'diferente']);
-const contradiz = (texto) => palavrasDe(texto).some((x) => CONTRADICOES.has(x.p));
+const temPedidoDeCobranca = (texto) => palavrasDe(texto).some((x) => COBRANCAS.has(x.p) || VERBOS_DE_PAGAR.has(x.p));
+// O marcador de duplo sentido seguido de fala neutra ("opa, obrigado", "pera, pode mandar") também é neutro (decisão do N2).
+const falaNeutraDepoisDoPrefixo = (texto) => {
+  const q = palavrasDe(texto);
+  const resto = q.slice(prefixoDeCorrecao(q));
+  return resto.every((x, i) => FALA_NEUTRA.has(x.p) || (x.p === 'segunda' && resto[i + 1] && resto[i + 1].p === 'via' && resto[i + 1].oracao === x.oracao));
+};
 // Revisão do incremento (achado A): QUALQUER marcador, forte ou de duplo sentido, seguido de outra rua dele corrige — "desculpa,
 // é o da Avenida" substitui o contrato escolhido antes. (Sem o acento, "é o da" e "e o da" são a mesma leitura: "opa, e o da
 // Avenida" também substitui — uma pergunta a mais, nunca uma cobrança a mais.)
@@ -618,8 +626,12 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   // contratos diferentes valem as duas (nenhuma substitui a outra: a cobrança fica limitada aos dois); uma entrada sem
   // escolha depois ("pode mandar", "ops, é a outra casa", um áudio sem transcrição) desfaz a escolha.
   let escolha = null;
-  // Rodada 9 (N4-C): ele desistiu do pedido neste lote (vale até um pedido novo pela rua).
+  // Rodada 9 (N4-C): ele desistiu do pedido neste lote (vale até um pedido novo pela rua); houve pedido de cobrança no lote; e a
+  // fala não classificada depois do pedido pela rua deixou a dúvida de endereço do turno (até uma nova escolha).
   let desistiu = false;
+  let pedidoNoLote = false;
+  let duvidaDoTurno = false;
+  const variosContratos = Array.isArray(enderecos) && enderecos.length > 1;
   // Revisão do v4 (07/10/2026). A1: uma entrada deste lote citou um endereço que deu dúvida de endereço — o resto do lote não
   // a encerra. A2: a dúvida gravada foi respondida com o contrato — o resto do lote não desfaz essa limitação (só soma
   // outro pedido simples, ou volta a uma dúvida).
@@ -680,26 +692,38 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
     // Rodada 8 (N2): a correção que não identifica outro contrato dele, depois de uma escolha neste lote (a da dúvida respondida
     // volta pela regra acima), não deixa o contrato desdito como destino — nem a cobrança livre: vira a dúvida de endereço, que
     // a fala seguinte dele, no mesmo lote, ainda pode responder.
-    // Rodada 9 (N4-C): a desistência (sem nova escolha) tira a autorização do turno, até um pedido novo pela rua.
-    if (!r.contratoEscolhido && !r.alvoPendente && !r.voltarAoTitular && ehDesistencia(texto)) {
+    // Rodada 9 (N4-C): a desistência (sem nova escolha, sem pedido de cobrança na fala, depois de um pedido no lote) tira a
+    // autorização do turno, até um pedido novo pela rua.
+    const pedidoAntes = pedidoNoLote;
+    pedidoNoLote = pedidoNoLote || temPedidoDeCobranca(texto) || Boolean(r.contratoEscolhido);
+    if (pedidoAntes && !r.contratoEscolhido && !r.alvoPendente && !r.voltarAoTitular && !temPedidoDeCobranca(texto) && ehDesistencia(texto)) {
       desistiu = true;
       escolha = null;
       alvoAmbiguo = r.alvoAmbiguo;
       continue;
     }
     const correcao = ehCorrecao(texto);
-    if ((correcao || contradiz(texto)) && escolha && !respondida && !r.contratoEscolhido && !r.alvoPendente && !r.alvoAmbiguo && !r.voltarAoTitular) {
+    if (correcao && escolha && !respondida && !r.contratoEscolhido && !r.alvoPendente && !r.alvoAmbiguo && !r.voltarAoTitular) {
       atual = { nome: null, contratos: [], pendente: true, alvoPendente: AMBIGUIDADE.ENDERECO_DESCONHECIDO };
       criado = true;
       alvoAmbiguo = AMBIGUIDADE.ENDERECO_DESCONHECIDO;
       escolha = null;
       continue;
     }
+    // Revisão da rodada 9 (achados 1 e 6): depois do pedido pela rua, com mais de um contrato, a fala que não é neutra nem traz
+    // nova escolha vira a dúvida de endereço só do turno — nem o contrato pedido fica forçado (a fala pode ser a troca para outra
+    // rua dele), nem os outros liberados.
+    if (variosContratos && escolha && !respondida && !r.contratoEscolhido && !r.alvoPendente && !r.alvoAmbiguo && !r.voltarAoTitular && !falaNeutraDepoisDoPrefixo(texto)) {
+      duvidaDoTurno = true;
+      escolha = null;
+      alvoAmbiguo = false;
+      continue;
+    }
     alvoAmbiguo = r.alvoAmbiguo;
     // A correção que escolhe outro contrato SUBSTITUI o desdito; sem correção, duas falas com contratos diferentes valem as duas.
     // Rodada 9 (N4-C): sem nova escolha, a fala que não leva a dúvida, pendência ou volta ao titular mantém a escolha (antes,
     // só depois da dúvida respondida).
-    if (r.contratoEscolhido) desistiu = false;
+    if (r.contratoEscolhido) { desistiu = false; duvidaDoTurno = false; }
     escolha = r.contratoEscolhido
       ? (temMarcadorDeCorrecao(texto) ? [r.contratoEscolhido] : [...new Set([...(escolha || []), r.contratoEscolhido])])
       : (!r.alvoAmbiguo && !r.alvoPendente && !r.voltarAoTitular ? escolha : null);
@@ -721,6 +745,7 @@ function resolverAlvoDasMensagens({ terceiro, textos, empresa = null, documentos
   }
   // Rodada 9 (N4-C): a desistência vale como dúvida do turno (trava a cobrança), salvo outra dúvida, que já trava.
   if (desistiu && !alvoAmbiguo) alvoAmbiguo = AMBIGUIDADE.DESISTENCIA;
+  if (duvidaDoTurno && !alvoAmbiguo) alvoAmbiguo = AMBIGUIDADE.ENDERECO_DESCONHECIDO;
   let gravar = null;
   if (criado) gravar = 'criar';
   else if (terceiro && !atual) gravar = 'limpar';

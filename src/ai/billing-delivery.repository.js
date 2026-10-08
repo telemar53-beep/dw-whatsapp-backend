@@ -11,9 +11,15 @@ const CONDICAO_DO_ALVO = `(($7::boolean AND c.ai_triage_third_party IS NULL)
 // Rodada 9 (N4-C; opção C autorizada pelo proprietário): "há mensagem do cliente que o turno ainda não considerou" — uma entrada sem a marca
 // alvoProcessado, fora das que o turno aplicou (ids), na MESMA janela da leitura das entradas (listarFalasSemAlvoConfirmado):
 // depois de `desde`, ou sem nenhuma confirmada, ou depois da última confirmada. A detecção é pelo id e pela marca; a hora do
-// provedor só delimita a janela, como na leitura. Os placeholders vêm de quem monta a consulta.
+// provedor só delimita a janela, como na leitura. Revisão da rodada 9 (achado 3): só a mensagem que gera o processamento da IA
+// (que relê o pedido) — a autorresposta, a figurinha, o vídeo, a localização e o áudio com transcrição que falhou não geram, e
+// contá-los travaria a entrega sem retomada. Os placeholders vêm de quem monta a consulta.
 const entradaNaoConsiderada = (desde, ids) => `SELECT 1 FROM messages m
             WHERE m.conversation_id = c.id AND m.direction = 'inbound'
+              AND m.message_type IN ('text', 'image', 'document', 'audio')
+              AND NOT (m.message_type = 'text' AND COALESCE(m.content, '') = '')
+              AND NOT (m.message_type = 'audio' AND COALESCE(m.transcription_status, '') IN ('failed', 'skipped'))
+              AND COALESCE(m.metadata->>'autorrespostaProvavel', '') <> 'true'
               AND COALESCE(m.metadata->>'alvoProcessado', 'false') <> 'true'
               AND NOT (m.id = ANY(${ids}::uuid[]))
               AND (m.created_at > ${desde}::timestamptz

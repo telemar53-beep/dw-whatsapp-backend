@@ -956,9 +956,12 @@ describe('pedido por endereço do próprio cliente', () => {
     // substituem o contrato nem criam a dúvida — "opa, obrigado" e "desculpa a demora" seguem como na produção. Com outra rua
     // dele, substituem (achado A, acima).
     test('prefixo de duplo sentido sem outra rua não é correção: não substitui nem cria dúvida, e ainda deixa ler a rua', () => {
-      for (const fala of ['opa, obrigado', 'desculpa a demora', 'pera, pode mandar']) {
+      for (const fala of ['opa, obrigado', 'pera, pode mandar', 'desculpa, obrigado']) {
         expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(mensagens(['manda o pix da Rua de Teste', 'obrigado']));
       }
+      // Rodada 9 (N4-C): fora da lista neutra, a fala depois do pedido pela rua vira a dúvida de endereço SÓ DO TURNO (o lado
+      // seguro: nem o pedido forçado, nem os outros liberados) — "desculpa a demora" incluída; nada se grava.
+      expect(mensagens(['manda o pix da Rua de Teste', 'desculpa a demora'])).toEqual({ terceiro: null, alvoAmbiguo: 'endereco_desconhecido', gravar: null });
       expect(mensagens(['Opa, é o da Avenida de Teste.'])).toEqual(so(['302']));
     });
 
@@ -967,13 +970,17 @@ describe('pedido por endereço do próprio cliente', () => {
     });
   });
 
-  // Rodada 9 (N4-C, opção C autorizada): o pedido relido com a mensagem nova (a reserva recusada) ou no mesmo lote. A fala sem
-  // nova escolha nunca libera os outros contratos: a neutra e a não classificada mantêm exatamente o contrato pedido; a
-  // desistência não deixa autorização nenhuma no turno; a contradição sem marcador vira a dúvida de endereço.
+  // Rodada 9 (N4-C, opção C autorizada; revisão da rodada 9, achados 1, 2 e 6): o pedido relido com a mensagem nova (a reserva
+  // recusada) ou no mesmo lote. A fala sem nova escolha nunca libera os outros contratos nem força o pedido antigo: só a NEUTRA (ou
+  // sem texto) mantém exatamente o contrato pedido; a desistência (sem pedido de cobrança na fala, depois de um pedido no lote) não
+  // deixa autorização no turno; o resto — o que o código não classifica com segurança, inclusive outra rua dele fora da forma
+  // estrita — vira a dúvida de endereço SÓ DO TURNO (não se grava). Com um contrato só, não há o que ampliar: mantém.
   describe('a fala depois do pedido pela rua (rodada 9, N4-C)', () => {
     const so = (contratos) => ({ terceiro: null, alvoAmbiguo: false, gravar: null, contratosEscolhidos: contratos, ...(contratos.length === 1 ? { contratoEscolhido: contratos[0] } : {}) });
     const DESISTIU = { terceiro: null, alvoAmbiguo: 'desistencia', gravar: null };
-    test.each([['obrigado'], ['Obrigado!'], ['ok'], ['beleza, pode mandar'], ['valeu 👍'], ['sim'], ['pode ser'], [''], [null], ['e como faço pra pagar?'], ['manda logo por favor']])(
+    const DUVIDA_DO_TURNO = { terceiro: null, alvoAmbiguo: 'endereco_desconhecido', gravar: null };
+    const NADA = { terceiro: null, alvoAmbiguo: false, gravar: null };
+    test.each([['obrigado'], ['Obrigado!'], ['ok'], ['beleza, pode mandar'], ['valeu 👍'], ['sim'], ['pode ser'], [''], [null]])(
       '%j depois do pedido: mantém exatamente o contrato pedido', (fala) => {
         expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(so(['301']));
       },
@@ -981,6 +988,18 @@ describe('pedido por endereço do próprio cliente', () => {
     test('dois pedidos e um agradecimento: mantém os dois', () => {
       expect(mensagens(['manda o pix da Rua de Teste', 'e o da Avenida de Teste', 'obrigado'])).toEqual(so(['301', '302']));
     });
+    test.each([
+      ['troca pra Avenida de Teste'], ['é a Avenida de Teste'], ['Avenida de Teste, 30'], ['muda pra Avenida de Teste'],
+      ['é a outra casa'], ['a outra'], ['não é essa'], ['errado'], ['e como faço pra pagar?'], ['manda logo por favor'],
+      ['obrigado, não tenho outra dúvida'],
+    ])('%j depois do pedido (dois contratos): nem o pedido antigo é forçado nem os outros liberados — dúvida de endereço só do turno', (fala) => {
+      expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(DUVIDA_DO_TURNO);
+    });
+    test.each([['não sei pagar pelo app'], ['obrigado, não tenho outra dúvida'], ['e como faço pra pagar?']])(
+      '%j depois do pedido, com um contrato só: mantém (não há o que ampliar), sem dúvida gravada', (fala) => {
+        expect(mensagens(['manda o pix da Rua de Teste', fala], { enderecos: UM_SO })).toEqual(so(['301']));
+      },
+    );
     test.each([['deixa, não precisa mais'], ['esquece'], ['Esquece, obrigado'], ['cancela'], ['não quero mais'], ['depois eu vejo'], ['Deixa pra lá']])(
       '%j depois do pedido: nenhuma autorização para entregar no turno, sem dúvida gravada', (fala) => {
         expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual(DESISTIU);
@@ -990,16 +1009,28 @@ describe('pedido por endereço do próprio cliente', () => {
       expect(mensagens(['manda o pix da Rua de Teste', 'deixa, não precisa', 'obrigado'])).toEqual(DESISTIU);
       expect(mensagens(['manda o pix da Rua de Teste', 'deixa', 'manda o da Avenida de Teste'])).toEqual(so(['302']));
     });
-    test('desistência sem pedido pela rua antes (um contrato só): também não deixa autorização', () => {
-      expect(mensagens(['manda o pix', 'esquece'], { enderecos: [ENDERECOS[0]] })).toEqual(DESISTIU);
+    test('desistência depois de um pedido sem rua (um contrato só): também não deixa autorização', () => {
+      expect(mensagens(['manda o pix', 'esquece'], { enderecos: UM_SO })).toEqual(DESISTIU);
     });
-    test.each([['é a outra casa'], ['a outra'], ['não é essa'], ['não, a outra'], ['errado']])(
-      '%j depois do pedido: o contrato pedido não fica como destino — dúvida de endereço gravada', (fala) => {
-        expect(mensagens(['manda o pix da Rua de Teste', fala])).toEqual({ terceiro: DUVIDA('endereco_desconhecido'), alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+    // Revisão da rodada 9 (achado 2): o pedido de cobrança com palavra de desistência não é desistência.
+    test.each([['não quero boleto, quero pix'], ['me manda o pix, depois eu vejo o boleto'], ['deixa eu te perguntar, manda o pix'], ['não precisa do boleto, manda só o pix']])(
+      '%j (um contrato só): é pedido, não desistência', (fala) => {
+        expect(mensagens([fala], { enderecos: UM_SO })).toEqual(NADA);
       },
     );
+    test('depois de um pedido no lote, o pedido de cobrança com palavra de desistência continua pedido (não trava)', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'não precisa do boleto, manda só o pix'], { enderecos: UM_SO })).toEqual(so(['301']));
+      expect(mensagens(['manda o pix', 'não quero boleto, quero pix'], { enderecos: UM_SO })).toEqual(NADA);
+    });
+    test('a dúvida do turno é desfeita por uma nova escolha pela rua no mesmo lote', () => {
+      expect(mensagens(['manda o pix da Rua de Teste', 'troca pra Avenida de Teste', 'é o da Avenida de Teste'])).toEqual(so(['302']));
+    });
+    test('a palavra de desistência sem pedido de cobrança antes no lote não trava nada', () => {
+      expect(mensagens(['Deixa pra lá'])).toEqual(NADA);
+      expect(mensagens(['oi, tudo bem?', 'esquece'])).toEqual(NADA);
+    });
     test('sem pedido pela rua antes, a fala não classificada não cria nada', () => {
-      expect(mensagens(['é a outra casa'])).toEqual({ terceiro: null, alvoAmbiguo: false, gravar: null });
+      expect(mensagens(['é a outra casa'])).toEqual(NADA);
     });
   });
 });

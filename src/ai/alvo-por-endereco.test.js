@@ -115,12 +115,27 @@ test('pedido e desistência no mesmo lote: nada sai, nem o contrato pedido; a in
   expect(viasPedidas()).toEqual([]);
   expect(pixEnviado()).toEqual([]);
 });
-test('pedido e contradição sem marcador ("é a outra casa"): o contrato pedido não sai; a pergunta é de endereço', async () => {
+test('pedido e contradição sem marcador ("é a outra casa"): o contrato pedido não sai; a pergunta é de endereço (dúvida só do turno)', async () => {
   const { alvo, contexto } = turno(['manda o pix da Rua de Teste', 'é a outra casa']);
-  expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: 'criar' });
+  expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: null });
   expect(await executeTool('gerar_pix', { contratoId: 301 }, contexto)).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
   expect(pixEnviado()).toEqual([]);
 });
+// Revisão da rodada 9 (achado 1): a correção para a outra rua dele fora da forma estrita não força o contrato antigo — nem
+// sem contrato informado, nem com o contrato da outra rua. Nada sai até ele esclarecer.
+test.each([['troca pra Avenida de Teste'], ['é a Avenida de Teste'], ['Avenida de Teste, 30']])(
+  'pedido e %j: o contrato antigo não é forçado; nada sai até esclarecer', async (fala) => {
+    const { alvo, contexto } = turno(['manda o pix da Rua de Teste', fala]);
+    expect(alvo).toMatchObject({ alvoAmbiguo: 'endereco_desconhecido', gravar: null });
+    expect(alvo.contratoEscolhido).toBeUndefined();
+    const semContrato = await executeTool('gerar_pix', {}, contexto);
+    expect(semContrato).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
+    expect(semContrato.instrucao).not.toMatch(/contratoId 301/);
+    expect(await executeTool('gerar_pix', { contratoId: 302 }, contexto)).toMatchObject({ ok: false, motivo: 'financial_target_ambiguous' });
+    expect(viasPedidas()).toEqual([]);
+    expect(pixEnviado()).toEqual([]);
+  },
+);
 
 test('dois contratos na mesma rua, sem número: nada sai, a dúvida de qual é gravada, e a pergunta é de endereço (sem pedir documento)', async () => {
   const { alvo, contexto } = turno(['manda o pix da Rua de Teste'], { contratos: [RUA, RUA_500] });

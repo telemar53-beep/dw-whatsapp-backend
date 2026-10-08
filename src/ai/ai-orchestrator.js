@@ -6,7 +6,7 @@ const { fatosDoAlvoFinanceiro } = require('./prompt/fluxos/alvo-financeiro');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
 const { recordAiInteraction, listAiInteractionsByConversation } = require('./ai-interaction.repository');
 const { promessasSemEvidencia, respostaSemPromessas } = require('./promessas-sem-evidencia');
-const { violacoesDaEntrega, respostaSemEntregaSemFato } = require('./anuncio-de-entrega');
+const { violacoesDaEntrega, respostaSemEntregaSemFato, correcaoDaEntrega, negacaoColada } = require('./anuncio-de-entrega');
 const {
   meiosDaJanela, meiosDoTurno, respostaSemOfertaDeMeioInexistente, respostaSemIndisponibilidadeNaoConfirmada,
 } = require('./meios-de-pagamento');
@@ -160,7 +160,8 @@ const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|e
 function afirmaEnvio(texto) {
   return String(texto || '').split(/(?<=[.!?])\s+|\n+/).some((frase) => {
     const m = AFIRMA_ENVIO.exec(frase);
-    return Boolean(m) && !/\bn[ãa]o\b/i.test(frase.slice(0, m.index));
+    // Revisão da rodada 10 (A3-1): só a negação da MESMA oração, colada ao verbo ("Não se preocupe, vou enviar…" é anúncio).
+    return Boolean(m) && !negacaoColada(frase.slice(0, m.index));
   });
 }
 
@@ -168,7 +169,6 @@ function afirmaEnvio(texto) {
 // acima obriga a ferramenta só para a sua lista de verbos; esta não obriga nada: pelo ESTADO da ação (houve entrega neste turno?
 // alguma vez nesta conversa?), a resposta que apresenta a cobrança como feita ou como trabalho que continuará sozinho é corrigida
 // uma vez e, se o modelo insistir, a frase sai (anuncio-de-entrega.js).
-const CORRECAO_DA_ENTREGA = 'NADA foi enviado ao cliente neste turno. A resposta não pode dizer que a cobrança foi enviada, nem que você vai enviá-la, usá-la, gerá-la ou verificá-la depois: nada continua sozinho depois desta mensagem. Responda de novo, sem anunciar: se o pedido dele já pode ser atendido, atenda agora pelas ferramentas (elas conferem tudo de novo); se falta alguma coisa, pergunte só o que falta; se não dá para enviar, diga com honestidade que não enviou e por quê.';
 // A entrega anterior que o histórico do turno mostra: o cartão PIX ou o PDF do boleto que a IA mandou.
 const entregaNoHistorico = (historico) => (historico || []).some((m) => m && m.direction === 'outbound' && m.sentBy === 'ai'
   && (m.messageType === 'pix' || m.messageType === 'document'));
@@ -799,7 +799,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         if (violacoesEntrega.length > 0) {
           corrigiuEntrega = true;
           messages.push({ role: 'assistant', content: conteudo });
-          messages.push({ role: 'system', content: CORRECAO_DA_ENTREGA });
+          messages.push({ role: 'system', content: correcaoDaEntrega({ forcarConclusao: Boolean(triagem && triagem.forcarConclusao) }) });
           continue;
         }
         if (

@@ -391,6 +391,9 @@ describe('billing delivery repository', () => {
     // O contrato chega como número ou texto.
     expect(await findLatestDeliveryOfContract({ conversationId: CONVERSA, tool: 'enviar_boleto', contractId: '17403' }))
       .toMatchObject({ messageId: 'msg-4' });
+    // Revisão da rodada 10 (A1-5): sem contrato, a última tentativa da ferramenta em qualquer contrato da conversa.
+    expect(await findLatestDeliveryOfContract({ conversationId: CONVERSA, tool: 'enviar_boleto', contractId: null }))
+      .toMatchObject({ messageId: 'msg-4' });
   });
 
   // MINIMIZAÇÃO (Fase 3): a tabela guarda só ids. Nenhum valor, nenhuma linha

@@ -1050,7 +1050,10 @@ async function pedidoDeAcao({ tool, item, contexto, args }) {
   }
   let anterior;
   try {
-    anterior = await findLatestDeliveryOfContract({ conversationId: contexto.conversationId, tool, contractId: args.contratoId });
+    // Revisão da rodada 10 (A1-5): sem tentativa neste contrato, a da ferramenta em qualquer contrato da conversa (a entrega pode
+    // ter ficado no contrato que a busca achou) — sem isto, o reenvio pedido depois de uma troca de contrato entrava em laço.
+    anterior = await findLatestDeliveryOfContract({ conversationId: contexto.conversationId, tool, contractId: args.contratoId })
+      || await findLatestDeliveryOfContract({ conversationId: contexto.conversationId, tool, contractId: null });
   } catch (err) {
     console.error(`${tool}: entrega anterior do contrato não lida na conversa ${contexto.conversationId}; reenvio recusado: ${mensagemSegura(err)}`);
     return recusaDoReenvio('A entrega anterior não pôde ser conferida.', `NADA foi reenviado: não deu para conferir agora o envio anterior do ${item}. Não diga que reenviou; se ele pediu o reenvio, diga que não conseguiu agora.`);

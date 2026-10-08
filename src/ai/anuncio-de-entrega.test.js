@@ -1,4 +1,4 @@
-const { violacoesDaEntrega, respostaSemEntregaSemFato, ENTREGA_NAO_FEITA } = require('./anuncio-de-entrega');
+const { violacoesDaEntrega, respostaSemEntregaSemFato, ENTREGA_NAO_FEITA, NADA_NOVO_ENVIADO, correcaoDaEntrega } = require('./anuncio-de-entrega');
 
 // Rodada 10 (08/10/2026; ordem, item 3, G1): sem entrega, o texto final não a apresenta como concluída nem como trabalho que
 // continuará sozinho. A proteção depende do ESTADO da ação (houve entrega neste turno? alguma vez nesta conversa?).
@@ -69,4 +69,51 @@ describe('respostaSemEntregaSemFato', () => {
     const t = 'Você quer pagar por boleto ou por PIX?';
     expect(respostaSemEntregaSemFato(t, SEM_NADA)).toBe(t);
   });
+});
+
+// Revisão da rodada 10 (achados A3-1 a A3-5, verificados por script).
+describe('G1: correções da revisão da rodada 10', () => {
+  test.each([
+    ['Não se preocupe, vou enviar o boleto agora.'], ['Não tem problema, vou gerar o PIX para você.'],
+    ['Você não precisa fazer nada, vou providenciar o boleto.'], ['Poxa, como o boleto não chegou, vou te enviar de novo.'],
+  ])('A3-1: o "não" de OUTRA oração não nega o anúncio — %j', (texto) => {
+    expect(violacoesDaEntrega(texto, SEM_NADA)).toContain('entrega_futura');
+  });
+  test('A3-1: o "não" de outra oração também não nega a afirmação de entrega feita', () => {
+    expect(violacoesDaEntrega('Não se preocupe, enviei o boleto acima.', SEM_NADA)).toContain('entrega_concluida');
+  });
+  test.each([['O boleto não foi enviado.'], ['Ainda não enviei a cobrança.'], ['Não vou mandar o boleto sem o seu pedido.'], ['Eu não vou conseguir enviar o PIX agora.']])(
+    'A3-1 (preservado): a negação colada ao verbo, na mesma oração — %j', (texto) => {
+      expect(violacoesDaEntrega(texto, SEM_NADA)).toEqual([]);
+    },
+  );
+  test.each([
+    ['Vou te explicar: o boleto vence no dia 20.'], ['Vamos lá: a fatura está em aberto, R$ 99,90.'], ['Pague e em seguida me envie o comprovante do PIX.'],
+    ['Obrigado! Aguarde a compensação do PIX, que pode levar alguns minutos.'], ['Vou te explicar como pagar o boleto pelo aplicativo.'],
+  ])('A3-2/A3-3: explicação legítima — %j', (texto) => {
+    expect(violacoesDaEntrega(texto, SEM_NADA)).toEqual([]);
+    expect(violacoesDaEntrega(texto, COM_ANTERIOR)).toEqual([]);
+  });
+  test('A3-2: com entrega anterior na conversa, a frase honesta não diz que nunca enviou', () => {
+    expect(respostaSemEntregaSemFato('Vou usar a fatura da Rua de Teste.', COM_ANTERIOR)).toBe(NADA_NOVO_ENVIADO);
+    expect(NADA_NOVO_ENVIADO).not.toMatch(/ainda não enviei/i);
+    expect(respostaSemEntregaSemFato('Vou usar a fatura da Rua de Teste.', SEM_NADA)).toBe(ENTREGA_NAO_FEITA);
+  });
+  test('A3-4: a afirmação de entrega feita numa frase que termina em pergunta continua sendo afirmação', () => {
+    expect(violacoesDaEntrega('Enviei o boleto acima, conseguiu abrir?', SEM_NADA)).toContain('entrega_concluida');
+    expect(violacoesDaEntrega('Quer que eu reenvie o boleto?', SEM_NADA)).toEqual([]);
+  });
+  test('A3-5: no turno do limite de perguntas, a correção não manda perguntar', () => {
+    expect(correcaoDaEntrega({})).toMatch(/pergunte só o que falta/);
+    const ultima = correcaoDaEntrega({ forcarConclusao: true });
+    expect(ultima).not.toMatch(/pergunte/);
+    expect(ultima).toMatch(/concluir_triagem/);
+  });
+});
+
+// Revisão da rodada 10: o gerúndio só conta com verbo de entrega; e o objeto implícito, com verbo de entrega, conta.
+test('G1: "estou vendo" é explicação; "estou gerando" e "vou te enviar de novo" (o boleto citado antes) são trabalho em andamento', () => {
+  expect(violacoesDaEntrega('Estou vendo aqui que a fatura vence dia 20.', SEM_NADA)).toEqual([]);
+  expect(violacoesDaEntrega('Já estou gerando o seu PIX.', SEM_NADA)).toContain('entrega_futura');
+  expect(violacoesDaEntrega('Poxa, como o boleto não chegou, vou te enviar de novo.', SEM_NADA)).toContain('entrega_futura');
 });

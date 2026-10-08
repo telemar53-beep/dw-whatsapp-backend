@@ -303,6 +303,10 @@ const ehInfinitivo = (p) => /(ar|er|ir|or)$/.test(p) && p.length >= 3 && p !== '
 const SO_A_COBRANCA = new Set([...FALA_NEUTRA, 'so', 'tambem', 'entao', 'ai', 'mais']);
 const AFIRMATIVOS = new Set(['sim', 's', 'ss', 'quero', 'pode', 'claro', 'isso', 'ok', 'okay', 'blz', 'beleza', 'certo', 'uhum', 'aham', 'ser', 'manda', 'mande']);
 const REPETICAO = [['de', 'novo'], ['novamente'], ['outra', 'vez']];
+// Revisão da rodada 10 (A1-1): "para de mandar", "chega de mandar".
+const PARAR = new Set(['para', 'pare', 'parar', 'chega']);
+// Revisão da rodada 10 (A1-6): a recusa curta à pergunta da IA sobre a cobrança ("não, obrigado", "agora não").
+const NEGATIVOS = new Set(['nao', 'n', 'agora', 'ainda', 'precisa', 'mais', 'nada', 'obrigado', 'obrigada', 'obg', 'valeu', 'vlw', 'por', 'favor']);
 
 const oracoesDe = (texto) => {
   const porOracao = [];
@@ -327,16 +331,23 @@ const oracoesDe = (texto) => {
   }
   return saida;
 };
-// "não" antes, na mesma oração (sem "e" no meio): "não manda", "não me manda", "não quero que mande".
+// "não" antes, na mesma oração (sem "e" no meio): "não manda", "não me manda", "não quero que mande". Revisão da rodada 10
+// (A1-1): também "nem" ("nem precisa mandar") e "para de"/"chega de" ("para de mandar boleto").
 const negadoAntes = (q, i) => {
   for (let k = i - 1; k >= 0; k -= 1) {
     if (q[k] === 'e') return false;
-    if (q[k] === 'nao') return true;
+    if (q[k] === 'nao' || q[k] === 'nem' || (PARAR.has(q[k]) && q[k + 1] === 'de')) return true;
   }
   return false;
 };
+// Revisão da rodada 10 (A1-1): a negação POSPOSTA, na mesma oração ("manda não", "precisa mandar não", "manda mais não", "de
+// novo não") — o "não" depois do verbo, sem cobrança depois dele ("manda o boleto não o pix" continua pedido do boleto).
+const negadoDepois = (q, i) => q.some((w, j) => j > i && w === 'nao' && !q.slice(j + 1).some((x) => COBRANCAS.has(x)));
+const repeticaoEm = (q, i) => REPETICAO.some((r) => r.every((w, j) => q[i + j] === w));
 // A desistência que a oração traz (o marcador e o que ele cancela).
 function desisteNaOracao(q) {
+  // Revisão da rodada 10 (A1-1): o envio ou a repetição negados (antes ou depois) também desistem.
+  if (q.some((w, i) => (VERBOS_DE_ENVIO.has(w) || repeticaoEm(q, i)) && (negadoDepois(q, i) || (negadoAntes(q, i) && q[i - 1] !== 'quero')))) return true;
   for (let i = 0; i < q.length; i += 1) {
     const d = DESISTENCIAS.find((m) => m.every((w, j) => q[i + j] === w));
     if (!d) continue;
@@ -355,11 +366,14 @@ function desisteNaOracao(q) {
 // O pedido de envio que a oração traz: verbo de envio não negado; desejo não negado com a cobrança ("quero o pix", "quero pagar");
 // repetição não negada ("de novo"); ou só a cobrança ("o boleto").
 function pedeNaOracao(q) {
-  if (q.some((w, i) => VERBOS_DE_ENVIO.has(w) && !negadoAntes(q, i))) return true;
-  if (q.some((w, i) => VERBOS_DE_DESEJO.has(w) && !negadoAntes(q, i) && q.slice(i + 1).some((x) => COBRANCAS.has(x) || x === 'pagar' || x === 'quitar'))) return true;
-  if (q.some((_, i) => REPETICAO.some((r) => r.every((w, j) => q[i + j] === w)) && !negadoAntes(q, i))) return true;
+  const negado = (i) => negadoAntes(q, i) || negadoDepois(q, i);
+  if (q.some((w, i) => VERBOS_DE_ENVIO.has(w) && !negado(i))) return true;
+  if (q.some((w, i) => VERBOS_DE_DESEJO.has(w) && !negado(i) && q.slice(i + 1).some((x) => COBRANCAS.has(x) || x === 'pagar' || x === 'quitar'))) return true;
+  if (q.some((_, i) => repeticaoEm(q, i) && !negado(i))) return true;
   return q.some((w) => COBRANCAS.has(w)) && q.every((w) => SO_A_COBRANCA.has(w));
 }
+// O meio que a oração cita (para a desistência de OUTRO meio não desfazer o pedido da mesma mensagem).
+const meioDaOracao = (q) => (q.includes('pix') ? 'pix' : (q.some((w) => w === 'boleto' || w === 'boletos') ? 'boleto' : null));
 // A fala da IA pergunta sobre a cobrança ou o envio: uma frase com "?" que cita a cobrança ou um verbo de envio.
 function perguntaSobreACobranca(falaDaIa) {
   return String(falaDaIa || '').split(/(?<=[.!?])\s+|\n+/).some((frase) => /\?\s*$/.test(frase.trim())
@@ -370,12 +384,27 @@ function perguntaSobreACobranca(falaDaIa) {
  * coisa) ou null (nenhum dos dois: "ok", "obrigado", "não chegou"). `falaDaIa`: a resposta da IA antes desta fala — a resposta
  * afirmativa curta ("sim", "quero", "pode") só é pedido depois de uma pergunta dela sobre a cobrança. Pura.
  */
+//
+// Revisão da rodada 10 (A1-2): dentro da MESMA mensagem também vale o último ato ("manda o boleto. Ah não, esquece, já paguei" é
+// desistência), salvo a desistência de OUTRO meio depois do pedido ("me manda o pix, depois eu vejo o boleto" continua pedido do
+// PIX). (A1-6): a recusa curta ("não, obrigado", "agora não") depois de uma pergunta da IA sobre a cobrança é desistência.
 function classificarPedido(texto, { falaDaIa = null } = {}) {
-  const oracoes = oracoesDe(texto);
-  if (oracoes.some(pedeNaOracao)) return 'pedido';
-  if (oracoes.some(desisteNaOracao)) return 'desistencia';
+  let ato = null;
+  const meiosPedidos = new Set();
+  for (const q of oracoesDe(texto)) {
+    if (pedeNaOracao(q)) {
+      ato = 'pedido';
+      const meio = meioDaOracao(q);
+      if (meio) meiosPedidos.add(meio);
+    } else if (desisteNaOracao(q)) {
+      const meio = meioDaOracao(q);
+      if (!(ato === 'pedido' && meio && meiosPedidos.size > 0 && !meiosPedidos.has(meio))) ato = 'desistencia';
+    }
+  }
+  if (ato) return ato;
   const q = palavrasDe(texto).map((x) => x.p);
   if (q.length && q.some((w) => AFIRMATIVOS.has(w)) && q.every((w) => AFIRMATIVOS.has(w) || CORTESIA.has(w)) && perguntaSobreACobranca(falaDaIa)) return 'pedido';
+  if (q.length && q.some((w) => w === 'nao' || w === 'n') && q.every((w) => NEGATIVOS.has(w) || CORTESIA.has(w)) && perguntaSobreACobranca(falaDaIa)) return 'desistencia';
   return null;
 }
 const temPedidoDeCobranca = (texto) => palavrasDe(texto).some((x) => COBRANCAS.has(x.p) || VERBOS_DE_PAGAR.has(x.p));

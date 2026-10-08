@@ -298,7 +298,7 @@ function aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDe
       let ultima = null;
       for (const { porFatura, registro } of entregas.values()) {
         const [conversa, ferramenta, contrato, fatura] = porFatura.split('|');
-        if (conversa === String(conversationId) && ferramenta === tool && Number(contrato) === Number(contractId)
+        if (conversa === String(conversationId) && ferramenta === tool && (contractId == null || Number(contrato) === Number(contractId))
           && (!ultima || registro.claimedAt >= ultima.claimedAt)) ultima = { ...registro, tool: ferramenta, contractId: Number(contrato), invoiceId: fatura };
       }
       return ultima;

@@ -21,16 +21,20 @@ const frasesDe = (texto) => String(texto || '').split(/(?<=[.!?])\s+|\n+/).map((
 
 const COBRANCA = /\b(?:pix|boletos?|faturas?|segunda via|2a via|codigo|qr ?code|copia e cola|linha digitavel|cobrancas?|pdf)\b/;
 
-// Trabalho em andamento ou por vir.
+// Trabalho em andamento ou por vir. Revisão da rodada 10 (A3-2/A3-3): "aguarde" e "em seguida" saíram ("Aguarde a compensação
+// do PIX", "em seguida me envie o comprovante" são do cliente), e a cobrança tem de estar na MESMA oração da forma.
 const FUTURA = [
   /\b(?:vou|irei|vamos|iremos)\s+(?:(?:te|lhe|ja|agora|so|entao|logo)\s+)*([a-z]+)/,
-  /\b(?:estou|to|estamos)\s+(?:[a-z]+\s+)?[a-z]+ndo\b/,
+  /\b(?:estou|to|estamos)\s+(?:[a-z]+\s+)?(?:enviando|mandando|gerando|preparando|providenciando|emitindo|separando|verificando|conferindo|buscando|puxando)\b/,
   /\bja\s+(?:te\s+|lhe\s+)?(?:envio|mando|gero|passo|reenvio|emito|providencio)\b/,
-  /\b(?:em instantes|em seguida|ja ja|daqui a pouco|aguarde)\b/,
+  /\b(?:em instantes|ja ja)\b/,
   /\b(?:sera|serao|vai ser|vao ser)\s+(?:enviad|gerad|mandad|reenviad|emitid|providenciad)/,
 ];
-// A necessidade de algo dele não é trabalho da IA ("vou precisar que você escolha").
-const VERBOS_QUE_PEDEM = new Set(['precisar', 'pedir', 'perguntar']);
+// A necessidade de algo dele não é trabalho da IA ("vou precisar que você escolha"), nem a explicação ("vou te explicar como…").
+const VERBOS_QUE_PEDEM = new Set(['precisar', 'pedir', 'perguntar', 'explicar', 'dizer', 'falar', 'mostrar', 'orientar', 'contar']);
+// Os verbos de entrega: com eles, a cobrança citada em outra oração da mesma frase é o objeto ("como o boleto não chegou, vou te
+// enviar de novo"). O gerúndio e as outras formas já são de entrega.
+const VERBOS_DE_ENTREGA = /^(?:enviar|mandar|reenviar|gerar|emitir|providenciar|passar|usar|seguir|separar|preparar|verificar|conferir|buscar|pegar|puxar)$/;
 
 // Entrega dada como feita.
 const CONCLUIDA = [
@@ -43,28 +47,48 @@ const CONCLUIDA = [
 const DEPENDE_DELE = /\b(?:se (?:voce |vc )?(?:quiser|preferir|precisar|confirmar|escolher|pedir|me (?:disser|pedir|confirmar|mandar|enviar|responder))|caso (?:voce |vc )?(?:queira|prefira|precise|confirme)|(?:assim que|quando|depois que|logo que) (?:voce|vc|o senhor|a senhora|me)\b)/;
 const ENCAMINHAMENTO = /\b(?:transferir|encaminhar|direcionar|passar)\b[^.!?]{0,40}\b(?:setor|financeiro|atendente|equipe|time|colega|especialista)\b|\b(?:sera|vai ser)\s+(?:encaminhad|transferid|direcionad)/;
 
-// O índice da primeira forma que casa (ou -1), para conferir se a negação vem antes dela.
+// Revisão da rodada 10 (A3-1): a negação só vale na MESMA oração e colada à forma (até duas palavras antes): "o boleto não foi
+// enviado", "ainda não enviei", "eu não vou conseguir enviar". O "não" de outra oração ("Não se preocupe, vou enviar o boleto")
+// não nega nada. Vale para o texto cru (afirmaEnvio) e para o normalizado.
+const FIM_DE_ORACAO = /[,;:.!?\u2014]/;
+function negacaoColada(prefixo) {
+  const p = String(prefixo || '');
+  let corte = -1;
+  for (let k = p.length - 1; k >= 0; k -= 1) if (FIM_DE_ORACAO.test(p[k])) { corte = k; break; }
+  return /(?:^|\s)n(?:ã|a)o\s+(?:[^\s]+\s+){0,2}$/i.test(p.slice(corte + 1));
+}
+// A oração em volta de um índice (entre os sinais de fim de oração).
+function oracaoEm(f, i) {
+  let ini = 0;
+  for (let k = i - 1; k >= 0; k -= 1) if (FIM_DE_ORACAO.test(f[k])) { ini = k + 1; break; }
+  let fim = f.length;
+  for (let k = i; k < f.length; k += 1) if (FIM_DE_ORACAO.test(f[k])) { fim = k + 1; break; }
+  return f.slice(ini, fim);
+}
+// A primeira forma que casa com a cobrança na mesma oração — ou, com verbo de entrega, na frase (ou null).
 function primeiraForma(f, formas, aceita = () => true) {
-  let menor = -1;
+  let melhor = null;
   for (const r of formas) {
     const m = r.exec(f);
-    if (m && aceita(m) && (menor < 0 || m.index < menor)) menor = m.index;
+    const naFrase = Boolean(m) && (!m[1] || VERBOS_DE_ENTREGA.test(m[1]));
+    if (m && aceita(m) && (naFrase || COBRANCA.test(oracaoEm(f, m.index))) && (!melhor || m.index < melhor.index)) melhor = m;
   }
-  return menor;
+  return melhor;
 }
-const negadaAntes = (f, i) => /\bnao\b/.test(f.slice(0, i));
 
 /** Os motivos pelos quais UMA frase não pode sair, dado o estado da ação. */
 function motivosDaFrase(frase, { entregaNoTurno = false, entregaAnterior = false } = {}) {
   if (entregaNoTurno) return [];
   const f = norm(frase);
-  if (!COBRANCA.test(f) || /\?\s*$/.test(f) || DEPENDE_DELE.test(f) || ENCAMINHAMENTO.test(f)) return [];
+  if (!COBRANCA.test(f) || DEPENDE_DELE.test(f) || ENCAMINHAMENTO.test(f)) return [];
   const motivos = [];
-  const futura = primeiraForma(f, FUTURA, (m) => !(m[1] && VERBOS_QUE_PEDEM.has(m[1])));
-  if (futura >= 0 && !negadaAntes(f, futura)) motivos.push('entrega_futura');
+  // A pergunta isenta o anúncio ("Posso enviar o boleto?"); a afirmação de entrega feita, só se a própria oração for a pergunta
+  // (revisão da rodada 10, A3-4: "Enviei o boleto acima, conseguiu abrir?" continua afirmação).
+  const futura = /\?\s*$/.test(f) ? null : primeiraForma(f, FUTURA, (m) => !(m[1] && VERBOS_QUE_PEDEM.has(m[1])));
+  if (futura && !negacaoColada(f.slice(0, futura.index))) motivos.push('entrega_futura');
   if (!entregaAnterior) {
     const concluida = primeiraForma(f, CONCLUIDA);
-    if (concluida >= 0 && !negadaAntes(f, concluida)) motivos.push('entrega_concluida');
+    if (concluida && !/\?\s*$/.test(oracaoEm(f, concluida.index)) && !negacaoColada(f.slice(0, concluida.index))) motivos.push('entrega_concluida');
   }
   return motivos;
 }
@@ -75,6 +99,19 @@ function violacoesDaEntrega(texto, estado) {
 }
 
 const ENTREGA_NAO_FEITA = 'Ainda não enviei a cobrança.';
+// Revisão da rodada 10 (A3-2): com uma entrega anterior na conversa, "ainda não enviei" seria falso.
+const NADA_NOVO_ENVIADO = 'Não enviei nenhuma cobrança nova agora.';
+
+/**
+ * A correção no laço (sem ferramenta obrigatória). Revisão da rodada 10 (A3-5): no turno do limite de perguntas, não manda
+ * perguntar — a triagem conclui.
+ */
+function correcaoDaEntrega({ forcarConclusao = false } = {}) {
+  const base = 'NADA foi enviado ao cliente neste turno. A resposta não pode dizer que a cobrança foi enviada, nem que você vai enviá-la, usá-la, gerá-la ou verificá-la depois: nada continua sozinho depois desta mensagem.';
+  return forcarConclusao
+    ? `${base} Esta é a última resposta da triagem: se o pedido dele já pode ser atendido, atenda agora pelas ferramentas (elas conferem tudo de novo); se não, não faça perguntas — chame concluir_triagem para o setor que cuidar de financeiro, com o que falta no resumo.`
+    : `${base} Responda de novo, sem anunciar: se o pedido dele já pode ser atendido, atenda agora pelas ferramentas (elas conferem tudo de novo); se falta alguma coisa, pergunte só o que falta; se não dá para enviar, diga com honestidade que não enviou e por quê.`;
+}
 
 /**
  * A resposta sem as frases que apresentam a entrega sem o fato. Se alguma saiu e o que sobra não pergunta nada a ele, entra a
@@ -84,9 +121,10 @@ function respostaSemEntregaSemFato(texto, estado) {
   const frases = frasesDe(texto);
   const ficam = frases.filter((f) => motivosDaFrase(f, estado).length === 0);
   if (ficam.length === frases.length) return texto;
+  const honesta = estado && estado.entregaAnterior ? NADA_NOVO_ENVIADO : ENTREGA_NAO_FEITA;
   const resto = ficam.join(' ').trim();
-  if (!resto) return ENTREGA_NAO_FEITA;
-  return /\?/.test(resto) ? resto : `${resto} ${ENTREGA_NAO_FEITA}`;
+  if (!resto) return honesta;
+  return /\?/.test(resto) ? resto : `${resto} ${honesta}`;
 }
 
-module.exports = { violacoesDaEntrega, respostaSemEntregaSemFato, ENTREGA_NAO_FEITA };
+module.exports = { violacoesDaEntrega, respostaSemEntregaSemFato, ENTREGA_NAO_FEITA, NADA_NOVO_ENVIADO, correcaoDaEntrega, negacaoColada };

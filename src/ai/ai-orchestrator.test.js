@@ -899,6 +899,10 @@ describe('perfil de triagem', () => {
       expect(afirmaEnvio('Ainda não enviei o PIX. Quer que eu envie?')).toBe(false);
       expect(afirmaEnvio('Não vou mandar o boleto sem o seu pedido.')).toBe(false);
       expect(afirmaEnvio('O boleto não foi gerado. Vou gerar o boleto agora.')).toBe(true);
+      // Revisão da rodada 10 (A3-1): o "não" de outra oração não tira a guarda.
+      expect(afirmaEnvio('Não se preocupe, vou enviar o boleto agora.')).toBe(true);
+      expect(afirmaEnvio('Não se preocupe, enviei o boleto acima.')).toBe(true);
+      expect(afirmaEnvio('Você não precisa fazer nada, vou gerar o PIX.')).toBe(true);
       expect(afirmaEnvio('Encaminhei seu atendimento para o Financeiro.')).toBe(false);
       expect(afirmaEnvio('Enviei seu pedido para a equipe conferir.')).toBe(false);
     });

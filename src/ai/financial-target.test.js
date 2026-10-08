@@ -1088,3 +1088,30 @@ describe('pedido por endereço do próprio cliente', () => {
     });
   });
 });
+
+// Revisão da rodada 10 (achados A1-1, A1-2 e A1-6, verificados por script).
+describe('pedido de ação: correções da revisão da rodada 10', () => {
+  test.each([
+    ['manda não'], ['precisa mandar não'], ['pode mandar não, obrigado'], ['nem precisa mandar'], ['para de mandar boleto'], ['pare de mandar'],
+    ['de novo não'], ['outra vez não'], ['manda mais não, obrigado'], ['precisa mandar não, já paguei'],
+  ])('A1-1: a negação posposta ou o "nem"/"para de" — %j é desistência, não pedido', (fala) => {
+    expect(classificarPedido(fala)).toBe('desistencia');
+  });
+  test.each([['manda o boleto. Ah não, esquece, já paguei'], ['tinha pedido pra mandar o pix, mas pode cancelar'], ['manda o pix. Pensando bem, deixa pra lá']])(
+    'A1-2: na mesma mensagem, a desistência DEPOIS do pedido vence — %j', (fala) => {
+      expect(classificarPedido(fala)).toBe('desistencia');
+    },
+  );
+  test.each([['esquece o pix, manda o boleto'], ['não quero boleto, quero pix'], ['me manda o pix, depois eu vejo o boleto'], ['não precisa do boleto, manda só o pix']])(
+    'A1-2 (preservado): o pedido que vem depois, ou a desistência de OUTRO meio, mantém o pedido — %j', (fala) => {
+      expect(classificarPedido(fala)).toBe('pedido');
+    },
+  );
+  test('A1-6: a recusa curta à pergunta da IA sobre a cobrança é desistência; sem a pergunta, nada', () => {
+    for (const fala of ['não, obrigado', 'agora não', 'não', 'não precisa', 'nao obg']) {
+      expect(classificarPedido(fala, { falaDaIa: 'Tudo bem. Você ainda quer a cobrança?' })).toBe('desistencia');
+    }
+    expect(classificarPedido('não, obrigado', { falaDaIa: 'Posso ajudar em algo mais?' })).toBe(null);
+    expect(classificarPedido('agora não')).toBe(null);
+  });
+});

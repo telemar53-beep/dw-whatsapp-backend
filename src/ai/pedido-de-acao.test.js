@@ -52,3 +52,11 @@ describe('pedidoDepoisDe', () => {
     expect(pedidoDepoisDe([cliente('m7', 'obrigado')], 'm1')).toBe(false);
   });
 });
+
+// Revisão da rodada 10 (A1-1): o cenário da revisão — a pergunta da recusa respondida com a negação posposta.
+describe('negação posposta na janela (revisão da rodada 10)', () => {
+  test('"precisa mandar não" depois da pergunta mantém a desistência; "manda mais não" não autoriza reenvio', () => {
+    expect(estadoDoPedido([cliente('m1', 'oi, manda o pix'), cliente('m2', 'esquece o pix'), ia('a1', 'Tudo bem. Você ainda quer a cobrança?'), cliente('m3', 'precisa mandar não')])).toBe('desistencia');
+    expect(pedidoDepoisDe([cliente('m1', 'manda o boleto'), ia('a1', 'Enviei acima o boleto.'), cliente('m2', 'manda mais não, obrigado')], 'm1')).toBe(false);
+  });
+});
